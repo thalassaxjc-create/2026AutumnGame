@@ -23,32 +23,91 @@
     <option name="INCOMING_COMMITS_CHECK_STRATEGY" value="FETCH" />
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
-        <entry key="$PROJECT_DIR$" value="level" />
+        <entry key="$PROJECT_DIR$" value="main" />
       </map>
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {
-    "state": "OPEN",
-    "assignee": "thalassaxjc-create"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;thalassaxjc-create&quot;
   }
-}]]></component>
-  <component name="GithubPullRequestsUISettings"><![CDATA[{
-  "selectedUrlAndAccountId": {
-    "url": "https://github.com/thalassaxjc-create/2026AutumnGame.git",
-    "accountId": "0dd5c0ff-53b7-4c9b-bfad-9bd76bbf939e"
+}</component>
+  <component name="GithubPullRequestsUISettings">{
+  &quot;selectedUrlAndAccountId&quot;: {
+    &quot;url&quot;: &quot;https://github.com/thalassaxjc-create/2026AutumnGame.git&quot;,
+    &quot;accountId&quot;: &quot;0dd5c0ff-53b7-4c9b-bfad-9bd76bbf939e&quot;
   }
-}]]></component>
+}</component>
   <component name="McpProjectServerCommands">
     <commands />
     <urls />
   </component>
   <component name="MetaFilesCheckinStateConfiguration" checkMetaFiles="true" />
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 0,
-  "fromUser": false
-}]]></component>
+  <component name="NextEditCompletionFeaturesState">
+    <decayedCancelled>
+      <entry key="MS100" value="1.4048309733525817" />
+      <entry key="MS500" value="3.1394392925002412" />
+      <entry key="S2" value="5.29961414834541" />
+      <entry key="S5" value="6.20678608850781" />
+      <entry key="S10" value="6.580840435321619" />
+      <entry key="S30" value="6.85485770429254" />
+      <entry key="S60" value="6.926723441848432" />
+      <entry key="M2" value="6.9631832206657025" />
+      <entry key="M5" value="6.985230169955583" />
+      <entry key="M10" value="6.992607875264403" />
+      <entry key="M15" value="6.995070312951333" />
+      <entry key="M30" value="6.997534354096111" />
+      <entry key="H1" value="6.99876697637179" />
+      <entry key="H2" value="6.999383438006655" />
+      <entry key="H4" value="6.999691706457244" />
+      <entry key="D1" value="6.999948616000254" />
+      <entry key="W1" value="6.9999926593859305" />
+    </decayedCancelled>
+    <decayedSelected>
+      <entry key="MS100" value="0.0" />
+      <entry key="MS500" value="0.0" />
+      <entry key="S2" value="0.0" />
+      <entry key="S5" value="0.0" />
+      <entry key="S10" value="0.0" />
+      <entry key="S30" value="0.0" />
+      <entry key="S60" value="0.0" />
+      <entry key="M2" value="0.0" />
+      <entry key="M5" value="0.0" />
+      <entry key="M10" value="0.0" />
+      <entry key="M15" value="0.0" />
+      <entry key="M30" value="0.0" />
+      <entry key="H1" value="0.0" />
+      <entry key="H2" value="0.0" />
+      <entry key="H4" value="0.0" />
+      <entry key="D1" value="0.0" />
+      <entry key="W1" value="0.0" />
+    </decayedSelected>
+    <decayedShown>
+      <entry key="MS100" value="1.339668801355962" />
+      <entry key="MS500" value="3.0993599913782104" />
+      <entry key="S2" value="5.2632812491539775" />
+      <entry key="S5" value="6.184975807655908" />
+      <entry key="S10" value="6.568237647831857" />
+      <entry key="S30" value="6.8502205917140415" />
+      <entry key="S60" value="6.92434625284638" />
+      <entry key="M2" value="6.961979642296816" />
+      <entry key="M5" value="6.984745100027261" />
+      <entry key="M10" value="6.992364730300101" />
+      <entry key="M15" value="6.994908080487272" />
+      <entry key="M30" value="6.997453169886969" />
+      <entry key="H1" value="6.998726367260461" />
+      <entry key="H2" value="6.9993631291977385" />
+      <entry key="H4" value="6.999681550989277" />
+      <entry key="D1" value="6.999946923274535" />
+      <entry key="W1" value="6.999992417564353" />
+    </decayedShown>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 0,
+  &quot;fromUser&quot;: false
+}</component>
   <component name="ProjectId" id="3LJPgI60hjxczUQWjxSpGSfaDgz" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -64,7 +123,7 @@
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "cidr.known.project.marker": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
-    "git-widget-placeholder": "main",
+    "git-widget-placeholder": "unity__setup",
     "git.auto.fetch.suggestion.counter": "1",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
