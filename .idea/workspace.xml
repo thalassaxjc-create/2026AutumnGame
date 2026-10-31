@@ -10,14 +10,20 @@
     <configurations />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a5f661c8-b55a-41a1-9ea3-ff5e224e57ba" name="更改" comment="" />
+    <list default="true" id="a5f661c8-b55a-41a1-9ea3-ff5e224e57ba" name="更改" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assembly-CSharp.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assembly-CSharp.csproj" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assets/Scenes/SampleScene.unity" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/Scenes/SampleScene.unity" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assets/Settings/Mobile_RPAsset.asset" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/Settings/Mobile_RPAsset.asset" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/ProjectSettings/TagManager.asset" beforeDir="false" afterPath="$PROJECT_DIR$/My project/ProjectSettings/TagManager.asset" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="6" />
+    <option name="cachedIndexableFilesCount" value="41280" />
   </component>
   <component name="Git.Settings">
     <option name="INCOMING_COMMITS_CHECK_STRATEGY" value="FETCH" />
@@ -130,7 +136,8 @@
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
-    "settings.editor.selected.configurable": "preferences.externalDependencies"
+    "settings.editor.selected.configurable": "preferences.externalDependencies",
+    "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
   <component name="TaskManager">
@@ -140,7 +147,17 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1793169310577</updated>
+      <workItem from="1793443167707" duration="2230000" />
     </task>
+    <task id="LOCAL-00001" summary="更改unity版本">
+      <option name="closed" value="true" />
+      <created>1793443226844</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1793443226844</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -168,7 +185,8 @@
     <option name="CLEAR_INITIAL_COMMIT_MESSAGE" value="true" />
     <MESSAGE value="0" />
     <MESSAGE value="建立unity文件" />
-    <option name="LAST_COMMIT_MESSAGE" value="建立unity文件" />
+    <MESSAGE value="更改unity版本" />
+    <option name="LAST_COMMIT_MESSAGE" value="更改unity版本" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
