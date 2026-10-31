@@ -47,23 +47,23 @@
   <component name="MetaFilesCheckinStateConfiguration" checkMetaFiles="true" />
   <component name="NextEditCompletionFeaturesState">
     <decayedCancelled>
-      <entry key="MS100" value="1.4048309733525817" />
-      <entry key="MS500" value="3.1394392925002412" />
-      <entry key="S2" value="5.29961414834541" />
-      <entry key="S5" value="6.20678608850781" />
-      <entry key="S10" value="6.580840435321619" />
-      <entry key="S30" value="6.85485770429254" />
-      <entry key="S60" value="6.926723441848432" />
-      <entry key="M2" value="6.9631832206657025" />
-      <entry key="M5" value="6.985230169955583" />
-      <entry key="M10" value="6.992607875264403" />
-      <entry key="M15" value="6.995070312951333" />
-      <entry key="M30" value="6.997534354096111" />
-      <entry key="H1" value="6.99876697637179" />
-      <entry key="H2" value="6.999383438006655" />
-      <entry key="H4" value="6.999691706457244" />
-      <entry key="D1" value="6.999948616000254" />
-      <entry key="W1" value="6.9999926593859305" />
+      <entry key="MS100" value="1.000777069297334" />
+      <entry key="MS500" value="1.2835077649194122" />
+      <entry key="S2" value="2.158840744739681" />
+      <entry key="S5" value="2.5994322491103548" />
+      <entry key="S10" value="2.7869708241088524" />
+      <entry key="S30" value="2.925932836523441" />
+      <entry key="S60" value="2.9629292058094565" />
+      <entry key="M2" value="3.0313846689195465" />
+      <entry key="M5" value="3.963721637112709" />
+      <entry key="M10" value="5.60369054679111" />
+      <entry key="M15" value="6.621401492561344" />
+      <entry key="M30" value="8.035350385097905" />
+      <entry key="H1" value="8.937069147072338" />
+      <entry key="H2" value="9.446691564717579" />
+      <entry key="H4" value="9.717658056905044" />
+      <entry key="D1" value="9.95213301333917" />
+      <entry key="W1" value="9.993141755816417" />
     </decayedCancelled>
     <decayedSelected>
       <entry key="MS100" value="0.0" />
@@ -85,23 +85,23 @@
       <entry key="W1" value="0.0" />
     </decayedSelected>
     <decayedShown>
-      <entry key="MS100" value="1.339668801355962" />
-      <entry key="MS500" value="3.0993599913782104" />
-      <entry key="S2" value="5.2632812491539775" />
-      <entry key="S5" value="6.184975807655908" />
-      <entry key="S10" value="6.568237647831857" />
-      <entry key="S30" value="6.8502205917140415" />
-      <entry key="S60" value="6.92434625284638" />
-      <entry key="M2" value="6.961979642296816" />
-      <entry key="M5" value="6.984745100027261" />
-      <entry key="M10" value="6.992364730300101" />
-      <entry key="M15" value="6.994908080487272" />
-      <entry key="M30" value="6.997453169886969" />
-      <entry key="H1" value="6.998726367260461" />
-      <entry key="H2" value="6.9993631291977385" />
-      <entry key="H4" value="6.999681550989277" />
-      <entry key="D1" value="6.999946923274535" />
-      <entry key="W1" value="6.999992417564353" />
+      <entry key="MS100" value="0.9272236315308213" />
+      <entry key="MS500" value="1.2573814422804874" />
+      <entry key="S2" value="2.143920446477365" />
+      <entry key="S5" value="2.5917948983140633" />
+      <entry key="S10" value="2.782797898300904" />
+      <entry key="S30" value="2.924454464407446" />
+      <entry key="S60" value="2.962178381820876" />
+      <entry key="M2" value="3.030997716851779" />
+      <entry key="M5" value="3.963502171893738" />
+      <entry key="M10" value="5.603523753145088" />
+      <entry key="M15" value="6.621266667115983" />
+      <entry key="M30" value="8.035266548995128" />
+      <entry key="H1" value="8.93702199022037" />
+      <entry key="H2" value="9.446666505613388" />
+      <entry key="H4" value="9.717645133677276" />
+      <entry key="D1" value="9.952130802688158" />
+      <entry key="W1" value="9.993141438590436" />
     </decayedShown>
   </component>
   <component name="ProjectColorInfo">{
@@ -167,7 +167,8 @@
   <component name="VcsManagerConfiguration">
     <option name="CLEAR_INITIAL_COMMIT_MESSAGE" value="true" />
     <MESSAGE value="0" />
-    <option name="LAST_COMMIT_MESSAGE" value="0" />
+    <MESSAGE value="建立unity文件" />
+    <option name="LAST_COMMIT_MESSAGE" value="建立unity文件" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
