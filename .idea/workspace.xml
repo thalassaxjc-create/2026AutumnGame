@@ -10,13 +10,7 @@
     <configurations />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="a5f661c8-b55a-41a1-9ea3-ff5e224e57ba" name="更改" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/Assembly-CSharp.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assembly-CSharp.csproj" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/Assets/Scenes/SampleScene.unity" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/Scenes/SampleScene.unity" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/Assets/Settings/Mobile_RPAsset.asset" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/Settings/Mobile_RPAsset.asset" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/ProjectSettings/TagManager.asset" beforeDir="false" afterPath="$PROJECT_DIR$/My project/ProjectSettings/TagManager.asset" afterDir="false" />
-    </list>
+    <list default="true" id="a5f661c8-b55a-41a1-9ea3-ff5e224e57ba" name="更改" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -147,7 +141,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1793169310577</updated>
-      <workItem from="1793443167707" duration="2230000" />
+      <workItem from="1793443167707" duration="3085000" />
     </task>
     <task id="LOCAL-00001" summary="更改unity版本">
       <option name="closed" value="true" />
@@ -157,7 +151,15 @@
       <option name="project" value="LOCAL" />
       <updated>1793443226844</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="add basic scene and player">
+      <option name="closed" value="true" />
+      <created>1793459142517</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1793459142517</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -186,7 +188,8 @@
     <MESSAGE value="0" />
     <MESSAGE value="建立unity文件" />
     <MESSAGE value="更改unity版本" />
-    <option name="LAST_COMMIT_MESSAGE" value="更改unity版本" />
+    <MESSAGE value="add basic scene and player" />
+    <option name="LAST_COMMIT_MESSAGE" value="add basic scene and player" />
   </component>
   <component name="XDebuggerManager">
     <breakpoint-manager>
