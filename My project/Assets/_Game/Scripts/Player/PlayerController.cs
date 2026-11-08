@@ -11,6 +11,7 @@ public sealed class PlayerController : MonoBehaviour
     [Header("Movement")]
     [SerializeField, Min(0f)] private float movementSpeed = 6f;
     [SerializeField, Min(0f)] private float jumpVelocity = 7f;
+    [SerializeField, Min(0f)] private float turnSpeed = 14f;
 
     [Header("Ground Check")]
     [SerializeField] private LayerMask groundLayers;
@@ -31,90 +32,372 @@ public sealed class PlayerController : MonoBehaviour
     private bool jumpQueued;
     private bool jumpConsumed;
     private bool becameAirborneAfterJump;
+    private UnityEngine.InputSystem.InputAction interactAction;
+    private Vector3[] climbPath;
+    private float climbDistance;
+    private float climbLength;
+    private float climbCooldown;
+    [SerializeField, Min(0.1f)] private float climbSpeed = 5f;
+
+    [Header("Rope Swing")]
+    [SerializeField, Min(0.1f)] private float swingPumpAcceleration = 1.45f;
+    [SerializeField, Range(0.9f, 1f)] private float swingDamping = 0.997f;
+    [SerializeField, Min(0f)] private float swingReleaseForwardBoost = 0.7f;
+    [SerializeField, Min(0f)] private float swingReleaseUpBoost = 2.8f;
+    [SerializeField, Min(1f)] private float swingMaxTangentSpeed = 5.3f;
+    [SerializeField, Range(45f, 88f)] private float maxSwingAngle = 72f;
+
+    private ClimbableRope swingSource;
+    private Vector3 swingAnchor;
+    private Vector3 swingForward;
+    private float swingLength;
+    private float swingAngle;
+    private float swingAngularVelocity;
+    private float lastSwingReleaseTime = float.NegativeInfinity;
+    private float swingReleaseMomentumUntil = float.NegativeInfinity;
+    private Collider playerCollider;
+    private bool throwPoseActive;
+    private Vector3 throwFacing = Vector3.left;
+
+    public event System.Action InteractRequested;
+    public event System.Action<bool> ClimbFinished;
+    public event System.Action SwingFinished;
+    public System.Func<Vector3, Vector3, Vector3> ConstrainMovement { get; set; }
+    public bool IsClimbing => climbPath != null;
+    public bool IsSwinging => swingSource != null;
+    public bool SwingTraversalActive => IsSwinging || Time.time - lastSwingReleaseTime < 3.5f;
+    public float MovementSpeed => movementSpeed;
+    public float JumpVelocity => jumpVelocity;
+    public Vector3 Position => body != null ? body.position : transform.position;
+    public bool MovementLocked { get; set; }
 
     public bool IsGrounded => isGrounded;
 
     private void Awake()
     {
         body = GetComponent<Rigidbody>();
-
-        InputActionAsset actions = GetComponent<PlayerInput>().actions;
-        InputActionMap gameplay = actions.FindActionMap(GameplayMapName, true);
+        playerCollider = GetComponent<Collider>();
+        UnityEngine.InputSystem.InputActionAsset actions = GetComponent<UnityEngine.InputSystem.PlayerInput>().actions;
+        var gameplay = actions.FindActionMap(GameplayMapName, true);
         moveAction = gameplay.FindAction(MoveActionName, true);
         jumpAction = gameplay.FindAction(JumpActionName, true);
+        interactAction = gameplay.FindAction("Interact", false);
     }
 
-    private void Update()
+    private void OnEnable()
     {
-        moveInput = Vector2.ClampMagnitude(moveAction.ReadValue<Vector2>(), 1f);
+        moveAction.performed += OnMove;
+        moveAction.canceled += OnMove;
+        jumpAction.performed += OnJump;
+        if (interactAction != null) interactAction.performed += OnInteract;
+    }
 
-        // Retain a short press until the next physics step.
-        bool jumpPressed = jumpAction.WasPressedThisFrame();
-        bool spacePressed = Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame;
+    private void OnDisable()
+    {
+        moveAction.performed -= OnMove;
+        moveAction.canceled -= OnMove;
+        jumpAction.performed -= OnJump;
+        if (interactAction != null) interactAction.performed -= OnInteract;
+        moveInput = Vector2.zero;
+        jumpQueued = false;
+    }
 
-        if (jumpPressed)
+    private void OnMove(UnityEngine.InputSystem.InputAction.CallbackContext context)
+    {
+        moveInput = Vector2.ClampMagnitude(context.ReadValue<Vector2>(), 1f);
+    }
+
+    private void OnJump(UnityEngine.InputSystem.InputAction.CallbackContext context)
+    {
+        if (!IsClimbing && !MovementLocked) jumpQueued = true;
+    }
+
+    private void OnInteract(UnityEngine.InputSystem.InputAction.CallbackContext context)
+    {
+        if (MovementLocked) return;
+        if (IsSwinging)
         {
-            jumpQueued = true;
+            EndSwing(false);
+            return;
+        }
+        if (IsClimbing)
+        {
+            if (climbDistance < 0.2f) FinishClimb(false);
+            else if (climbLength - climbDistance < 0.2f) FinishClimb(true);
+            return;
+        }
+        if (Time.time >= climbCooldown) InteractRequested?.Invoke();
+    }
+
+    // Paths are ordered bottom to top. Both endpoints are safe standing positions.
+    public bool BeginClimb(Vector3[] path, bool fromTop)
+    {
+        if (IsClimbing || IsSwinging || MovementLocked || Time.time < climbCooldown || path == null || path.Length < 2) return false;
+        climbPath = (Vector3[])path.Clone();
+        climbLength = 0f;
+        for (int i = 1; i < path.Length; i++) climbLength += Vector3.Distance(path[i - 1], path[i]);
+        if (climbLength < 0.01f) { climbPath = null; return false; }
+        climbDistance = fromTop ? climbLength : 0f;
+        body.linearVelocity = Vector3.zero;
+        body.useGravity = false;
+        body.isKinematic = true;
+        body.position = fromTop ? path[path.Length - 1] : path[0];
+        jumpQueued = false;
+        return true;
+    }
+
+    public void BeginThrowPose(Vector3 facing)
+    {
+        facing.y = 0f;
+        if (facing.sqrMagnitude < 0.001f) facing = Vector3.left;
+        throwFacing = facing.normalized;
+        throwPoseActive = true;
+        Vector3 velocity = body.linearVelocity;
+        velocity.x = 0f;
+        velocity.z = 0f;
+        body.linearVelocity = velocity;
+        Quaternion rotation = Quaternion.LookRotation(throwFacing, Vector3.up);
+        body.rotation = rotation;
+        transform.rotation = rotation;
+    }
+
+    public void EndThrowPose()
+    {
+        throwPoseActive = false;
+    }
+
+    public bool BeginSwing(
+        ClimbableRope source,
+        Vector3 anchor,
+        Vector3 forward,
+        float length,
+        float startAngle,
+        float startAngularVelocity)
+    {
+        if (source == null || IsClimbing || IsSwinging || MovementLocked ||
+            Time.time < climbCooldown || length < 1f)
+        {
+            return false;
         }
 
-        // Temporary diagnosis: logs only when Space or the Jump action is pressed.
-        if (spacePressed || jumpPressed)
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
         {
-            Debug.Log(
-                $"[PlayerController/Input] Space={spacePressed}, Jump={jumpPressed}, " +
-                $"ActionEnabled={jumpAction.enabled}, MapEnabled={jumpAction.actionMap.enabled}, " +
-                $"Grounded(last physics step)={isGrounded}, Buffered={jumpQueued}",
-                this);
+            forward = Vector3.forward;
         }
+
+        swingSource = source;
+        swingAnchor = anchor;
+        swingForward = forward.normalized;
+        swingLength = Mathf.Clamp(length, 2.5f, 8f);
+
+        swingAngle = Mathf.Clamp(
+            startAngle,
+            -maxSwingAngle * Mathf.Deg2Rad,
+            maxSwingAngle * Mathf.Deg2Rad);
+        swingAngularVelocity = Mathf.Abs(startAngularVelocity) > 0.01f
+            ? startAngularVelocity
+            : 0.05f;
+
+        body.linearVelocity = Vector3.zero;
+        body.angularVelocity = Vector3.zero;
+        body.useGravity = false;
+        body.isKinematic = true;
+        body.position = source.DriveSwingPlatform(
+            swingAngle,
+            swingAnchor,
+            swingForward,
+            swingLength);
+        body.rotation = Quaternion.LookRotation(swingForward, Vector3.up);
+        isGrounded = false;
+        jumpQueued = false;
+        return true;
+    }
+
+    private void EndSwing(bool release)
+    {
+        if (!IsSwinging) return;
+
+        ClimbableRope finishedSource = swingSource;
+        Vector3 tangent = swingForward * Mathf.Cos(swingAngle) + Vector3.up * Mathf.Sin(swingAngle);
+        Vector3 velocity = Vector3.ClampMagnitude(
+            tangent * (swingAngularVelocity * swingLength),
+            swingMaxTangentSpeed);
+        if (release)
+        {
+            velocity += swingForward * swingReleaseForwardBoost + Vector3.up * swingReleaseUpBoost;
+            lastSwingReleaseTime = Time.time;
+            swingReleaseMomentumUntil = Time.time + 1.25f;
+            jumpConsumed = true;
+            becameAirborneAfterJump = true;
+        }
+
+        if (finishedSource != null)
+        {
+            finishedSource.ReleaseRider(
+                swingAngle,
+                swingAngularVelocity,
+                swingAnchor,
+                swingForward,
+                swingLength,
+                playerCollider);
+        }
+
+        swingSource = null;
+        body.isKinematic = false;
+        body.useGravity = true;
+        body.linearVelocity = release ? velocity : Vector3.zero;
+        body.angularVelocity = Vector3.zero;
+        jumpQueued = false;
+        moveInput = Vector2.zero;
+        climbCooldown = Time.time + 0.25f;
+        SwingFinished?.Invoke();
+    }
+
+    private Vector3 EvaluateClimb(float distance)
+    {
+        for (int i = 1; i < climbPath.Length; i++)
+        {
+            float segment = Vector3.Distance(climbPath[i - 1], climbPath[i]);
+            if (distance <= segment) return Vector3.Lerp(climbPath[i - 1], climbPath[i], segment > 0f ? distance / segment : 0f);
+            distance -= segment;
+        }
+        return climbPath[climbPath.Length - 1];
+    }
+
+    private void FinishClimb(bool atTop)
+    {
+        body.position = atTop ? climbPath[climbPath.Length - 1] : climbPath[0];
+        climbPath = null;
+        body.isKinematic = false;
+        body.useGravity = true;
+        body.linearVelocity = Vector3.zero;
+        jumpConsumed = false;
+        becameAirborneAfterJump = false;
+        swingReleaseMomentumUntil = float.NegativeInfinity;
+        moveInput = Vector2.zero;
+        jumpQueued = false;
+        climbCooldown = Time.time + 0.3f;
+        ClimbFinished?.Invoke(atTop);
+    }
+
+    public void Respawn(Vector3 position)
+    {
+        if (IsSwinging)
+        {
+            swingSource.CancelRiderAndRestore();
+            swingSource = null;
+        }
+        climbPath = null;
+        body.isKinematic = false;
+        body.useGravity = true;
+        body.position = position;
+        body.linearVelocity = Vector3.zero;
+        jumpQueued = false;
+        jumpConsumed = false;
+        becameAirborneAfterJump = false;
+        swingReleaseMomentumUntil = float.NegativeInfinity;
+        throwPoseActive = false;
     }
 
     private void FixedUpdate()
     {
+        if (IsSwinging)
+        {
+            float gravity = Mathf.Abs(Physics.gravity.y);
+            float pumpInput = moveInput.y;
+            if (Keyboard.current != null)
+            {
+                if (Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) pumpInput = 1f;
+                else if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) pumpInput = -1f;
+            }
+
+            float acceleration = -(gravity / swingLength) * Mathf.Sin(swingAngle);
+            acceleration += pumpInput * swingPumpAcceleration;
+            swingAngularVelocity += acceleration * Time.fixedDeltaTime;
+            swingAngularVelocity *= swingDamping;
+            swingAngularVelocity = Mathf.Clamp(swingAngularVelocity, -3.2f, 3.2f);
+            swingAngle += swingAngularVelocity * Time.fixedDeltaTime;
+
+            float limit = maxSwingAngle * Mathf.Deg2Rad;
+            if (Mathf.Abs(swingAngle) > limit)
+            {
+                swingAngle = Mathf.Clamp(swingAngle, -limit, limit);
+                swingAngularVelocity *= -0.25f;
+            }
+
+            Vector3 position = swingSource.DriveSwingPlatform(
+                swingAngle,
+                swingAnchor,
+                swingForward,
+                swingLength);
+            body.MovePosition(position);
+            body.MoveRotation(Quaternion.LookRotation(swingForward, Vector3.up));
+            isGrounded = false;
+
+            if (jumpQueued)
+            {
+                EndSwing(true);
+            }
+            jumpQueued = false;
+            return;
+        }
+
+        if (IsClimbing)
+        {
+            float input = MovementLocked ? 0f : moveInput.y;
+            climbDistance = Mathf.Clamp(climbDistance + input * climbSpeed * Time.fixedDeltaTime, 0f, climbLength);
+            if (input > 0f && climbDistance >= climbLength) FinishClimb(true);
+            else if (input < 0f && climbDistance <= 0f) FinishClimb(false);
+            else body.MovePosition(EvaluateClimb(climbDistance));
+            return;
+        }
         Vector3 velocity = body.linearVelocity;
         isGrounded = CheckGrounded();
-        bool hadBufferedJump = jumpQueued;
-        bool groundedBeforeJump = isGrounded;
-        bool jumpConsumedBefore = jumpConsumed;
-        float verticalVelocityBefore = velocity.y;
-        bool jumpApplied = false;
-
-        if (!isGrounded && jumpConsumed)
-        {
-            becameAirborneAfterJump = true;
-        }
+        if (!isGrounded && jumpConsumed) becameAirborneAfterJump = true;
         else if (isGrounded && becameAirborneAfterJump && velocity.y <= 0f)
         {
             jumpConsumed = false;
             becameAirborneAfterJump = false;
         }
-
-        velocity.x = moveInput.x * movementSpeed;
-        velocity.z = moveInput.y * movementSpeed;
-
-        if (jumpQueued && isGrounded && !jumpConsumed)
+        bool preserveSwingMomentum = Time.time < swingReleaseMomentumUntil;
+        if (!preserveSwingMomentum)
+        {
+            velocity.x = MovementLocked ? 0f : moveInput.x * movementSpeed;
+            velocity.z = MovementLocked ? 0f : moveInput.y * movementSpeed;
+        }
+        Vector3 planarVelocity = new Vector3(velocity.x, 0f, velocity.z);
+        if (throwPoseActive)
+        {
+            body.MoveRotation(Quaternion.LookRotation(throwFacing, Vector3.up));
+        }
+        else if (!MovementLocked && planarVelocity.sqrMagnitude > 0.01f)
+        {
+            Quaternion targetRotation = Quaternion.LookRotation(planarVelocity.normalized, Vector3.up);
+            body.MoveRotation(Quaternion.Slerp(
+                body.rotation,
+                targetRotation,
+                1f - Mathf.Exp(-turnSpeed * Time.fixedDeltaTime)));
+        }
+        if (jumpQueued && isGrounded && !jumpConsumed && !MovementLocked)
         {
             velocity.y = jumpVelocity;
             jumpConsumed = true;
             becameAirborneAfterJump = false;
             isGrounded = false;
-            jumpApplied = true;
         }
-
         jumpQueued = false;
-        body.linearVelocity = velocity;
-
-        // Temporary diagnosis: proves that the buffered press reached the physics step.
-        if (hadBufferedJump)
+        if (ConstrainMovement != null)
         {
-            Debug.Log(
-                $"[PlayerController/Physics] Buffered=True, Grounded={groundedBeforeJump}, " +
-                $"ConsumedBefore={jumpConsumedBefore}, JumpApplied={jumpApplied}, " +
-                $"VelocityY={verticalVelocityBefore:F2}->{body.linearVelocity.y:F2}",
-                this);
+            Vector3 intended = body.position + new Vector3(velocity.x, 0f, velocity.z) * Time.fixedDeltaTime;
+            Vector3 allowed = ConstrainMovement(body.position, intended);
+            velocity.x = (allowed.x - body.position.x) / Time.fixedDeltaTime;
+            velocity.z = (allowed.z - body.position.z) / Time.fixedDeltaTime;
         }
+        body.linearVelocity = velocity;
     }
 
-    private bool CheckGrounded()
+private bool CheckGrounded()
     {
         Vector3 center = body.position + groundCheckOffset;
         int hitCount = Physics.OverlapSphereNonAlloc(
