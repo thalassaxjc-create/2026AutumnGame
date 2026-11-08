@@ -15,6 +15,14 @@ public sealed class PuzzleCamera : MonoBehaviour
     private float throwViewWeight;
     private float swingViewWeight;
     private Vector3 throwLookDirection = Vector3.left;
+    [SerializeField] private ParkourDirector parkour;
+    private float sideViewUntil;
+    private bool wasSwinging;
+    private float shakeUntil;
+    private float shakeStrength;
+    public void PulseShake(float strength = .035f, float duration = .18f)
+    { shakeStrength = Mathf.Clamp(strength, 0f, .06f); shakeUntil = Time.unscaledTime + duration; }
+    public void ConfigureParkour(ParkourDirector director) { parkour = director; }
 
     public void Configure(FivePillarLevel puzzle) { level = puzzle; }
 
@@ -56,13 +64,21 @@ public sealed class PuzzleCamera : MonoBehaviour
             throwViewWeight,
             throwViewRequested ? 1f : 0f,
             viewStep);
+        bool finale = parkour != null && position.z >= 140f && position.z <= 170f && level.Player.GameplayMode == PlayerGameplayMode.AutoRun;
+        if (parkour != null)
+        {
+            if (wasSwinging && !level.Player.IsSwinging) sideViewUntil = Time.time + 1.5f;
+            wasSwinging = level.Player.IsSwinging;
+        }
+        bool sideRequested = parkour != null ? level.Player.IsSwinging || Time.time < sideViewUntil : level.Player.SwingTraversalActive;
         swingViewWeight = Mathf.MoveTowards(
             swingViewWeight,
-            level.Player.SwingTraversalActive ? 1f : 0f,
+            sideRequested ? 1f : 0f,
             viewStep);
 
-        Vector3 followPosition = position + followOffset;
+        Vector3 followPosition = position + (finale ? new Vector3(0f, 2.6f, -10f) : followOffset);
         Quaternion followRotation = Quaternion.LookRotation(position + lookOffset - followPosition);
+        view.fieldOfView = Mathf.Lerp(view.fieldOfView, finale ? 72f : fieldOfView, 1f - Mathf.Exp(-2f * Time.unscaledDeltaTime));
 
         Vector3 swingPosition = position + Vector3.left * 7.2f +
                                 Vector3.up * 2.7f +
@@ -81,7 +97,12 @@ public sealed class PuzzleCamera : MonoBehaviour
         Vector3 targetPosition = Vector3.Lerp(basePosition, cinematicPosition, throwViewWeight);
         Quaternion targetRotation = Quaternion.Slerp(baseRotation, cinematicRotation, throwViewWeight);
         float blend = 1f - Mathf.Exp(-smoothing * Time.unscaledDeltaTime);
-        transform.position = Vector3.Lerp(transform.position, targetPosition, blend);
+        Vector3 cameraPosition = Vector3.Lerp(transform.position, targetPosition, blend);
+        if (parkour != null && swingViewWeight < .01f && throwViewWeight < .01f)
+            cameraPosition.x = Mathf.Lerp(transform.position.x, targetPosition.x, 1f - Mathf.Exp(-4f * Time.unscaledDeltaTime));
+        if (parkour != null && Time.unscaledTime < shakeUntil)
+            cameraPosition += new Vector3(Mathf.Sin(Time.unscaledTime*73f),Mathf.Sin(Time.unscaledTime*89f),0f)*shakeStrength;
+        transform.position = cameraPosition;
         transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, blend);
     }
 }

@@ -69,14 +69,122 @@ public sealed class PlayerController : MonoBehaviour
     public float MovementSpeed => movementSpeed;
     public float JumpVelocity => jumpVelocity;
     public Vector3 Position => body != null ? body.position : transform.position;
+    public Vector3 Velocity => body != null ? body.linearVelocity : Vector3.zero;
     public bool MovementLocked { get; set; }
 
     public bool IsGrounded => isGrounded;
+
+    [Header("Parkour Prototype (opt-in)")]
+    [SerializeField] private bool parkourEnabled;
+    [SerializeField] private float laneChangeDuration = 0.20f;
+    [SerializeField] private float inputBuffer = 0.12f;
+    [SerializeField] private float coyoteTime = 0.12f;
+    [SerializeField] private float slideDuration = 0.65f;
+    [SerializeField] private float slideCooldown = 0.15f;
+    [SerializeField] private float fastFallVelocity = 12f;
+    private PlayerGameplayMode gameplayMode = PlayerGameplayMode.FreePuzzle;
+    private int lane = 2;
+    private int bufferedLane;
+    private float laneInputUntil;
+    private float laneStarted = float.NegativeInfinity;
+    private float laneStartX;
+    private float jumpUntil = float.NegativeInfinity;
+    private float groundedAt = float.NegativeInfinity;
+    private float slideUntil = float.NegativeInfinity;
+    private float slideReadyAt;
+    private CapsuleCollider capsule;
+    private MovingSurface groundedSurface;
+    private float capsuleHeight;
+    private Vector3 capsuleCenter;
+    public float AutoRunSpeed { get; set; }
+    public bool AllowParkourInteraction { get; set; }
+    public bool ParkourEnabled => parkourEnabled;
+    public bool IsSliding => parkourEnabled && Time.time < slideUntil;
+    public int Lane => lane;
+    public float LastLaneChangeAt { get; private set; } = float.NegativeInfinity;
+    public PlayerGameplayMode GameplayMode => IsSwinging ? PlayerGameplayMode.Swinging :
+        IsClimbing ? PlayerGameplayMode.Climbing : throwPoseActive ? PlayerGameplayMode.ThrowPose : gameplayMode;
+    public event System.Action<int> LaneChanged;
+    public event System.Action JumpStarted;
+    public event System.Action SlideStarted;
+
+    public void SetGameplayMode(PlayerGameplayMode mode)
+    {
+        gameplayMode = mode;
+        jumpQueued = false;
+        jumpUntil = float.NegativeInfinity;
+        bufferedLane = 0;
+        if (mode == PlayerGameplayMode.AutoRun)
+        {
+            lane = Mathf.Clamp(Mathf.RoundToInt(Position.x / 3.6f) + 2, 0, 4);
+            laneStartX = Position.x;
+            laneStarted = Time.time;
+        }
+        if (mode != PlayerGameplayMode.AutoRun) EndSlide();
+    }
+
+    public void RequestLaneChange(int direction)
+    {
+        if (!parkourEnabled || GameplayMode != PlayerGameplayMode.AutoRun || MovementLocked) return;
+        bufferedLane = direction < 0 ? -1 : 1;
+        laneInputUntil = Time.time + inputBuffer;
+    }
+
+    public void RequestSlide()
+    {
+        if (!parkourEnabled || GameplayMode != PlayerGameplayMode.AutoRun || MovementLocked) return;
+        if (!isGrounded)
+        {
+            Vector3 velocity = body.linearVelocity;
+            velocity.y = Mathf.Min(velocity.y, -fastFallVelocity);
+            body.linearVelocity = velocity;
+            return;
+        }
+        if (Time.time < slideReadyAt || capsule == null) return;
+        slideUntil = Time.time + slideDuration;
+        slideReadyAt = slideUntil + slideCooldown;
+        capsule.height = capsuleHeight * 0.5f;
+        capsule.center = capsuleCenter + Vector3.down * capsuleHeight * 0.25f;
+        SlideStarted?.Invoke();
+    }
+
+    private void EndSlide()
+    {
+        slideUntil = float.NegativeInfinity;
+        if (capsule != null) { capsule.height = capsuleHeight; capsule.center = capsuleCenter; }
+    }
+
+    private void ApplyAutoRun(ref Vector3 velocity)
+    {
+        if (Time.time >= slideUntil) EndSlide();
+        if (bufferedLane != 0 && Time.time >= laneStarted + laneChangeDuration)
+        {
+            if (Time.time <= laneInputUntil)
+            {
+                int next = Mathf.Clamp(lane + bufferedLane, 0, 4);
+                if (next != lane)
+                {
+                    laneStartX = body.position.x;
+                    lane = next;
+                    laneStarted = Time.time;
+                    LastLaneChangeAt = Time.time;
+                    LaneChanged?.Invoke(lane);
+                }
+            }
+            bufferedLane = 0;
+        }
+        float t = Mathf.Clamp01((Time.time + Time.fixedDeltaTime - laneStarted) / laneChangeDuration);
+        float targetX = Mathf.Lerp(laneStartX, (lane - 2) * 3.6f, t * t * (3f - 2f * t));
+        velocity.x = MovementLocked ? 0f : (targetX - body.position.x) / Time.fixedDeltaTime;
+        velocity.z = MovementLocked ? 0f : AutoRunSpeed;
+    }
 
     private void Awake()
     {
         body = GetComponent<Rigidbody>();
         playerCollider = GetComponent<Collider>();
+        capsule = playerCollider as CapsuleCollider;
+        if (capsule != null) { capsuleHeight = capsule.height; capsuleCenter = capsule.center; }
         UnityEngine.InputSystem.InputActionAsset actions = GetComponent<UnityEngine.InputSystem.PlayerInput>().actions;
         var gameplay = actions.FindActionMap(GameplayMapName, true);
         moveAction = gameplay.FindAction(MoveActionName, true);
@@ -104,17 +212,28 @@ public sealed class PlayerController : MonoBehaviour
 
     private void OnMove(UnityEngine.InputSystem.InputAction.CallbackContext context)
     {
+        Vector2 previous = moveInput;
         moveInput = Vector2.ClampMagnitude(context.ReadValue<Vector2>(), 1f);
+        if (parkourEnabled && GameplayMode == PlayerGameplayMode.AutoRun)
+        {
+            if (moveInput.x < -0.5f && previous.x >= -0.5f) RequestLaneChange(-1);
+            if (moveInput.x > 0.5f && previous.x <= 0.5f) RequestLaneChange(1);
+            if (moveInput.y < -0.5f && previous.y >= -0.5f) RequestSlide();
+        }
     }
 
     private void OnJump(UnityEngine.InputSystem.InputAction.CallbackContext context)
     {
-        if (!IsClimbing && !MovementLocked) jumpQueued = true;
+        if (!IsClimbing && !MovementLocked)
+        {
+            jumpQueued = true;
+            jumpUntil = Time.time + inputBuffer;
+        }
     }
 
     private void OnInteract(UnityEngine.InputSystem.InputAction.CallbackContext context)
     {
-        if (MovementLocked) return;
+        if (MovementLocked || (parkourEnabled && GameplayMode == PlayerGameplayMode.AutoRun && !AllowParkourInteraction)) return;
         if (IsSwinging)
         {
             EndSwing(false);
@@ -244,6 +363,7 @@ public sealed class PlayerController : MonoBehaviour
         }
 
         swingSource = null;
+        if (parkourEnabled) gameplayMode = release ? PlayerGameplayMode.AirborneFromSwing : PlayerGameplayMode.FreePuzzle;
         body.isKinematic = false;
         body.useGravity = true;
         body.linearVelocity = release ? velocity : Vector3.zero;
@@ -298,6 +418,10 @@ public sealed class PlayerController : MonoBehaviour
         becameAirborneAfterJump = false;
         swingReleaseMomentumUntil = float.NegativeInfinity;
         throwPoseActive = false;
+        EndSlide();
+        jumpUntil = float.NegativeInfinity;
+        groundedAt = float.NegativeInfinity;
+        bufferedLane = 0;
     }
 
     private void FixedUpdate()
@@ -354,6 +478,7 @@ public sealed class PlayerController : MonoBehaviour
         }
         Vector3 velocity = body.linearVelocity;
         isGrounded = CheckGrounded();
+        if (isGrounded) groundedAt = Time.time;
         if (!isGrounded && jumpConsumed) becameAirborneAfterJump = true;
         else if (isGrounded && becameAirborneAfterJump && velocity.y <= 0f)
         {
@@ -361,10 +486,22 @@ public sealed class PlayerController : MonoBehaviour
             becameAirborneAfterJump = false;
         }
         bool preserveSwingMomentum = Time.time < swingReleaseMomentumUntil;
-        if (!preserveSwingMomentum)
+        if (parkourEnabled && GameplayMode == PlayerGameplayMode.AutoRun)
         {
-            velocity.x = MovementLocked ? 0f : moveInput.x * movementSpeed;
-            velocity.z = MovementLocked ? 0f : moveInput.y * movementSpeed;
+            ApplyAutoRun(ref velocity);
+        }
+        else if (!preserveSwingMomentum)
+        {
+            bool locked = MovementLocked || gameplayMode == PlayerGameplayMode.Stunned ||
+                gameplayMode == PlayerGameplayMode.Respawning || gameplayMode == PlayerGameplayMode.Finished;
+            velocity.x = locked ? 0f : moveInput.x * movementSpeed;
+            velocity.z = locked ? 0f : moveInput.y * movementSpeed;
+        }
+        if (parkourEnabled && isGrounded && groundedSurface != null && !jumpConsumed)
+        {
+            velocity.y = groundedSurface.Velocity.y;
+            velocity.x += groundedSurface.Velocity.x;
+            velocity.z += groundedSurface.Velocity.z;
         }
         Vector3 planarVelocity = new Vector3(velocity.x, 0f, velocity.z);
         if (throwPoseActive)
@@ -379,12 +516,17 @@ public sealed class PlayerController : MonoBehaviour
                 targetRotation,
                 1f - Mathf.Exp(-turnSpeed * Time.fixedDeltaTime)));
         }
-        if (jumpQueued && isGrounded && !jumpConsumed && !MovementLocked)
+        bool requestedJump = parkourEnabled ? Time.time <= jumpUntil : jumpQueued;
+        bool canJump = isGrounded || (parkourEnabled && Time.time - groundedAt <= coyoteTime);
+        if (requestedJump && canJump && !jumpConsumed && !MovementLocked)
         {
+            EndSlide();
             velocity.y = jumpVelocity;
             jumpConsumed = true;
             becameAirborneAfterJump = false;
             isGrounded = false;
+            jumpUntil = float.NegativeInfinity;
+            JumpStarted?.Invoke();
         }
         jumpQueued = false;
         if (ConstrainMovement != null)
@@ -399,6 +541,7 @@ public sealed class PlayerController : MonoBehaviour
 
 private bool CheckGrounded()
     {
+        groundedSurface = null;
         Vector3 center = body.position + groundCheckOffset;
         int hitCount = Physics.OverlapSphereNonAlloc(
             center,
@@ -420,6 +563,7 @@ private bool CheckGrounded()
                 continue;
             }
 
+            MovingSurface.TryGet(hit.attachedRigidbody, out groundedSurface);
             return true;
         }
 

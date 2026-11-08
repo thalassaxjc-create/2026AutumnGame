@@ -17,6 +17,8 @@ public sealed class InteractionPrompt : MonoBehaviour
     private TextMeshProUGUI completionText;
     private RectTransform completionRoot;
     private const float TimingBarWidth = 560f;
+    [SerializeField] private ParkourDirector parkour;
+    public void ConfigureParkour(ParkourDirector director) { parkour = director; }
 
     public void Configure(
         FivePillarLevel puzzle,
@@ -34,8 +36,10 @@ public sealed class InteractionPrompt : MonoBehaviour
         climbLabels = climbTexts;
     }
 
+    private GameObject helpPanel;
     private void Awake()
     {
+        if (status != null) helpPanel = status.transform.parent.gameObject;
         BuildRuntimeHud();
     }
 
@@ -104,7 +108,7 @@ public sealed class InteractionPrompt : MonoBehaviour
         if (timingRoot == null) BuildRuntimeHud();
         PullBlockMechanism timing = level.ActiveTimingMechanism;
         bool active = timing != null;
-        if (completionRoot != null) completionRoot.gameObject.SetActive(!active);
+        if (completionRoot != null) completionRoot.gameObject.SetActive(!active && (parkour == null || !parkour.Finished));
         timingRoot.gameObject.SetActive(active);
         if (!active) return;
 
@@ -127,6 +131,13 @@ public sealed class InteractionPrompt : MonoBehaviour
     private void UpdateStatus()
     {
         if (status == null) return;
+        if (parkour != null)
+        {
+            string instructionText = parkour.Instruction;
+            if (helpPanel != null) helpPanel.SetActive(!parkour.Finished && !string.IsNullOrEmpty(instructionText));
+            status.text = instructionText;
+            return;
+        }
 
         string instruction = level.Interaction != null ? level.Interaction.CurrentPrompt : string.Empty;
         PullBlockMechanism timing = level.ActiveTimingMechanism;

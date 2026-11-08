@@ -4,6 +4,13 @@ public sealed class FivePillarLevel : MonoBehaviour
 {
     private const float FinishZ = 58f;
     private const float LevelEndZ = 59.2f;
+    [Header("Parkour prototype")]
+    [SerializeField] private bool useParkourRules;
+    [SerializeField] private float parkourFinishZ = 172f;
+    [SerializeField] private float parkourEndZ = 176f;
+    public bool ExternalRespawn { get; set; }
+    public Vector3 Checkpoint => checkpoint;
+    public int CheckpointStage => checkpointStage;
     [SerializeField] private PlayerController player;
     [SerializeField] private PlayerInteraction interaction;
     [SerializeField] private PullBlockMechanism[] mechanisms = new PullBlockMechanism[0];
@@ -22,7 +29,7 @@ public sealed class FivePillarLevel : MonoBehaviour
     public int FailureCount { get; private set; }
     public int ResolvedCount { get; private set; }
     public bool AllResolved => mechanisms.Length > 0 && ResolvedCount >= mechanisms.Length;
-    public bool ReachedFinish => AllResolved && player != null && player.Position.z >= FinishZ && player.Position.y > -1.5f;
+    public bool ReachedFinish => (useParkourRules || AllResolved) && player != null && player.Position.z >= (useParkourRules ? parkourFinishZ : FinishZ) && player.Position.y > -1.5f;
     public bool PerfectComplete => ReachedFinish && TransferCount == mechanisms.Length;
     public bool Complete => AllResolved;
     public bool AtGoal => ReachedFinish;
@@ -225,7 +232,7 @@ public sealed class FivePillarLevel : MonoBehaviour
             checkpointStage = i + 1;
         }
 
-        if (!player.IsClimbing && !player.IsSwinging && !IsSwinging && player.Position.y < fallRespawnHeight)
+        if (!ExternalRespawn && !player.IsClimbing && !player.IsSwinging && !IsSwinging && player.Position.y < fallRespawnHeight)
         {
             player.Respawn(checkpoint);
         }
@@ -259,10 +266,10 @@ public sealed class FivePillarLevel : MonoBehaviour
         }
 
         target.x = Mathf.Clamp(target.x, -8.45f, 8.45f);
-        target.z = Mathf.Clamp(target.z, -3.7f, LevelEndZ);
+        target.z = Mathf.Clamp(target.z, -3.7f, useParkourRules ? parkourEndZ : LevelEndZ);
         if (masks == null) return target;
 
-        for (int row = 0; row < masks.Length; row++)
+        for (int row = 0; !useParkourRules && row < masks.Length; row++)
         {
             for (int lane = 0; lane < 5; lane++)
             {

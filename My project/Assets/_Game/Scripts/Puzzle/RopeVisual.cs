@@ -73,7 +73,9 @@ public sealed class RopeVisual : MonoBehaviour
 
     public void SetPoints(Vector3[] positions)
     {
-        points = positions == null ? new Vector3[0] : (Vector3[])positions.Clone();
+        int count = positions == null ? 0 : positions.Length;
+        if (points == null || points.Length != count) points = new Vector3[count];
+        if (count > 0) System.Array.Copy(positions, points, count);
         broken = false;
 
         if (!Application.isPlaying)
@@ -199,7 +201,8 @@ public sealed class RopeVisual : MonoBehaviour
     {
         if (points == null || points.Length < 2 || nodes == null || nodes.Length < 2) return;
 
-        guideNodeIndices = new int[points.Length];
+        if (guideNodeIndices == null || guideNodeIndices.Length != points.Length)
+            guideNodeIndices = new int[points.Length];
         float total = PathLength(points);
         float traversed = 0f;
         guideNodeIndices[0] = 0;

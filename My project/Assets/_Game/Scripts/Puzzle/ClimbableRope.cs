@@ -28,6 +28,12 @@ public sealed class ClimbableRope : MonoBehaviour
     private Collider ignoredPlayerCollider;
     private Collider platformCollider;
     private float restoreCollisionAt = float.NegativeInfinity;
+    private Vector3[] swingPoints;
+    public event System.Action<ClimbableRope> SwingStarted;
+    public event System.Action<ClimbableRope> SwingReleased;
+    public event System.Action<ClimbableRope> Restored;
+    public event System.Action<ClimbableRope, PlayerController> RiderLanded;
+    public void NotifyRiderLanded(PlayerController rider) { RiderLanded?.Invoke(this, rider); }
 
     public Vector3 Bottom => path[0];
     public Vector3 Top => path[path.Length - 1];
@@ -115,6 +121,7 @@ public sealed class ClimbableRope : MonoBehaviour
             {
                 residualSwing = false;
                 riderAttached = true;
+                SwingStarted?.Invoke(this);
             }
             return started;
         }
@@ -158,6 +165,7 @@ public sealed class ClimbableRope : MonoBehaviour
         residualAnchor = anchor;
         residualForward = forward;
         residualLength = length;
+        SwingReleased?.Invoke(this);
 
         if (playerCollider != null && platformCollider != null)
         {
@@ -272,10 +280,12 @@ public sealed class ClimbableRope : MonoBehaviour
     private void UpdateSwingRope(Vector3 tie, Vector3 anchor)
     {
         if (swingRope == null) return;
-        if (path != null && path.Length > 2)
-            swingRope.SetPoints(new[] { tie, anchor, path[path.Length - 1] });
-        else
-            swingRope.SetPoints(new[] { tie, anchor });
+        int count = path != null && path.Length > 2 ? 3 : 2;
+        if (swingPoints == null || swingPoints.Length != count) swingPoints = new Vector3[count];
+        swingPoints[0] = tie;
+        swingPoints[1] = anchor;
+        if (count == 3) swingPoints[2] = path[path.Length - 1];
+        swingRope.SetPoints(swingPoints);
     }
 
     private void RestoreRestPose()
@@ -283,6 +293,7 @@ public sealed class ClimbableRope : MonoBehaviour
         if (!restPoseCaptured || swingPlatform == null) return;
         swingPlatform.SetPositionAndRotation(restPlatformPosition, restPlatformRotation);
         UpdateSwingRope(CurrentTiePoint(), FindSwingAnchor());
+        Restored?.Invoke(this);
     }
 
     private void OnDrawGizmosSelected()

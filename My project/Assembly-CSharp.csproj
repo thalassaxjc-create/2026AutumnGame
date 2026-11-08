@@ -53,16 +53,35 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\_Game\Scripts\Player\PlayerController.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\PlayerGameplayMode.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\ParkourLevelConfig.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\ParkourObstacleEvent.cs" />
     <Compile Include="Assets\_Game\Scripts\Visual\CrescentPlankMesh.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\WovenPatternRecorder.cs" />
     <Compile Include="Assets\_Game\Scripts\Puzzle\PullBlockMechanism.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\Obstacles\HangingWeightPendulum.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\ParkourHUD.cs" />
     <Compile Include="Assets\_Game\Scripts\Level\RingObstacleGenerator.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\Obstacles\ThreadGateObstacle.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\Obstacles\FallingBambooObstacle.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\ParkourDirector.cs" />
     <Compile Include="Assets\_Game\Scripts\Interaction\PlayerInteraction.cs" />
     <Compile Include="Assets\_Game\Scripts\UI\InteractionPrompt.cs" />
     <Compile Include="Assets\_Game\Scripts\Level\FivePillarLevel.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\Obstacles\WarpShedController.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\Obstacles\ThreadKnotObstacle.cs" />
     <Compile Include="Assets\_Game\Scripts\Puzzle\ClimbableRope.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\ParkourFeedback.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Readme.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\MovingSurface.cs" />
     <Compile Include="Assets\_Game\Scripts\Camera\PuzzleCamera.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\ParkourCheckpoint.cs" />
     <Compile Include="Assets\_Game\Scripts\Puzzle\RopeVisual.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\Obstacles\ButtonThreadObstacle.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\BeatClock.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\Obstacles\ReedBeaterChase.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\Obstacles\PressureButton.cs" />
+    <Compile Include="Assets\_Game\Scripts\Parkour\ScoreComboController.cs" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile-2-Pass.shader" />

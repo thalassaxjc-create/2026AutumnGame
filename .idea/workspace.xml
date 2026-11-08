@@ -14,16 +14,13 @@
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/My project/Assembly-CSharp-Editor.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assembly-CSharp-Editor.csproj" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/My project/Assembly-CSharp.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assembly-CSharp.csproj" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/Assets/Scenes/WhiteboxLevel.unity" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/Scenes/WhiteboxLevel.unity" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/PlayerControls.inputactions" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/PlayerControls.inputactions" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/Prefabs/Player.prefab" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/Prefabs/Player.prefab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Camera/PuzzleCamera.cs" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Camera/PuzzleCamera.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Level/FivePillarLevel.cs" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Level/FivePillarLevel.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Player/PlayerController.cs" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Player/PlayerController.cs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/Packages/manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Packages/manifest.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/Packages/packages-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Packages/packages-lock.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/ProjectSettings/EditorBuildSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/My project/ProjectSettings/EditorBuildSettings.asset" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/ProjectSettings/ProjectSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/My project/ProjectSettings/ProjectSettings.asset" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/ProjectSettings/ShaderGraphSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/My project/ProjectSettings/ShaderGraphSettings.asset" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/My project/ProjectSettings/URPProjectSettings.asset" beforeDir="false" afterPath="$PROJECT_DIR$/My project/ProjectSettings/URPProjectSettings.asset" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Puzzle/ClimbableRope.cs" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Puzzle/ClimbableRope.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Puzzle/PullBlockMechanism.cs" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Puzzle/PullBlockMechanism.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Puzzle/RopeVisual.cs" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/Puzzle/RopeVisual.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/UI/InteractionPrompt.cs" beforeDir="false" afterPath="$PROJECT_DIR$/My project/Assets/_Game/Scripts/UI/InteractionPrompt.cs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

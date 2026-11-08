@@ -52,9 +52,20 @@
     <Analyzer Include="E:\game\2026AutumnGame\My project\Library\PackageCache\com.unity.dt.app-ui@8606a9847e5b\Runtime\MVVM\SourceGenerators\netstandard2.0\MVVMSourceGenerators.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Editor\ParkourBaselineTest.cs" />
+    <Compile Include="Assets\Editor\ParkourMechanismUpgrade.cs" />
+    <Compile Include="Assets\Editor\ParkourProfileCapture.cs" />
     <Compile Include="Assets\TutorialInfo\Scripts\Editor\ReadmeEditor.cs" />
     <Compile Include="Assets\Editor\PlayModeTestRunner.cs" />
+    <Compile Include="Assets\Editor\ParkourIntegrationTest.cs" />
+    <Compile Include="Assets\Editor\ParkourPrototypeBuilder.cs" />
+    <Compile Include="Assets\Editor\ParkourGateTest.cs" />
+    <Compile Include="Assets\Editor\KnotWindowVerification.cs" />
+    <Compile Include="Assets\Editor\ParkourSystemBuilder.cs" />
+    <Compile Include="Assets\Editor\ParkourStateVerification.cs" />
     <Compile Include="Assets\Editor\ProjectOneUpgrade.cs" />
+    <Compile Include="Assets\Editor\ParkourMechanismVerification.cs" />
+    <Compile Include="Assets\Editor\ParkourPresentationVerification.cs" />
     <Reference Include="UnityEngine">
       <HintPath>C:\Program Files\Unity\Hub\Editor\6000.3.27f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>

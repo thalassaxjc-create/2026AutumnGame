@@ -29,6 +29,7 @@ public sealed class PullBlockMechanism : MonoBehaviour
     [SerializeField, Min(0.1f)] private float timingSpeed = 0.72f;
     [SerializeField, Min(0.4f)] private float failedFallDuration = 1.35f;
     [SerializeField, Min(0f)] private float poseBlendDuration = 0.45f;
+    [SerializeField, Min(1.35f)] private float parkourHeldOffset = 2.1f;
     [SerializeField] private Vector3 pullPoint;
 
     private PullState state;
@@ -44,6 +45,12 @@ public sealed class PullBlockMechanism : MonoBehaviour
     public System.Func<bool> ValidatePull { get; set; }
     public event System.Action<PullBlockMechanism> Transferred;
     public event System.Action<PullBlockMechanism, bool> Resolved;
+    public event System.Action<PullBlockMechanism> ThrowStarted;
+    public event System.Action<PullBlockMechanism, bool> ThrowResolved
+    {
+        add { Resolved += value; }
+        remove { Resolved -= value; }
+    }
 
     public PullState State => state;
     public float SectionZ => sectionZ;
@@ -172,6 +179,7 @@ public sealed class PullBlockMechanism : MonoBehaviour
         foreach (Collider collider in blockColliders) collider.enabled = false;
         UpdateHeldPlank(true);
         if (barrier != null) barrier.SetActive(false);
+        ThrowStarted?.Invoke(this);
         return true;
     }
 
@@ -291,7 +299,8 @@ public sealed class PullBlockMechanism : MonoBehaviour
     private void UpdateHeldPlank(bool immediate)
     {
         if (block == null || activePlayer == null) return;
-        Vector3 target = activePlayer.Position + Vector3.left * 1.35f + Vector3.up * 0.1f;
+        float distance = activePlayer.ParkourEnabled ? parkourHeldOffset : 1.35f;
+        Vector3 target = activePlayer.Position + Vector3.left * distance + Vector3.up * 0.1f;
         float blend = immediate
             ? 1f
             : 1f - Mathf.Exp(-12f * Mathf.Max(0.001f, Time.unscaledDeltaTime));

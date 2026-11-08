@@ -1,0 +1,364 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac10e9341e865e34eb2a5625b432c22c, type: 3}
+  m_Name: ParkourLevel_01
+  m_EditorClassIdentifier: Assembly-CSharp::ParkourLevelConfig
+  startZ: -3
+  finishZ: 172
+  endZ: 176
+  bpm: 120
+  throwSections:
+  - 58
+  - 124
+  checkpoints:
+  - -3
+  - 64
+  - 130
+  speed:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: -3
+      value: 4.2
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 24
+      value: 4.5
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 62.5
+      value: 4.8
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 88
+      value: 5.4
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 128.5
+      value: 5.8
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 140
+      value: 5.8
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 170
+      value: 7.2
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 172
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  obstacles:
+  - z: 10
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 17
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 16
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 4
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 22
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 10
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 28
+    interactionZ: 0
+    endZ: 0
+    type: 1
+    laneMask: 31
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.8
+    gapSequence: 
+  - z: 40
+    interactionZ: 34
+    endZ: 40
+    type: 8
+    laneMask: 31
+    activationDistance: 12
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.8
+    gapSequence: 
+  - z: 44
+    interactionZ: 0
+    endZ: 0
+    type: 5
+    laneMask: 24
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 46
+    interactionZ: 0
+    endZ: 0
+    type: 1
+    laneMask: 31
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.8
+    gapSequence: 
+  - z: 49.15
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 10
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 82
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 21
+    activationDistance: 10
+    duration: 0.86956525
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 88
+    interactionZ: 0
+    endZ: 0
+    type: 5
+    laneMask: 3
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 88
+    interactionZ: 0
+    endZ: 0
+    type: 5
+    laneMask: 24
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0.6
+    warningTime: 0.45
+    gapSequence: 
+  - z: 96
+    interactionZ: 0
+    endZ: 0
+    type: 1
+    laneMask: 31
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.8
+    gapSequence: 
+  - z: 98
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 4
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 104
+    interactionZ: 0
+    endZ: 0
+    type: 4
+    laneMask: 27
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 110
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 5
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 113
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 18
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 133
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 21
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 138
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 10
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 143
+    interactionZ: 0
+    endZ: 0
+    type: 1
+    laneMask: 31
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.8
+    gapSequence: 
+  - z: 158
+    interactionZ: 0
+    endZ: 0
+    type: 5
+    laneMask: 3
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 158
+    interactionZ: 0
+    endZ: 0
+    type: 5
+    laneMask: 24
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0.6
+    warningTime: 0.45
+    gapSequence: 
+  - z: 162
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 17
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 165
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 10
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 168
+    interactionZ: 0
+    endZ: 0
+    type: 9
+    laneMask: 5
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 170
+    interactionZ: 0
+    endZ: 0
+    type: 7
+    laneMask: 31
+    activationDistance: 10
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.45
+    gapSequence: 
+  - z: 86
+    interactionZ: 0
+    endZ: 96
+    type: 10
+    laneMask: 24
+    activationDistance: 14
+    duration: 1
+    phaseOffset: 0
+    warningTime: 0.8
+    gapSequence: 
