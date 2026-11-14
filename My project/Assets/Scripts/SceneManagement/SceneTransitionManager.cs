@@ -32,15 +32,18 @@ public class SceneTransitionManager : MonoBehaviour
 
     void Update()
     {
-        if (!SceneTransitionState.WaitForInteractRelease)
-            return;
         if (!IsInteractHeld())
-            SceneTransitionState.WaitForInteractRelease = false;
+        {
+            if (SceneTransitionState.WaitForInteractRelease)
+                SceneTransitionState.WaitForInteractRelease = false;
+            if (GameFlowModalState.WaitForInteractRelease)
+                GameFlowModalState.NotifyInteractReleased();
+        }
     }
 
     public static bool TryConsumeInteractPress()
     {
-        if (SceneTransitionState.IsLocked)
+        if (SceneTransitionState.IsLocked || GameFlowModalState.IsInteractionBlocked)
             return false;
 
         SceneTransitionManager manager = FindInstance();
@@ -51,20 +54,25 @@ public class SceneTransitionManager : MonoBehaviour
 
     public static void Request(string sceneName, string spawnId)
     {
+        TryRequest(sceneName, spawnId);
+    }
+
+    public static bool TryRequest(string sceneName, string spawnId)
+    {
         if (SceneTransitionState.IsLoading)
-            return;
+            return false;
 
         if (string.IsNullOrEmpty(sceneName) || string.IsNullOrEmpty(spawnId))
         {
             Debug.LogError("场景切换缺少目标场景或出生点。");
-            return;
+            return false;
         }
 
         if (!TryGetBuildIndex(sceneName, out int buildIndex, out string error))
         {
             Debug.LogError(error);
             SceneTransitionState.FailLoad();
-            return;
+            return false;
         }
 
         InteractionPromptUI.HideImmediate();
@@ -73,11 +81,13 @@ public class SceneTransitionManager : MonoBehaviour
         try
         {
             SceneManager.LoadScene(buildIndex);
+            return true;
         }
         catch (System.Exception exception)
         {
             SceneTransitionState.FailLoad();
             Debug.LogError("加载场景失败: " + sceneName + "\n" + exception);
+            return false;
         }
     }
 
