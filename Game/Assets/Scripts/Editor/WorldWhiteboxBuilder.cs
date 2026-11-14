@@ -9,7 +9,7 @@ using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 /// <summary>
-/// 第二阶段室外大地图白盒。只重建 WorldRoot，不改 PlayerController、CameraFollow、输入系统和 WorkshopScene。
+/// 室外大地图白盒。按草图重排 WorldRoot：工坊北门左竹林右街坊，南门回家。山只作外圈点景，不圈死可走范围。
 /// </summary>
 public static class WorldWhiteboxBuilder
 {
@@ -19,90 +19,124 @@ public static class WorldWhiteboxBuilder
     const string MeshFolder = "Assets/Meshes/Whitebox";
     const string MaterialFolder = "Assets/Materials";
 
-    const float MapWidth = 100f;
-    const float MapDepth = 80f;
+    const float MapWidth = 640f;
+    const float MapDepth = 560f;
     const float GroundTopY = 0f;
     const float GroundThickness = 1f;
-    const float TileSize = 5f;
-    const float RiverWidth = 6f;
-    const float RiverSurfaceY = -0.35f;
-    const float RoadWidth = 4f;
+    const float TileSize = 10f;
+    const float RiverWidth = 8f;
+    const float RiverSurfaceY = 0.045f;
+    const float RoadWidth = 4.5f;
     const float RoadHeight = 0.12f;
-    const float BridgeZ = 22f;
-    const float BridgeGap = 7f;
     const int BambooSeed = 12880001;
-    const int BambooCount = 52;
+    const int BambooCount = 90;
+    const float WorkshopDoorWidth = 2.8f;
+    const float WorkshopDoorHeight = 3f;
 
-    static readonly Vector3 PlayerSpawn = new Vector3(2f, 1f, -10f);
+    static readonly Vector3 PlayerSpawn = new Vector3(72f, 1f, 76f);
+    static readonly Quaternion PlayerSpawnRotation = Quaternion.Euler(0f, 180f, 0f);
 
-    static readonly Vector3 WorkshopCenter = new Vector3(-24f, 0f, 24f);
-    static readonly Vector3 WorkshopSize = new Vector3(18f, 5f, 14f);
-    static readonly Vector3 ShopCenter = new Vector3(-8f, 0f, 6f);
-    static readonly Vector3 ShopSize = new Vector3(10f, 4f, 8f);
-    static readonly Vector3 CourtyardCenter = new Vector3(2f, 0f, -10f);
-    static readonly Vector3 CourtyardSize = new Vector3(24f, 0.8f, 18f);
-    static readonly Vector3 BedroomCenter = new Vector3(-14f, 0f, -24f);
-    static readonly Vector3 BedroomSize = new Vector3(10f, 3.6f, 8f);
-    static readonly Vector3 BridgeCenter = new Vector3(22.5f, 0f, 22f);
-    static readonly Vector3 BridgeSize = new Vector3(14f, 0.35f, 4.5f);
-    static readonly Vector3 BambooCenter = new Vector3(-42f, 0f, 32f);
-    static readonly Vector3 BambooArea = new Vector3(16f, 0f, 16f);
+    static readonly Vector3 WorkshopCenter = new Vector3(-48f, 0f, 10f);
+    static readonly Vector3 WorkshopSize = new Vector3(34f, 5.5f, 22f);
+    static readonly Vector3 WorkshopNorthDoor = new Vector3(-58f, 0f, 21f);
+    static readonly Vector3 WorkshopSouthDoor = new Vector3(-36f, 0f, -1f);
+
+    static readonly Vector3 StreetHouseACenter = new Vector3(0f, 0f, 64f);
+    static readonly Vector3 StreetHouseASize = new Vector3(16f, 5.6f, 14f);
+    static readonly Vector3 StreetHouseBCenter = new Vector3(26f, 0f, 48f);
+    static readonly Vector3 StreetHouseBSize = new Vector3(11f, 5.2f, 12f);
+    static readonly Vector3 StreetHouseCCenter = new Vector3(64f, 0f, 4f);
+    static readonly Vector3 StreetHouseCSize = new Vector3(12f, 5.4f, 14f);
+
+    static readonly Vector3 CourtyardCenter = new Vector3(12f, 0f, -30f);
+    static readonly Vector3 CourtyardSize = new Vector3(28f, 4.2f, 22f);
+    static readonly Vector3 KitchenCenter = new Vector3(12f, 0f, -15f);
+    static readonly Vector3 KitchenSize = new Vector3(12f, 3.6f, 8f);
+    static readonly Vector3 BedroomCenter = new Vector3(3f, 0f, -47f);
+    static readonly Vector3 BedroomSize = new Vector3(10f, 3.8f, 12f);
+    static readonly Vector3 BridgeCenter = new Vector3(60f, 0f, 48f);
+    static readonly Vector3 BridgeSize = new Vector3(18f, 0.35f, 5.5f);
+    static readonly Vector3 BambooCenter = new Vector3(-90f, 0f, 40f);
+    static readonly Vector3 BambooArea = new Vector3(40f, 0f, 36f);
+    static readonly Vector3 VillageGateCenter = new Vector3(72f, 0f, 72f);
 
     static readonly Vector3[] RiverPoints =
     {
-        new Vector3(21f, 0f, -42f),
-        new Vector3(17.5f, 0f, -28f),
-        new Vector3(23f, 0f, -14f),
-        new Vector3(18.5f, 0f, -2f),
-        new Vector3(25f, 0f, 10f),
-        new Vector3(22f, 0f, 22f),
-        new Vector3(27f, 0f, 34f),
-        new Vector3(24f, 0f, 42f)
+        new Vector3(16f, 0f, 272f),
+        new Vector3(26f, 0f, 228f),
+        new Vector3(36f, 0f, 178f),
+        new Vector3(46f, 0f, 132f),
+        new Vector3(52f, 0f, 96f),
+        new Vector3(56f, 0f, 78f),
+        new Vector3(58f, 0f, 64f),
+        new Vector3(60f, 0f, 48f),
+        new Vector3(66f, 0f, 32f),
+        new Vector3(74f, 0f, 16f),
+        new Vector3(84f, 0f, 2f),
+        new Vector3(92f, 0f, -18f),
+        new Vector3(88f, 0f, -40f),
+        new Vector3(96f, 0f, -70f),
+        new Vector3(114f, 0f, -118f),
+        new Vector3(146f, 0f, -168f),
+        new Vector3(188f, 0f, -214f),
+        new Vector3(242f, 0f, -258f)
     };
 
-    static readonly Vector3[] MainRoad =
+    static readonly Vector3[] NorthToBamboo =
     {
-        new Vector3(-24f, 0f, 15.4f),
-        new Vector3(-18f, 0f, 13f),
-        new Vector3(-12f, 0f, 11.5f),
-        new Vector3(-8f, 0f, 11f),
-        new Vector3(0f, 0f, 9f),
-        new Vector3(4f, 0f, 4f),
-        new Vector3(2f, 0f, -0.6f)
+        new Vector3(-58f, 0f, 24.5f),
+        new Vector3(-68f, 0f, 30f),
+        new Vector3(-78f, 0f, 36f),
+        new Vector3(-90f, 0f, 40f)
     };
 
-    static readonly Vector3[] ShopRoad =
+    static readonly Vector3[] NorthToStreet =
     {
-        new Vector3(-8f, 0f, 11f),
-        new Vector3(-8f, 0f, 2.8f)
+        new Vector3(-58f, 0f, 24.5f),
+        new Vector3(-44f, 0f, 32f),
+        new Vector3(-24f, 0f, 40f),
+        new Vector3(-8f, 0f, 48f),
+        new Vector3(0f, 0f, 52f)
     };
 
-    static readonly Vector3[] BridgeRoad =
+    static readonly Vector3[] SouthToHome =
     {
-        new Vector3(-8f, 0f, 11f),
-        new Vector3(-2f, 0f, 14.5f),
-        new Vector3(6f, 0f, 19f),
-        new Vector3(14.8f, 0f, 22f)
+        new Vector3(-36f, 0f, -4.5f),
+        new Vector3(-28f, 0f, -12f),
+        new Vector3(-18f, 0f, -20f),
+        new Vector3(-8f, 0f, -28f),
+        new Vector3(-5.2f, 0f, -30f)
     };
 
-    static readonly Vector3[] VillageRoad =
+    static readonly Vector3[] HomeToBridge =
     {
-        new Vector3(30.2f, 0f, 22f),
-        new Vector3(36f, 0f, 18f),
+        new Vector3(30f, 0f, -30f),
+        new Vector3(36f, 0f, -8f),
         new Vector3(40f, 0f, 10f),
-        new Vector3(38f, 0f, -2f),
-        new Vector3(36f, 0f, -14f)
+        new Vector3(44f, 0f, 28f),
+        new Vector3(48f, 0f, 40f),
+        new Vector3(51f, 0f, 48f),
+        new Vector3(69f, 0f, 48f),
+        new Vector3(74f, 0f, 60f),
+        new Vector3(72f, 0f, 72f),
+        new Vector3(70f, 0f, 84f)
     };
 
-    static readonly Vector3[] BedroomRoad =
+    static readonly Vector3[] StreetLink =
     {
-        new Vector3(2f, 0f, -10f),
-        new Vector3(-6f, 0f, -16f),
-        new Vector3(-14f, 0f, -19.4f)
+        new Vector3(0f, 0f, 52f),
+        new Vector3(16f, 0f, 40f),
+        new Vector3(32f, 0f, 36f),
+        new Vector3(46f, 0f, 40f)
+    };
+
+    static readonly Vector3[] EastHouseRoad =
+    {
+        new Vector3(40f, 0f, 4f),
+        new Vector3(56f, 0f, 4f)
     };
 
     static Materials Palette;
-    static Vector3[] RiverSamples;
 
     struct Materials
     {
@@ -119,6 +153,8 @@ public static class WorldWhiteboxBuilder
         public Material Leaf;
         public Material Mountain;
         public Material Courtyard;
+        public Material NpcElder;
+        public Material NpcUncle;
     }
 
     [MenuItem("宣纸帘/生成第二阶段大地图白盒")]
@@ -161,7 +197,6 @@ public static class WorldWhiteboxBuilder
         EnsureFolder(MaterialFolder);
         EnsureFolder(MeshFolder);
         Palette = CreateMaterials();
-        RiverSamples = SampleCatmullRom(RiverPoints, 1.25f);
 
         DisableLegacyGround();
         GameObject worldRoot = RebuildWorldRoot();
@@ -171,11 +206,13 @@ public static class WorldWhiteboxBuilder
         Transform workshop = CreateGroup(worldRoot.transform, "WorkshopExterior");
         Transform bamboo = CreateGroup(worldRoot.transform, "BambooForest");
         Transform courtyard = CreateGroup(worldRoot.transform, "Courtyard");
+        Transform kitchen = CreateGroup(worldRoot.transform, "Kitchen");
         Transform bedroom = CreateGroup(worldRoot.transform, "Bedroom");
-        Transform shop = CreateGroup(worldRoot.transform, "Shop");
         Transform river = CreateGroup(worldRoot.transform, "River");
         Transform bridge = CreateGroup(worldRoot.transform, "Bridge");
         Transform village = CreateGroup(worldRoot.transform, "VillageBuildings");
+        Transform villageGate = CreateGroup(worldRoot.transform, "VillageEntrance");
+        Transform npcs = CreateGroup(worldRoot.transform, "Npcs");
         Transform mountains = CreateGroup(worldRoot.transform, "Mountains");
 
         int groundTiles = BuildTerrain(terrain);
@@ -185,10 +222,13 @@ public static class WorldWhiteboxBuilder
         BuildWorkshop(workshop);
         int bambooCount = BuildBamboo(bamboo);
         BuildCourtyard(courtyard);
+        BuildKitchen(kitchen);
         BuildBedroom(bedroom);
-        BuildShop(shop);
         BuildVillage(village);
+        BuildVillageEntrance(villageGate);
+        BuildNpcs(npcs);
         BuildMountains(mountains);
+        ApplyWorldFog();
         PlacePlayerSafely();
 
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
@@ -243,11 +283,8 @@ public static class WorldWhiteboxBuilder
         {
             for (int z = 0; z < rows; z++)
             {
-                Vector2 center = new Vector2(originX + (x + 0.5f) * TileSize, originZ + (z + 0.5f) * TileSize);
-                bool isLand = DistanceToRiver(center) > RiverWidth * 0.5f + 0.35f;
-                land[x, z] = isLand;
-                if (isLand)
-                    landCount++;
+                land[x, z] = true;
+                landCount++;
             }
         }
 
@@ -324,7 +361,8 @@ public static class WorldWhiteboxBuilder
             Vector3 a = bankSamples[i];
             Vector3 b = bankSamples[i + 1];
             Vector3 mid = (a + b) * 0.5f;
-            if (Mathf.Abs(mid.z - BridgeZ) < BridgeGap * 0.5f)
+            Vector2 bridgeFlat = new Vector2(BridgeCenter.x, BridgeCenter.z);
+            if ((new Vector2(mid.x, mid.z) - bridgeFlat).sqrMagnitude < 7.5f * 7.5f)
                 continue;
 
             Vector3 tangent = b - a;
@@ -365,15 +403,22 @@ public static class WorldWhiteboxBuilder
 
         CreateBox(parent, "BridgeApproachWest", new Vector3(BridgeCenter.x - BridgeSize.x * 0.5f - 1.2f, 0.08f, BridgeCenter.z), new Vector3(2.6f, 0.16f, RoadWidth), Palette.Road, true);
         CreateBox(parent, "BridgeApproachEast", new Vector3(BridgeCenter.x + BridgeSize.x * 0.5f + 1.2f, 0.08f, BridgeCenter.z), new Vector3(2.6f, 0.16f, RoadWidth), Palette.Road, true);
+
+        float flankHeight = 1.35f;
+        Vector3 flankSize = new Vector3(RiverWidth + 1.2f, flankHeight, 3.2f);
+        CreateBox(parent, "BridgeFlankNorth", new Vector3(BridgeCenter.x, flankHeight * 0.5f, BridgeCenter.z + BridgeSize.z * 0.5f + 1.7f), flankSize, Palette.Bank, true);
+        CreateBox(parent, "BridgeFlankSouth", new Vector3(BridgeCenter.x, flankHeight * 0.5f, BridgeCenter.z - BridgeSize.z * 0.5f - 1.7f), flankSize, Palette.Bank, true);
     }
 
     static void BuildRoads(Transform parent)
     {
-        BuildRoadStrip(parent, "MainRoad", MainRoad, Palette.Road);
-        BuildRoadStrip(parent, "ShopRoad", ShopRoad, Palette.Road);
-        BuildRoadStrip(parent, "BridgeRoad", BridgeRoad, Palette.Road);
-        BuildRoadStrip(parent, "VillageRoad", VillageRoad, Palette.Road);
-        BuildRoadStrip(parent, "BedroomRoad", BedroomRoad, Palette.Road);
+        BuildRoadStrip(parent, "NorthToBamboo", NorthToBamboo, Palette.Road);
+        BuildRoadStrip(parent, "NorthToStreet", NorthToStreet, Palette.Road);
+        BuildRoadStrip(parent, "SouthToHome", SouthToHome, Palette.Road);
+        BuildRoadStrip(parent, "HomeToBridge", HomeToBridge, Palette.Road);
+        BuildRoadStrip(parent, "StreetLink", StreetLink, Palette.Road);
+        BuildRoadStrip(parent, "EastHouseRoad", EastHouseRoad, Palette.Road);
+        CreateBox(parent, "NorthForkPlaza", new Vector3(-58f, RoadHeight * 0.5f, 26f), new Vector3(9f, RoadHeight, 8f), Palette.Road, true);
     }
 
     static void BuildRoadStrip(Transform parent, string name, Vector3[] waypoints, Material material)
@@ -399,39 +444,66 @@ public static class WorldWhiteboxBuilder
 
     static void BuildWorkshop(Transform parent)
     {
-        CreateBuilding(
-            parent,
-            "WorkshopBuilding",
-            WorkshopCenter,
-            WorkshopSize.x,
-            WorkshopSize.z,
-            WorkshopSize.y,
-            Vector3.back,
-            2.5f,
-            3f,
-            Palette.Workshop,
-            "WorkshopEntranceMarker");
+        Transform building = CreateGroup(parent, "WorkshopBuilding");
+        Vector3 center = WorkshopCenter;
+        float width = WorkshopSize.x;
+        float depth = WorkshopSize.z;
+        float height = WorkshopSize.y;
+        float wall = 0.45f;
+        float wallY = height * 0.5f;
 
-        Vector3 doorPos = DoorWorldPosition(WorkshopCenter, WorkshopSize.x, WorkshopSize.z, Vector3.back);
-        Vector3 platformCenter = doorPos + Vector3.back * 2.1f;
-        platformCenter.y = 0.1f;
-        CreateBox(parent, "WorkshopEntrancePlatform", platformCenter, new Vector3(5f, 0.2f, 4.2f), Palette.Road, true);
+        CreateBox(building, "Foundation", center + Vector3.up * 0.1f, new Vector3(width + 0.4f, 0.2f, depth + 0.4f), Palette.Workshop, true);
+        CreateBox(building, "InteriorFill", center + Vector3.up * wallY, new Vector3(width - 1.2f, height, depth - 3.4f), Palette.Workshop, true);
+        CreateBox(building, "WallWest", center + Vector3.left * (width * 0.5f - wall * 0.5f) + Vector3.up * wallY, new Vector3(wall, height, depth), Palette.Workshop, true);
+        CreateBox(building, "WallEast", center + Vector3.right * (width * 0.5f - wall * 0.5f) + Vector3.up * wallY, new Vector3(wall, height, depth), Palette.Workshop, true);
+
+        float northZ = center.z + depth * 0.5f - wall * 0.5f;
+        float southZ = center.z - depth * 0.5f + wall * 0.5f;
+        CreateWallRun(building, "North", new Vector3(center.x, wallY, northZ), width, height, wall, WorkshopNorthDoor.x - center.x, WorkshopDoorWidth, WorkshopDoorHeight, Palette.Workshop);
+        CreateWallRun(building, "South", new Vector3(center.x, wallY, southZ), width, height, wall, WorkshopSouthDoor.x - center.x, WorkshopDoorWidth, WorkshopDoorHeight, Palette.Workshop);
+        CreateBox(building, "Roof", center + Vector3.up * (height + 0.2f), new Vector3(width + 1f, 0.4f, depth + 1f), Palette.Roof, true);
+
+        CreateDoorMarker(building, "WorkshopNorthMarker", WorkshopNorthDoor, Vector3.forward);
+        CreateDoorMarker(building, "WorkshopSouthMarker", WorkshopSouthDoor, Vector3.back);
     }
 
-    static void BuildShop(Transform parent)
+    static void CreateWallRun(Transform parent, string prefix, Vector3 center, float length, float height, float thickness, float doorOffset, float doorWidth, float doorHeight, Material material)
+    {
+        float leftWidth = (length * 0.5f + doorOffset) - doorWidth * 0.5f;
+        float rightWidth = (length * 0.5f - doorOffset) - doorWidth * 0.5f;
+        float leftCenterX = center.x - length * 0.5f + leftWidth * 0.5f;
+        float rightCenterX = center.x + length * 0.5f - rightWidth * 0.5f;
+        if (leftWidth > 0.2f)
+            CreateBox(parent, prefix + "Left", new Vector3(leftCenterX, center.y, center.z), new Vector3(leftWidth, height, thickness), material, true);
+        if (rightWidth > 0.2f)
+            CreateBox(parent, prefix + "Right", new Vector3(rightCenterX, center.y, center.z), new Vector3(rightWidth, height, thickness), material, true);
+
+        float lintelHeight = Mathf.Max(0.25f, height - doorHeight);
+        CreateBox(parent, prefix + "Lintel", new Vector3(center.x + doorOffset, doorHeight + lintelHeight * 0.5f, center.z), new Vector3(doorWidth, lintelHeight, thickness), material, true);
+    }
+
+    static void CreateDoorMarker(Transform parent, string name, Vector3 doorPosition, Vector3 outward)
+    {
+        var marker = new GameObject(name);
+        marker.transform.SetParent(parent, false);
+        doorPosition.y = 0.15f;
+        marker.transform.SetPositionAndRotation(doorPosition, Quaternion.LookRotation(Flatten(outward), Vector3.up));
+    }
+
+    static void BuildKitchen(Transform parent)
     {
         CreateBuilding(
             parent,
-            "ShopBuilding",
-            ShopCenter,
-            ShopSize.x,
-            ShopSize.z,
-            ShopSize.y,
+            "KitchenBuilding",
+            KitchenCenter,
+            KitchenSize.x,
+            KitchenSize.z,
+            KitchenSize.y,
             Vector3.back,
-            2.2f,
-            2.6f,
-            Palette.Shop,
-            "ShopEntranceMarker");
+            2.4f,
+            2.4f,
+            Palette.House,
+            "KitchenEntranceMarker");
     }
 
     static void BuildBedroom(Transform parent)
@@ -444,7 +516,7 @@ public static class WorldWhiteboxBuilder
             BedroomSize.z,
             BedroomSize.y,
             Vector3.forward,
-            2.2f,
+            2.4f,
             2.4f,
             Palette.House,
             "BedroomEntranceMarker");
@@ -453,32 +525,62 @@ public static class WorldWhiteboxBuilder
     static void BuildCourtyard(Transform parent)
     {
         float wallHeight = CourtyardSize.y;
-        float wallThickness = 0.35f;
-        float x = CourtyardSize.x;
-        float z = CourtyardSize.z;
+        float wallThickness = 0.4f;
+        float halfX = CourtyardSize.x * 0.5f;
+        float halfZ = CourtyardSize.z * 0.5f;
         Vector3 c = CourtyardCenter;
+        float northZ = c.z + halfZ - wallThickness * 0.5f;
+        float southZ = c.z - halfZ + wallThickness * 0.5f;
+        float westX = c.x - halfX + wallThickness * 0.5f;
+        float eastX = c.x + halfX - wallThickness * 0.5f;
 
-        CreateBox(parent, "CourtyardWallNorthWest", new Vector3(c.x - 7.5f, wallHeight * 0.5f, c.z + z * 0.5f - wallThickness * 0.5f), new Vector3(9f, wallHeight, wallThickness), Palette.Courtyard, true);
-        CreateBox(parent, "CourtyardWallNorthEast", new Vector3(c.x + 7.5f, wallHeight * 0.5f, c.z + z * 0.5f - wallThickness * 0.5f), new Vector3(9f, wallHeight, wallThickness), Palette.Courtyard, true);
-        CreateBox(parent, "CourtyardWallSouth", new Vector3(c.x + 2f, wallHeight * 0.5f, c.z - z * 0.5f + wallThickness * 0.5f), new Vector3(x - 8f, wallHeight, wallThickness), Palette.Courtyard, true);
-        CreateBox(parent, "CourtyardWallEast", new Vector3(c.x + x * 0.5f - wallThickness * 0.5f, wallHeight * 0.5f, c.z), new Vector3(wallThickness, wallHeight, z), Palette.Courtyard, true);
-        CreateBox(parent, "CourtyardWallWestNorth", new Vector3(c.x - x * 0.5f + wallThickness * 0.5f, wallHeight * 0.5f, c.z + 3f), new Vector3(wallThickness, wallHeight, z - 8f), Palette.Courtyard, true);
+        CreateBox(parent, "CourtyardPad", new Vector3(c.x, 0.04f, c.z), new Vector3(CourtyardSize.x - 1.2f, 0.08f, CourtyardSize.z - 1.2f), Palette.Courtyard, true);
 
-        CreateBox(parent, "CourtyardGatePostWest", new Vector3(c.x - 2.2f, 1.1f, c.z + z * 0.5f), new Vector3(0.45f, 2.2f, 0.45f), Palette.House, true);
-        CreateBox(parent, "CourtyardGatePostEast", new Vector3(c.x + 2.2f, 1.1f, c.z + z * 0.5f), new Vector3(0.45f, 2.2f, 0.45f), Palette.House, true);
+        CreateBox(parent, "CourtyardWallNorthWest", new Vector3(-2f + 4f, wallHeight * 0.5f, northZ), new Vector3(8f, wallHeight, wallThickness), Palette.Courtyard, true);
+        CreateBox(parent, "CourtyardWallNorthEast", new Vector3(18f + 4f, wallHeight * 0.5f, northZ), new Vector3(8f, wallHeight, wallThickness), Palette.Courtyard, true);
+        CreateBox(parent, "CourtyardWallSouthLeft", new Vector3((-2f + 1.2f) * 0.5f, wallHeight * 0.5f, southZ), new Vector3(3.2f, wallHeight, wallThickness), Palette.Courtyard, true);
+        CreateBox(parent, "CourtyardWallSouthRight", new Vector3((4.8f + 26f) * 0.5f, wallHeight * 0.5f, southZ), new Vector3(21.2f, wallHeight, wallThickness), Palette.Courtyard, true);
 
-        var marker = new GameObject("CourtyardCenterMarker");
-        marker.transform.SetParent(parent, false);
-        marker.transform.position = new Vector3(c.x, 0.05f, c.z);
+        CreateBox(parent, "CourtyardWallWestSouth", new Vector3(westX, wallHeight * 0.5f, (-41f + -32f) * 0.5f), new Vector3(wallThickness, wallHeight, 9f), Palette.Courtyard, true);
+        CreateBox(parent, "CourtyardWallWestNorth", new Vector3(westX, wallHeight * 0.5f, (-28f + -19f) * 0.5f), new Vector3(wallThickness, wallHeight, 9f), Palette.Courtyard, true);
+        CreateBox(parent, "CourtyardWallEastSouth", new Vector3(eastX, wallHeight * 0.5f, (-41f + -32f) * 0.5f), new Vector3(wallThickness, wallHeight, 9f), Palette.Courtyard, true);
+        CreateBox(parent, "CourtyardWallEastNorth", new Vector3(eastX, wallHeight * 0.5f, (-28f + -19f) * 0.5f), new Vector3(wallThickness, wallHeight, 9f), Palette.Courtyard, true);
+
+        CreateBox(parent, "WestGatePostSouth", new Vector3(westX, 1.5f, -32f), new Vector3(0.45f, 3f, 0.45f), Palette.House, true);
+        CreateBox(parent, "WestGatePostNorth", new Vector3(westX, 1.5f, -28f), new Vector3(0.45f, 3f, 0.45f), Palette.House, true);
+        CreateBox(parent, "EastGatePostSouth", new Vector3(eastX, 1.5f, -32f), new Vector3(0.45f, 3f, 0.45f), Palette.House, true);
+        CreateBox(parent, "EastGatePostNorth", new Vector3(eastX, 1.5f, -28f), new Vector3(0.45f, 3f, 0.45f), Palette.House, true);
+        CreateBox(parent, "WestDoorLintel", new Vector3(westX, 3.35f, -30f), new Vector3(wallThickness + 0.2f, 0.45f, 4.4f), Palette.House, true);
+        CreateBox(parent, "EastDoorLintel", new Vector3(eastX, 3.35f, -30f), new Vector3(wallThickness + 0.2f, 0.45f, 4.4f), Palette.House, true);
+        CreateBox(parent, "CourtyardRoof", new Vector3(c.x, wallHeight + 0.22f, c.z), new Vector3(CourtyardSize.x + 1.1f, 0.44f, CourtyardSize.z + 1.1f), Palette.Roof, true);
+        CreateBox(parent, "CourtyardInteriorFill", new Vector3(c.x, wallHeight * 0.5f, c.z), new Vector3(CourtyardSize.x - 8.5f, wallHeight, CourtyardSize.z - 1.8f), Palette.Courtyard, true);
+
+        var westMarker = new GameObject("HomeEntranceMarker");
+        westMarker.transform.SetParent(parent, false);
+        westMarker.transform.SetPositionAndRotation(new Vector3(westX, 0.15f, -30f), Quaternion.LookRotation(Vector3.left, Vector3.up));
+
+        var eastMarker = new GameObject("HomeEastEntranceMarker");
+        eastMarker.transform.SetParent(parent, false);
+        eastMarker.transform.SetPositionAndRotation(new Vector3(eastX, 0.15f, -30f), Quaternion.LookRotation(Vector3.right, Vector3.up));
+
+        var courtyardMarker = new GameObject("CourtyardCenterMarker");
+        courtyardMarker.transform.SetParent(parent, false);
+        courtyardMarker.transform.position = new Vector3(c.x, 0.05f, c.z);
     }
 
     static void BuildVillage(Transform parent)
     {
-        CreateVillageHouse(parent, "VillageHouse_A", new Vector3(36f, 0f, -16f), 8f, 6f, 4.2f, Vector3.left, Palette.Village);
-        CreateVillageHouse(parent, "VillageHouse_B", new Vector3(43f, 0f, -6f), 6f, 6.5f, 5f, Vector3.left, Palette.House);
-        CreateVillageHouse(parent, "VillageHouse_C", new Vector3(37.5f, 0f, 8f), 7.5f, 5.5f, 3.8f, Vector3.left, Palette.Shop);
-        CreateVillageHouse(parent, "VillageHouse_D", new Vector3(44f, 0f, 16f), 5.5f, 8f, 5.5f, Vector3.back, Palette.Village);
-        CreateVillageHouse(parent, "VillageHouse_E", new Vector3(39f, 0f, 30f), 8.5f, 7f, 4.6f, Vector3.left, Palette.House);
+        CreateVillageHouse(parent, "StreetHouse_A", StreetHouseACenter, StreetHouseASize.x, StreetHouseASize.z, StreetHouseASize.y, Vector3.back, Palette.Village);
+        CreateVillageHouse(parent, "StreetHouse_B", StreetHouseBCenter, StreetHouseBSize.x, StreetHouseBSize.z, StreetHouseBSize.y, Vector3.back, Palette.House);
+        CreateVillageHouse(parent, "StreetHouse_C", StreetHouseCCenter, StreetHouseCSize.x, StreetHouseCSize.z, StreetHouseCSize.y, Vector3.left, Palette.Village);
+    }
+
+    static void BuildVillageEntrance(Transform parent)
+    {
+        float gap = 6f;
+        CreateBox(parent, "GatePostWest", VillageGateCenter + new Vector3(-gap * 0.5f, 1.6f, 0f), new Vector3(0.7f, 3.2f, 0.7f), Palette.House, true);
+        CreateBox(parent, "GatePostEast", VillageGateCenter + new Vector3(gap * 0.5f, 1.6f, 0f), new Vector3(0.7f, 3.2f, 0.7f), Palette.House, true);
+        CreateBox(parent, "GateLintel", VillageGateCenter + new Vector3(0f, 3.35f, 0f), new Vector3(gap + 1.2f, 0.45f, 0.7f), Palette.Roof, true);
     }
 
     static void CreateVillageHouse(Transform parent, string name, Vector3 center, float width, float depth, float height, Vector3 doorDir, Material wall)
@@ -492,14 +594,14 @@ public static class WorldWhiteboxBuilder
         var planted = new List<Vector2>();
         int created = 0;
         int attempts = 0;
-        Bounds workshopBounds = new Bounds(WorkshopCenter, new Vector3(WorkshopSize.x + 6f, 10f, WorkshopSize.z + 8f));
+        Bounds workshopBounds = new Bounds(WorkshopCenter, new Vector3(WorkshopSize.x + 8f, 12f, WorkshopSize.z + 10f));
         Rect forest = new Rect(
             BambooCenter.x - BambooArea.x * 0.5f,
             BambooCenter.z - BambooArea.z * 0.5f,
             BambooArea.x,
             BambooArea.z);
 
-        while (created < BambooCount && attempts < 600)
+        while (created < BambooCount && attempts < 900)
         {
             attempts++;
             float x = forest.xMin + (float)rng.NextDouble() * forest.width;
@@ -509,9 +611,7 @@ public static class WorldWhiteboxBuilder
 
             if (workshopBounds.Contains(world))
                 continue;
-            if (Mathf.Abs(x - (-33f)) < 3.2f && z < 30f)
-                continue;
-            if (z < 24.5f && x > -40f)
+            if (NearPath(world, NorthToBamboo, 4.2f) || NearPath(world, NorthToStreet, 4.2f))
                 continue;
 
             bool tooClose = false;
@@ -582,18 +682,73 @@ public static class WorldWhiteboxBuilder
         }
     }
 
+    static void BuildNpcs(Transform parent)
+    {
+        CreateNpc(
+            parent,
+            "村口大爷",
+            new Vector3(77.4f, 1f, 71.2f),
+            Quaternion.LookRotation(new Vector3(-5.4f, 0f, 4.8f), Vector3.up),
+            Palette.NpcElder,
+            1.05f);
+        CreateNpc(
+            parent,
+            "舅舅",
+            new Vector3(28.6f, 1f, -33.6f),
+            Quaternion.LookRotation(Vector3.right, Vector3.up),
+            Palette.NpcUncle,
+            1.12f);
+    }
+
+    static void CreateNpc(Transform parent, string npcName, Vector3 position, Quaternion rotation, Material material, float heightScale)
+    {
+        GameObject npc = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+        npc.name = npcName;
+        npc.transform.SetParent(parent, false);
+        npc.transform.SetPositionAndRotation(position, rotation);
+        npc.transform.localScale = new Vector3(0.95f, heightScale, 0.95f);
+        AssignMaterial(npc, material);
+
+        CapsuleCollider collider = npc.GetComponent<CapsuleCollider>();
+        if (collider != null)
+            collider.isTrigger = false;
+
+        NpcCharacter character = npc.GetComponent<NpcCharacter>();
+        if (character == null)
+            character = npc.AddComponent<NpcCharacter>();
+        character.Configure(npcName);
+    }
+
+    static void ApplyWorldFog()
+    {
+        RenderSettings.fog = true;
+        RenderSettings.fogMode = FogMode.Linear;
+        RenderSettings.fogColor = new Color(0.70f, 0.74f, 0.76f);
+        RenderSettings.fogStartDistance = 70f;
+        RenderSettings.fogEndDistance = 150f;
+    }
+
     static void BuildMountains(Transform parent)
     {
-        CreateBox(parent, "Mountain_WestNorth", new Vector3(-48f, 5f, 18f), new Vector3(8f, 10f, 20f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_WestSouth", new Vector3(-47.5f, 4.2f, -22f), new Vector3(7f, 8.4f, 16f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_NorthWest", new Vector3(-28f, 6f, 38.5f), new Vector3(18f, 12f, 7f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_North", new Vector3(2f, 4.5f, 39f), new Vector3(16f, 9f, 6.5f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_NorthEast", new Vector3(38f, 6.5f, 38.2f), new Vector3(14f, 13f, 7.5f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_EastNorth", new Vector3(48.2f, 5.5f, 16f), new Vector3(6.5f, 11f, 18f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_EastSouth", new Vector3(47.8f, 5f, -20f), new Vector3(7.5f, 10f, 18f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_SouthEast", new Vector3(8f, 4f, -38.5f), new Vector3(18f, 8f, 6.5f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_SouthWest", new Vector3(-30f, 4.8f, -38.6f), new Vector3(16f, 9.6f, 6.8f), Palette.Mountain, true);
-        CreateBox(parent, "Mountain_SouthMid", new Vector3(-8f, 3.6f, -39.2f), new Vector3(12f, 7.2f, 5.5f), Palette.Mountain, true);
+        // 山放在很外围，地面继续铺到山外。游玩范围内只看到雾和远山，看不到地图切边。
+        CreatePeak(parent, "Mountain_NorthWestA", new Vector3(-250f, 0f, 210f), new Vector3(36f, 28f, 32f));
+        CreatePeak(parent, "Mountain_NorthWestB", new Vector3(-210f, 0f, 240f), new Vector3(28f, 22f, 24f));
+        CreatePeak(parent, "Mountain_North", new Vector3(-20f, 0f, 250f), new Vector3(42f, 24f, 26f));
+        CreatePeak(parent, "Mountain_NorthEast", new Vector3(210f, 0f, 245f), new Vector3(34f, 26f, 28f));
+        CreatePeak(parent, "Mountain_EastNorth", new Vector3(270f, 0f, 140f), new Vector3(28f, 30f, 36f));
+        CreatePeak(parent, "Mountain_East", new Vector3(280f, 0f, -10f), new Vector3(26f, 22f, 40f));
+        CreatePeak(parent, "Mountain_SouthEast", new Vector3(250f, 0f, -230f), new Vector3(36f, 24f, 32f));
+        CreatePeak(parent, "Mountain_South", new Vector3(20f, 0f, -250f), new Vector3(44f, 20f, 26f));
+        CreatePeak(parent, "Mountain_SouthWest", new Vector3(-160f, 0f, -245f), new Vector3(36f, 22f, 28f));
+        CreatePeak(parent, "Mountain_WestSouth", new Vector3(-275f, 0f, -140f), new Vector3(28f, 24f, 36f));
+        CreatePeak(parent, "Mountain_West", new Vector3(-285f, 0f, 10f), new Vector3(26f, 26f, 44f));
+        CreatePeak(parent, "Mountain_WestNorth", new Vector3(-260f, 0f, 90f), new Vector3(24f, 20f, 28f));
+    }
+
+    static void CreatePeak(Transform parent, string name, Vector3 baseCenter, Vector3 size)
+    {
+        Vector3 center = baseCenter + Vector3.up * (size.y * 0.5f);
+        CreateBox(parent, name, center, size, Palette.Mountain, true);
     }
 
     static void CreateBuilding(
@@ -654,7 +809,10 @@ public static class WorldWhiteboxBuilder
         if (controller == null || character == null)
             throw new InvalidOperationException("Player 缺少 PlayerController 或 CharacterController。");
 
-        player.transform.SetPositionAndRotation(PlayerSpawn, Quaternion.identity);
+        player.transform.SetPositionAndRotation(PlayerSpawn, PlayerSpawnRotation);
+        SerializedObject serializedPlayer = new SerializedObject(controller);
+        serializedPlayer.FindProperty("moveSpeed").floatValue = 7f;
+        serializedPlayer.ApplyModifiedPropertiesWithoutUndo();
 
         GameObject cameraObject = FindRoot("Main Camera");
         if (cameraObject == null)
@@ -664,7 +822,7 @@ public static class WorldWhiteboxBuilder
         if (follow == null)
             throw new InvalidOperationException("Main Camera 缺少 CameraFollow。");
 
-        follow.SnapToTarget();
+        follow.ApplyGameplayView(player.transform);
     }
 
     public static string ValidateWorldMap()
@@ -681,7 +839,7 @@ public static class WorldWhiteboxBuilder
 
         if (worldRoot != null)
         {
-            string[] groups = { "Terrain", "Roads", "WorkshopExterior", "BambooForest", "Courtyard", "Bedroom", "Shop", "River", "Bridge", "VillageBuildings", "Mountains" };
+            string[] groups = { "Terrain", "Roads", "WorkshopExterior", "BambooForest", "Courtyard", "Kitchen", "Bedroom", "River", "Bridge", "VillageBuildings", "VillageEntrance", "Npcs", "Mountains" };
             foreach (string group in groups)
             {
                 Transform child = worldRoot.transform.Find(group);
@@ -710,20 +868,20 @@ public static class WorldWhiteboxBuilder
         {
             Physics.SyncTransforms();
             report.AppendLine(CheckSpawnClearance());
-            report.AppendLine(CheckDoorway("工坊门洞", DoorWorldPosition(WorkshopCenter, WorkshopSize.x, WorkshopSize.z, Vector3.back), Vector3.forward));
-            report.AppendLine(CheckPathAlong("庭院到工坊", ConcatPaths(CourtyardCenter, ReversePath(MainRoad))));
-            report.AppendLine(CheckPathAlong("庭院到商店", new[]
-            {
-                CourtyardCenter, MainRoad[6], MainRoad[5], MainRoad[4], MainRoad[3], new Vector3(-8f, 0f, 2.8f)
-            }));
-            report.AppendLine(CheckPathAlong("庭院到桥西", new[]
-            {
-                CourtyardCenter, MainRoad[6], MainRoad[5], MainRoad[4],
-                BridgeRoad[0], BridgeRoad[1], BridgeRoad[2], BridgeRoad[3]
-            }));
-            report.AppendLine(CheckPathAlong("桥面通行", new[] { new Vector3(15.8f, 1.2f, 22f), new Vector3(29.2f, 1.2f, 22f) }));
-            report.AppendLine(CheckRiverBlocked(new Vector3(8f, 1.2f, 8f), new Vector3(36f, 1.2f, 8f)));
-            report.AppendLine("- WorkshopEntranceMarker: " + (GameObject.Find("WorkshopEntranceMarker") != null));
+            report.AppendLine(CheckApproach("工坊北门", WorkshopNorthDoor, Vector3.forward));
+            report.AppendLine(CheckApproach("工坊南门", WorkshopSouthDoor, Vector3.back));
+            report.AppendLine(CheckPathAlong("北门到竹林", NorthToBamboo));
+            report.AppendLine(CheckPathAlong("北门到街坊", NorthToStreet));
+            report.AppendLine(CheckPathAlong("南门到家", ConcatPaths(SouthToHome, new[] { new Vector3(-6.4f, 0f, -30f) })));
+            report.AppendLine(CheckPathAlong("家到村口", ConcatPaths(new[] { new Vector3(30.4f, 0f, -30f) }, HomeToBridge)));
+            report.AppendLine(CheckPathAlong("桥面通行", new[] { new Vector3(51f, 0f, 48f), new Vector3(69f, 0f, 48f) }));
+            report.AppendLine(CheckRiverBlocked(new Vector3(48f, 1.2f, 16f), new Vector3(96f, 1.2f, 16f)));
+            report.AppendLine("- WorkshopNorthMarker: " + (GameObject.Find("WorkshopNorthMarker") != null));
+            report.AppendLine("- WorkshopSouthMarker: " + (GameObject.Find("WorkshopSouthMarker") != null));
+            report.AppendLine("- HomeEntranceMarker: " + (GameObject.Find("HomeEntranceMarker") != null));
+            report.AppendLine("- HomeEastEntranceMarker: " + (GameObject.Find("HomeEastEntranceMarker") != null));
+            report.AppendLine("- 村口大爷: " + DescribeNpc("村口大爷"));
+            report.AppendLine("- 舅舅: " + DescribeNpc("舅舅"));
         }
         finally
         {
@@ -736,15 +894,16 @@ public static class WorldWhiteboxBuilder
     static string DescribeLayout()
     {
         var report = new StringBuilder();
-        report.AppendLine("布局（未使用草图文件，按文字空间关系）:");
-        report.AppendLine("- 地图: X=" + MapWidth + ", Z=" + MapDepth + ", 中心(0,0,0), 地面顶面 Y=0");
-        report.AppendLine("- 工坊: 中心 " + WorkshopCenter + ", 尺寸 " + WorkshopSize + ", 朝南门洞 2.5x3");
-        report.AppendLine("- 竹林: 中心 " + BambooCenter + ", 范围 " + BambooArea + ", 种子 " + BambooSeed);
-        report.AppendLine("- 商店: 中心 " + ShopCenter + ", 尺寸 " + ShopSize);
-        report.AppendLine("- 庭院: 中心 " + CourtyardCenter + ", 尺寸 " + CourtyardSize);
-        report.AppendLine("- 卧室: 中心 " + BedroomCenter + ", 尺寸 " + BedroomSize);
-        report.AppendLine("- 桥梁: 中心 " + BridgeCenter + ", 尺寸 " + BridgeSize);
-        report.AppendLine("- 河流: 宽度 " + RiverWidth + ", 右岸曲线, 水面 Y=" + RiverSurfaceY);
+        report.AppendLine("布局（对照草图，+Z 为北）:");
+        report.AppendLine("- 地图: X=" + MapWidth + ", Z=" + MapDepth + "，地面铺满，山在外圈");
+        report.AppendLine("- 工坊: 中心 " + WorkshopCenter + " 尺寸 " + WorkshopSize);
+        report.AppendLine("- 北门 " + WorkshopNorthDoor + "：向左进竹林，向右去街坊");
+        report.AppendLine("- 南门 " + WorkshopSouthDoor + "：出门去家里");
+        report.AppendLine("- 竹林: 中心 " + BambooCenter + " 范围 " + BambooArea);
+        report.AppendLine("- 街坊 A/B/C: " + StreetHouseACenter + " / " + StreetHouseBCenter + " / " + StreetHouseCCenter);
+        report.AppendLine("- 庭院 " + CourtyardCenter + "，厨房 " + KitchenCenter + "，卧室 " + BedroomCenter);
+        report.AppendLine("- 桥 " + BridgeCenter + "，村口 " + VillageGateCenter);
+        report.AppendLine("- NPC: 村口大爷、舅舅");
         report.AppendLine("- 玩家出生点: " + PlayerSpawn);
         return report.ToString().TrimEnd();
     }
@@ -760,13 +919,48 @@ public static class WorldWhiteboxBuilder
         return "- 出生点地面: " + info.collider.name + " Y=" + info.point.y.ToString("0.###") + "，胶囊重叠: " + blocked;
     }
 
-    static string CheckDoorway(string label, Vector3 door, Vector3 inward)
+    static string DescribeNpc(string name)
     {
-        Vector3 start = door + Flatten(-inward) * 2.2f + Vector3.up * 1.2f;
-        Vector3 end = door + Flatten(inward) * 2.2f + Vector3.up * 1.2f;
+        GameObject npc = GameObject.Find(name);
+        if (npc == null)
+            return "缺失";
+        NpcCharacter character = npc.GetComponent<NpcCharacter>();
+        return "pos " + npc.transform.position.ToString("F1")
+            + " name=" + (character != null ? character.DisplayName : npc.name);
+    }
+
+    static string CheckApproach(string label, Vector3 door, Vector3 outward)
+    {
+        Vector3 start = door + Flatten(outward) * 4.8f + Vector3.up * 1.2f;
+        Vector3 end = door + Flatten(outward) * 0.55f + Vector3.up * 1.2f;
         Vector3 delta = end - start;
-        bool blocked = Physics.SphereCast(start, 0.35f, delta.normalized, out RaycastHit hit, delta.magnitude);
-        return "- " + label + " 可穿过: " + (!blocked) + (blocked ? " 阻挡=" + hit.collider.name : string.Empty);
+        bool blocked = Physics.SphereCast(start, 0.35f, delta.normalized, out RaycastHit hit, delta.magnitude, ~0, QueryTriggerInteraction.Ignore);
+        return "- " + label + " 门外可到达: " + (!blocked) + (blocked ? " 阻挡=" + hit.collider.name : string.Empty);
+    }
+
+    static bool NearPath(Vector3 world, Vector3[] path, float radius)
+    {
+        float limit = radius * radius;
+        Vector2 point = new Vector2(world.x, world.z);
+        for (int i = 0; i < path.Length - 1; i++)
+        {
+            Vector2 a = new Vector2(path[i].x, path[i].z);
+            Vector2 b = new Vector2(path[i + 1].x, path[i + 1].z);
+            if (DistancePointSegmentSqr(point, a, b) <= limit)
+                return true;
+        }
+
+        return false;
+    }
+
+    static float DistancePointSegmentSqr(Vector2 point, Vector2 a, Vector2 b)
+    {
+        Vector2 offset = b - a;
+        float denom = offset.sqrMagnitude;
+        if (denom < 0.0001f)
+            return (point - a).sqrMagnitude;
+        float t = Mathf.Clamp01(Vector2.Dot(point - a, offset) / denom);
+        return (point - (a + offset * t)).sqrMagnitude;
     }
 
     static string CheckPathAlong(string label, Vector3[] waypoints)
@@ -900,7 +1094,7 @@ public static class WorldWhiteboxBuilder
         return new Materials
         {
             Terrain = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxTerrain.mat", new Color(0.62f, 0.64f, 0.58f)),
-            Road = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxRoad.mat", new Color(0.74f, 0.70f, 0.62f)),
+            Road = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxRoad.mat", new Color(0.62f, 0.48f, 0.32f)),
             Workshop = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxWorkshop.mat", new Color(0.82f, 0.78f, 0.72f)),
             Shop = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxShop.mat", new Color(0.76f, 0.68f, 0.58f)),
             House = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxHouse.mat", new Color(0.80f, 0.76f, 0.71f)),
@@ -911,7 +1105,9 @@ public static class WorldWhiteboxBuilder
             Bamboo = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxBamboo.mat", new Color(0.46f, 0.56f, 0.38f)),
             Leaf = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxLeaf.mat", new Color(0.40f, 0.52f, 0.34f)),
             Mountain = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxMountain.mat", new Color(0.55f, 0.56f, 0.58f)),
-            Courtyard = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxCourtyard.mat", new Color(0.68f, 0.66f, 0.60f))
+            Courtyard = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxCourtyard.mat", new Color(0.68f, 0.66f, 0.60f)),
+            NpcElder = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxNpcElder.mat", new Color(0.62f, 0.50f, 0.40f)),
+            NpcUncle = GetOrCreateLitMaterial(MaterialFolder + "/WhiteboxNpcUncle.mat", new Color(0.48f, 0.54f, 0.46f))
         };
     }
 
@@ -1050,30 +1246,6 @@ public static class WorldWhiteboxBuilder
             (-p0 + p2) * t +
             (2f * p0 - 5f * p1 + 4f * p2 - p3) * t2 +
             (-p0 + 3f * p1 - 3f * p2 + p3) * t3);
-    }
-
-    static float DistanceToRiver(Vector2 point)
-    {
-        Vector3[] samples = RiverSamples ?? RiverPoints;
-        float min = float.MaxValue;
-        for (int i = 0; i < samples.Length - 1; i++)
-        {
-            Vector2 a = new Vector2(samples[i].x, samples[i].z);
-            Vector2 b = new Vector2(samples[i + 1].x, samples[i + 1].z);
-            min = Mathf.Min(min, DistancePointToSegment(point, a, b));
-        }
-
-        return min;
-    }
-
-    static float DistancePointToSegment(Vector2 p, Vector2 a, Vector2 b)
-    {
-        Vector2 ab = b - a;
-        float denom = ab.sqrMagnitude;
-        if (denom < 0.0001f)
-            return Vector2.Distance(p, a);
-        float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / denom);
-        return Vector2.Distance(p, a + ab * t);
     }
 
     static Vector3 Flatten(Vector3 value)

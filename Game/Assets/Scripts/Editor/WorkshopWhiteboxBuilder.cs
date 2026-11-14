@@ -425,10 +425,6 @@ public static class WorkshopWhiteboxBuilder
         Camera cameraComponent = cameraGo.GetComponent<Camera>();
         if (cameraComponent == null)
             cameraComponent = cameraGo.AddComponent<Camera>();
-        cameraComponent.orthographic = false;
-        cameraComponent.fieldOfView = 42f;
-        cameraComponent.nearClipPlane = 0.3f;
-        cameraComponent.farClipPlane = 120f;
         cameraComponent.clearFlags = CameraClearFlags.Skybox;
         cameraComponent.depth = -1f;
 
@@ -439,20 +435,11 @@ public static class WorkshopWhiteboxBuilder
         CameraFollow follow = cameraGo.GetComponent<CameraFollow>();
         if (follow == null)
             follow = cameraGo.AddComponent<CameraFollow>();
-
-        SerializedObject serializedFollow = new SerializedObject(follow);
-        serializedFollow.FindProperty("target").objectReferenceValue = player.transform;
-        serializedFollow.FindProperty("horizontalDistance").floatValue = 11f;
-        serializedFollow.FindProperty("height").floatValue = 10f;
-        serializedFollow.FindProperty("smoothTime").floatValue = 0.15f;
-        serializedFollow.FindProperty("lookAtHeight").floatValue = 0.2f;
-        serializedFollow.ApplyModifiedPropertiesWithoutUndo();
-        follow.SnapToTarget();
+        follow.ApplyGameplayView(player.transform);
 
         PlayerController playerController = player.GetComponent<PlayerController>();
         SerializedObject serializedPlayer = new SerializedObject(playerController);
-        if (serializedPlayer.FindProperty("gameplayCamera").objectReferenceValue == null)
-            serializedPlayer.FindProperty("gameplayCamera").objectReferenceValue = cameraComponent;
+        serializedPlayer.FindProperty("moveSpeed").floatValue = 7f;
         serializedPlayer.FindProperty("gameplayCamera").objectReferenceValue = cameraComponent;
         serializedPlayer.ApplyModifiedPropertiesWithoutUndo();
 

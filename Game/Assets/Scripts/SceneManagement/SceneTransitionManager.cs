@@ -32,10 +32,15 @@ public class SceneTransitionManager : MonoBehaviour
 
     void Update()
     {
-        if (!SceneTransitionState.WaitForInteractRelease)
-            return;
-        if (!IsInteractHeld())
+        if (SceneTransitionState.WaitForInteractRelease && !IsInteractHeld())
             SceneTransitionState.WaitForInteractRelease = false;
+
+        if (!SceneTransitionState.MustLeaveTrigger)
+            return;
+
+        PlayerController player = FindUniquePlayer();
+        if (player != null && !IsInsideAnyDoor(player.transform))
+            SceneTransitionState.MustLeaveTrigger = false;
     }
 
     public static bool TryConsumeInteractPress()
@@ -69,22 +74,12 @@ public class SceneTransitionManager : MonoBehaviour
 
         InteractionPromptUI.HideImmediate();
         SceneTransitionState.BeginLoad(spawnId);
-
-        try
-        {
-            SceneManager.LoadScene(buildIndex);
-        }
-        catch (System.Exception exception)
-        {
-            SceneTransitionState.FailLoad();
-            Debug.LogError("加载场景失败: " + sceneName + "\n" + exception);
-        }
+        SceneTransitionFader.Go(buildIndex);
     }
 
     void ApplyPendingSpawn()
     {
         string spawnId = SceneTransitionState.ConsumePendingSpawnId();
-        SceneTransitionState.FinishLoad();
         if (string.IsNullOrEmpty(spawnId))
             return;
 
@@ -104,9 +99,13 @@ public class SceneTransitionManager : MonoBehaviour
             controller.enabled = false;
 
         player.transform.SetPositionAndRotation(spawn.transform.position, spawn.transform.rotation);
+        Physics.SyncTransforms();
 
         if (controller != null)
+        {
             controller.enabled = true;
+            controller.Move(Vector3.zero);
+        }
 
         CameraFollow follow = Camera.main != null ? Camera.main.GetComponent<CameraFollow>() : null;
         if (follow != null)
@@ -115,8 +114,8 @@ public class SceneTransitionManager : MonoBehaviour
             Debug.LogWarning("新场景没有可用的 CameraFollow。");
 
         Physics.SyncTransforms();
-        SceneTransitionState.MustLeaveTrigger = IsInsideAnyDoor(player.transform);
-        SceneTransitionState.WaitForInteractRelease = true;
+        SceneTransitionState.MustLeaveTrigger = true;
+        SceneTransitionState.WaitForInteractRelease = false;
     }
 
     void CacheInteractAction()
@@ -171,9 +170,11 @@ public class SceneTransitionManager : MonoBehaviour
         error = null;
         string path = sceneName == SceneTransitionState.WorkshopSceneName
             ? SceneTransitionState.WorkshopScenePath
-            : sceneName == SceneTransitionState.WorldSceneName
-                ? SceneTransitionState.WorldScenePath
-                : null;
+            : sceneName == SceneTransitionState.HomeSceneName
+                ? SceneTransitionState.HomeScenePath
+                : sceneName == SceneTransitionState.WorldSceneName
+                    ? SceneTransitionState.WorldScenePath
+                    : null;
 
         if (path != null)
             buildIndex = SceneUtility.GetBuildIndexByScenePath(path);

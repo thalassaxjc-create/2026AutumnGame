@@ -47,9 +47,10 @@ public static class SceneTransitionSetup
         var report = new StringBuilder();
         report.AppendLine(ConfigureWorldScene());
         report.AppendLine(ConfigureWorkshopScene());
+        report.AppendLine(ConfigureHomeScene());
         EditorSceneManager.OpenScene(WorldScenePath, OpenSceneMode.Single);
         AssetDatabase.SaveAssets();
-        report.AppendLine("已保存两个场景，并重新打开 WorldScene。");
+        report.AppendLine("已保存三个场景，并重新打开 WorldScene。");
         report.AppendLine(ValidateCurrentWorld());
         return report.ToString();
     }
@@ -59,6 +60,7 @@ public static class SceneTransitionSetup
         var report = new StringBuilder();
         report.AppendLine(OpenAndValidate(WorldScenePath, ValidateCurrentWorld));
         report.AppendLine(OpenAndValidate(WorkshopScenePath, ValidateCurrentWorkshop));
+        report.AppendLine(OpenAndValidate(SceneTransitionState.HomeScenePath, ValidateCurrentHome));
         EditorSceneManager.OpenScene(WorldScenePath, OpenSceneMode.Single);
         return report.ToString();
     }
@@ -77,30 +79,79 @@ public static class SceneTransitionSetup
         EnsurePromptCanvas();
         RemoveDuplicateEventSystems();
 
-        Transform marker = FindDeep("WorkshopEntranceMarker");
-        if (marker == null)
-            return "WorldScene: 找不到 WorkshopEntranceMarker，已中止该场景配置。";
+        Transform north = FindDeep("WorkshopNorthMarker");
+        Transform south = FindDeep("WorkshopSouthMarker");
+        if (north == null || south == null)
+            return "WorldScene: 找不到工坊北门或南门标记，已中止该场景配置。";
 
-        Vector3 outward = Flatten(marker.forward);
-        Vector3 doorPosition = marker.position;
-        doorPosition.y = 0f;
+        ConfigureWorldDoor(
+            root,
+            "WorkshopNorthEntranceTrigger",
+            "WorkshopNorthSpawn",
+            north,
+            SceneTransitionState.WorkshopSceneName,
+            SceneTransitionState.SpawnWorkshopEntrance,
+            SceneTransitionState.SpawnWorkshopNorth);
+        ConfigureWorldDoor(
+            root,
+            "WorkshopSouthEntranceTrigger",
+            "WorkshopSouthSpawn",
+            south,
+            SceneTransitionState.WorkshopSceneName,
+            SceneTransitionState.SpawnWorkshopEntranceSouth,
+            SceneTransitionState.SpawnWorkshopSouth);
 
-        GameObject trigger = EnsureChild(root, "WorkshopEntranceTrigger");
-        trigger.transform.SetPositionAndRotation(doorPosition + outward * 1.05f + Vector3.up * 1.1f, marker.rotation);
-        ConfigureBoxTrigger(trigger, new Vector3(2.7f, 2.2f, 2.4f));
-        DoorTransition door = EnsureComponent<DoorTransition>(trigger);
-        door.Configure(SceneTransitionState.WorkshopSceneName, SceneTransitionState.SpawnWorkshopEntrance, "按 E 进入工坊");
+        Transform homeDoor = FindDeep("HomeEntranceMarker");
+        Transform homeEastDoor = FindDeep("HomeEastEntranceMarker");
+        if (homeDoor == null || homeEastDoor == null)
+            return "WorldScene: 找不到家西门或东门标记，已中止该场景配置。";
+        ConfigureWorldDoor(
+            root,
+            "HomeEntranceTrigger",
+            "HomeExteriorSpawn",
+            homeDoor,
+            SceneTransitionState.HomeSceneName,
+            SceneTransitionState.SpawnHomeEntrance,
+            SceneTransitionState.SpawnHomeExterior);
+        ConfigureWorldDoor(
+            root,
+            "HomeEastEntranceTrigger",
+            "HomeEastExteriorSpawn",
+            homeEastDoor,
+            SceneTransitionState.HomeSceneName,
+            SceneTransitionState.SpawnHomeEntranceEast,
+            SceneTransitionState.SpawnHomeExteriorEast);
 
-        GameObject spawn = EnsureChild(root, "WorkshopExteriorSpawn");
-        Vector3 spawnPos = doorPosition + outward * 3.3f + Vector3.up * 1f;
-        spawnPos = NudgeSpawn(spawnPos, outward);
-        spawn.transform.SetPositionAndRotation(spawnPos, marker.rotation);
-        SceneSpawnPoint spawnPoint = EnsureComponent<SceneSpawnPoint>(spawn);
-        spawnPoint.SetSpawnId(SceneTransitionState.SpawnWorkshopExterior);
+        DestroyIfFound("WorkshopEntranceTrigger");
+        DestroyIfFound("WorkshopExteriorSpawn");
+        ApplyGameplayCamera();
 
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
         EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), WorldScenePath);
         return DescribeWorld();
+    }
+
+    static void ConfigureWorldDoor(Transform root, string triggerName, string spawnName, Transform marker, string targetScene, string interiorSpawnId, string exteriorSpawnId)
+    {
+        Vector3 outward = Flatten(marker.forward);
+        Vector3 doorPosition = marker.position;
+        doorPosition.y = 0f;
+
+        GameObject trigger = EnsureChild(root, triggerName);
+        Vector3 triggerSize = Mathf.Abs(Vector3.Dot(outward, Vector3.forward)) > 0.7f
+            ? new Vector3(2.6f, 2.2f, 1.6f)
+            : new Vector3(1.6f, 2.2f, 2.6f);
+        trigger.transform.SetPositionAndRotation(doorPosition + outward * 1.05f + Vector3.up * 1.1f, marker.rotation);
+        ConfigureBoxTrigger(trigger, triggerSize);
+        DoorTransition door = EnsureComponent<DoorTransition>(trigger);
+        door.Configure(targetScene, interiorSpawnId, "");
+
+        GameObject spawn = EnsureChild(root, spawnName);
+        Vector3 spawnPos = doorPosition + outward * 4.6f + Vector3.up * 1f;
+        spawnPos = NudgeSpawn(spawnPos, outward);
+        spawn.transform.SetPositionAndRotation(spawnPos, marker.rotation);
+        SceneSpawnPoint spawnPoint = EnsureComponent<SceneSpawnPoint>(spawn);
+        spawnPoint.SetSpawnId(exteriorSpawnId);
     }
 
     static string ConfigureWorkshopScene()
@@ -116,32 +167,110 @@ public static class SceneTransitionSetup
         if (doorA == null || doorB == null)
             return "WorkshopScene: 找不到 DoorA 或 DoorB，已中止该场景配置。";
 
-        ConfigureExit(root, "WorkshopExitTriggerA", doorA, "按 E 离开工坊");
-        ConfigureExit(root, "WorkshopExitTriggerB", doorB, "按 E 离开工坊");
-
-        Transform existingInside = FindDeep("Spawn_DoorAInside");
-        GameObject spawn = EnsureChild(root, "WorkshopEntranceSpawn");
-        Vector3 inward = Flatten(doorA.forward);
-        Vector3 spawnPos = (existingInside != null ? existingInside.position : doorA.position + inward * 2.8f);
-        spawnPos.y = 1f;
-        spawnPos = NudgeSpawn(spawnPos, inward);
-        spawn.transform.SetPositionAndRotation(spawnPos, Quaternion.LookRotation(inward, Vector3.up));
-        SceneSpawnPoint spawnPoint = EnsureComponent<SceneSpawnPoint>(spawn);
-        spawnPoint.SetSpawnId(SceneTransitionState.SpawnWorkshopEntrance);
+        ConfigureExit(root, "WorkshopExitTriggerA", doorA, SceneTransitionState.SpawnWorkshopNorth, "");
+        ConfigureExit(root, "WorkshopExitTriggerB", doorB, SceneTransitionState.SpawnWorkshopSouth, "");
+        ConfigureInteriorSpawn(root, "WorkshopEntranceSpawn", doorA, FindDeep("Spawn_DoorAInside"), SceneTransitionState.SpawnWorkshopEntrance);
+        ConfigureInteriorSpawn(root, "WorkshopEntranceSpawnSouth", doorB, FindDeep("Spawn_DoorBInside"), SceneTransitionState.SpawnWorkshopEntranceSouth);
+        ApplyGameplayCamera();
 
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
         EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), WorkshopScenePath);
         return DescribeWorkshop();
     }
 
-    static void ConfigureExit(Transform root, string name, Transform door, string prompt)
+    static string ConfigureHomeScene()
+    {
+        EditorSceneManager.OpenScene(SceneTransitionState.HomeScenePath, OpenSceneMode.Single);
+        Transform root = EnsureRoot(RootName).transform;
+        EnsureManager(root);
+        EnsurePromptCanvas();
+        RemoveDuplicateEventSystems();
+
+        Transform door = FindDeep("HomeDoor");
+        Transform doorEast = FindDeep("HomeDoorEast");
+        if (door == null || doorEast == null)
+            return "HomeScene: 找不到 HomeDoor 或 HomeDoorEast，已中止该场景配置。";
+
+        DestroyIfFound("WorkshopExitTriggerA");
+        DestroyIfFound("WorkshopExitTriggerB");
+        DestroyIfFound("WorkshopEntranceSpawn");
+        DestroyIfFound("WorkshopEntranceSpawnSouth");
+        ConfigureExit(root, "HomeExitTrigger", door, SceneTransitionState.SpawnHomeExterior, "");
+        ConfigureExit(root, "HomeEastExitTrigger", doorEast, SceneTransitionState.SpawnHomeExteriorEast, "");
+        ConfigureInteriorSpawn(root, "HomeEntranceSpawn", door, FindDeep("Spawn_HomeInside"), SceneTransitionState.SpawnHomeEntrance);
+        ConfigureInteriorSpawn(root, "HomeEastEntranceSpawn", doorEast, FindDeep("Spawn_HomeInsideEast"), SceneTransitionState.SpawnHomeEntranceEast);
+        ApplyGameplayCamera();
+
+        EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+        EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), SceneTransitionState.HomeScenePath);
+        return "HomeScene 已配置。西门Exit=" + Pos("HomeExitTrigger")
+            + " 东门Exit=" + Pos("HomeEastExitTrigger")
+            + " 西门Spawn=" + Pos("HomeEntranceSpawn")
+            + " 东门Spawn=" + Pos("HomeEastEntranceSpawn");
+    }
+
+    static void ConfigureExit(Transform root, string name, Transform door, string spawnId, string prompt)
     {
         Vector3 inward = Flatten(door.forward);
         GameObject trigger = EnsureChild(root, name);
-        trigger.transform.SetPositionAndRotation(door.position + inward * 1.15f + Vector3.up * 1.1f, door.rotation);
-        ConfigureBoxTrigger(trigger, new Vector3(2.6f, 2.3f, 2.0f));
+        Vector3 triggerSize = Mathf.Abs(Vector3.Dot(inward, Vector3.forward)) > 0.7f
+            ? new Vector3(2.4f, 2.3f, 1.5f)
+            : new Vector3(1.5f, 2.3f, 2.4f);
+        trigger.transform.SetPositionAndRotation(door.position + inward * 1.05f + Vector3.up * 1.1f, door.rotation);
+        ConfigureBoxTrigger(trigger, triggerSize);
         DoorTransition doorTransition = EnsureComponent<DoorTransition>(trigger);
-        doorTransition.Configure(SceneTransitionState.WorldSceneName, SceneTransitionState.SpawnWorkshopExterior, prompt);
+        doorTransition.Configure(SceneTransitionState.WorldSceneName, spawnId, prompt);
+    }
+
+    static void ConfigureInteriorSpawn(Transform root, string name, Transform door, Transform existingInside, string spawnId)
+    {
+        Vector3 inward = Flatten(door.forward);
+        GameObject spawn = EnsureChild(root, name);
+        Vector3 spawnPos = door.position + inward * 3.8f;
+        if (existingInside != null)
+        {
+            Vector3 inside = existingInside.position;
+            inside.y = 1f;
+            if (Vector3.Dot(inside - door.position, inward) >= 3.2f)
+                spawnPos = inside;
+        }
+
+        spawnPos.y = 1f;
+        spawnPos = NudgeSpawn(spawnPos, inward);
+        spawn.transform.SetPositionAndRotation(spawnPos, Quaternion.LookRotation(inward, Vector3.up));
+        SceneSpawnPoint spawnPoint = EnsureComponent<SceneSpawnPoint>(spawn);
+        spawnPoint.SetSpawnId(spawnId);
+    }
+
+    static void ApplyGameplayCamera()
+    {
+        GameObject cameraGo = GameObject.Find("Main Camera");
+        GameObject player = GameObject.Find("Player");
+        if (cameraGo == null || player == null)
+            return;
+
+        CameraFollow follow = cameraGo.GetComponent<CameraFollow>();
+        if (follow == null)
+            follow = cameraGo.AddComponent<CameraFollow>();
+        follow.ApplyGameplayView(player.transform);
+
+        PlayerController controller = player.GetComponent<PlayerController>();
+        if (controller == null)
+            return;
+
+        SerializedObject serialized = new SerializedObject(controller);
+        serialized.FindProperty("moveSpeed").floatValue = 7f;
+        SerializedProperty gameplayCamera = serialized.FindProperty("gameplayCamera");
+        if (gameplayCamera.objectReferenceValue == null)
+            gameplayCamera.objectReferenceValue = cameraGo.GetComponent<Camera>();
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    static void DestroyIfFound(string name)
+    {
+        GameObject leftover = FindDeepObject(name);
+        if (leftover != null)
+            Object.DestroyImmediate(leftover);
     }
 
     static string ValidateCurrentWorld()
@@ -153,13 +282,23 @@ public static class SceneTransitionSetup
         report.AppendLine("- SceneTransitionManager: " + Count<SceneTransitionManager>());
         report.AppendLine("- InteractionPromptUI: " + Count<InteractionPromptUI>());
         report.AppendLine("- EventSystem: " + Count<EventSystem>());
-        DoorTransition trigger = FindDoor("WorkshopEntranceTrigger");
-        SceneSpawnPoint spawn = FindSpawn(SceneTransitionState.SpawnWorkshopExterior);
-        report.AppendLine("- WorkshopEntranceTrigger: " + DescribeTrigger(trigger));
-        report.AppendLine("- WorkshopExteriorSpawn: " + DescribeSpawn(spawn));
+        report.AppendLine("- 北门进入: " + DescribeTrigger(FindDoor("WorkshopNorthEntranceTrigger")));
+        report.AppendLine("- 北门出生: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnWorkshopNorth)));
+        report.AppendLine("- 南门进入: " + DescribeTrigger(FindDoor("WorkshopSouthEntranceTrigger")));
+        report.AppendLine("- 南门出生: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnWorkshopSouth)));
         report.AppendLine("- Interact 动作存在: " + (UnityEngine.InputSystem.InputSystem.actions != null && UnityEngine.InputSystem.InputSystem.actions.FindAction("Player/Interact", false) != null));
-        report.AppendLine("- 入口胶囊重叠: " + SpawnOverlaps(spawn));
-        report.AppendLine("- Build Index World/Workshop: " + SceneUtility.GetBuildIndexByScenePath(WorldScenePath) + "/" + SceneUtility.GetBuildIndexByScenePath(WorkshopScenePath));
+        report.AppendLine("- 北门出生重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnWorkshopNorth)));
+        report.AppendLine("- 南门出生重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnWorkshopSouth)));
+        report.AppendLine("- 家西门进入: " + DescribeTrigger(FindDoor("HomeEntranceTrigger")));
+        report.AppendLine("- 家西门出生: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnHomeExterior)));
+        report.AppendLine("- 家西门出生重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnHomeExterior)));
+        report.AppendLine("- 家东门进入: " + DescribeTrigger(FindDoor("HomeEastEntranceTrigger")));
+        report.AppendLine("- 家东门出生: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnHomeExteriorEast)));
+        report.AppendLine("- 家东门出生重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnHomeExteriorEast)));
+        report.AppendLine("- Build Index World/Workshop/Home: "
+            + SceneUtility.GetBuildIndexByScenePath(WorldScenePath) + "/"
+            + SceneUtility.GetBuildIndexByScenePath(WorkshopScenePath) + "/"
+            + SceneUtility.GetBuildIndexByScenePath(SceneTransitionState.HomeScenePath));
         return report.ToString().TrimEnd();
     }
 
@@ -172,19 +311,35 @@ public static class SceneTransitionSetup
         report.AppendLine("- SceneTransitionManager: " + Count<SceneTransitionManager>());
         report.AppendLine("- InteractionPromptUI: " + Count<InteractionPromptUI>());
         report.AppendLine("- EventSystem: " + Count<EventSystem>());
-        report.AppendLine("- WorkshopExitTriggerA: " + DescribeTrigger(FindDoor("WorkshopExitTriggerA")));
-        report.AppendLine("- WorkshopExitTriggerB: " + DescribeTrigger(FindDoor("WorkshopExitTriggerB")));
-        report.AppendLine("- WorkshopEntranceSpawn: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnWorkshopEntrance)));
-        report.AppendLine("- 入口胶囊重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnWorkshopEntrance)));
+        report.AppendLine("- 左上角出门: " + DescribeTrigger(FindDoor("WorkshopExitTriggerA")));
+        report.AppendLine("- 右下角出门: " + DescribeTrigger(FindDoor("WorkshopExitTriggerB")));
+        report.AppendLine("- 北门内出生: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnWorkshopEntrance)));
+        report.AppendLine("- 南门内出生: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnWorkshopEntranceSouth)));
+        report.AppendLine("- 北门内重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnWorkshopEntrance)));
+        report.AppendLine("- 南门内重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnWorkshopEntranceSouth)));
+        return report.ToString().TrimEnd();
+    }
+
+    static string ValidateCurrentHome()
+    {
+        var report = new StringBuilder();
+        report.AppendLine("HomeScene 校验:");
+        report.AppendLine("- 路径: " + SceneManager.GetActiveScene().path);
+        report.AppendLine("- Player: " + Count<PlayerController>() + "  Camera: " + Object.FindObjectsByType<Camera>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length);
+        report.AppendLine("- SceneTransitionManager: " + Count<SceneTransitionManager>());
+        report.AppendLine("- 西门出门: " + DescribeTrigger(FindDoor("HomeExitTrigger")));
+        report.AppendLine("- 东门出门: " + DescribeTrigger(FindDoor("HomeEastExitTrigger")));
+        report.AppendLine("- 西门内出生: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnHomeEntrance)));
+        report.AppendLine("- 东门内出生: " + DescribeSpawn(FindSpawn(SceneTransitionState.SpawnHomeEntranceEast)));
+        report.AppendLine("- 西门内重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnHomeEntrance)));
+        report.AppendLine("- 东门内重叠: " + SpawnOverlaps(FindSpawn(SceneTransitionState.SpawnHomeEntranceEast)));
         return report.ToString().TrimEnd();
     }
 
     static string DescribeWorld()
     {
-        DoorTransition trigger = FindDoor("WorkshopEntranceTrigger");
-        SceneSpawnPoint spawn = FindSpawn(SceneTransitionState.SpawnWorkshopExterior);
-        return "WorldScene 已配置。Trigger=" + (trigger != null ? trigger.transform.position.ToString("F2") : "无")
-            + " Spawn=" + (spawn != null ? spawn.transform.position.ToString("F2") : "无");
+        return "WorldScene 已配置。北门出生=" + Pos("WorkshopNorthSpawn")
+            + " 南门出生=" + Pos("WorkshopSouthSpawn");
     }
 
     static string DescribeWorkshop()
@@ -302,7 +457,7 @@ public static class SceneTransitionSetup
         text.fontSize = 34;
         text.color = Color.white;
         text.raycastTarget = false;
-        text.text = "按 E 进入工坊";
+        text.text = "";
         InteractionPromptUI.EnsureChineseFont(text);
         Outline outline = EnsureComponent<Outline>(textGo);
         outline.effectColor = new Color(0f, 0f, 0f, 0.85f);

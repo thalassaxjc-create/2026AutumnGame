@@ -9,7 +9,7 @@ using UnityEngine.InputSystem;
 public class PlayerController : MonoBehaviour
 {
     [SerializeField, Min(0f), Tooltip("水平移动速度，单位：米/秒。")]
-    float moveSpeed = 5f;
+    float moveSpeed = 7f;
 
     [SerializeField, Min(0f), Tooltip("转向速度，单位：度/秒。")]
     float turnSpeed = 540f;
@@ -42,6 +42,9 @@ public class PlayerController : MonoBehaviour
 
         CacheMoveAction();
         ResolveCamera();
+
+        if (SceneTransitionState.IsLoading)
+            return;
 
         Vector3 move = CameraRelativeDirection(ReadMoveInput());
         if (move.sqrMagnitude > 0.0001f)

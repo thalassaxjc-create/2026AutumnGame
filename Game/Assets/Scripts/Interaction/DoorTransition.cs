@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// 门口交互触发器。只检测带 PlayerController 的角色，不响应任意碰撞体。
+/// 门口自动切换。玩家走进触发器即加载目标场景，不需要按键。
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(BoxCollider))]
@@ -9,7 +9,7 @@ public class DoorTransition : MonoBehaviour
 {
     [SerializeField] string targetSceneName;
     [SerializeField] string targetSpawnId;
-    [SerializeField] string promptText = "按 E 交互";
+    [SerializeField] string promptText = "";
 
     int playerOverlap;
     static readonly Collider[] OverlapBuffer = new Collider[12];
@@ -23,13 +23,11 @@ public class DoorTransition : MonoBehaviour
     {
         targetSceneName = sceneName;
         targetSpawnId = spawnId;
-        promptText = prompt;
+        promptText = prompt ?? string.Empty;
     }
 
     void OnDisable()
     {
-        if (playerOverlap > 0)
-            InteractionPromptUI.Hide();
         playerOverlap = 0;
     }
 
@@ -39,7 +37,7 @@ public class DoorTransition : MonoBehaviour
             return;
 
         playerOverlap++;
-        RefreshPrompt();
+        TryAutoTransition();
     }
 
     void OnTriggerStay(Collider other)
@@ -48,6 +46,7 @@ public class DoorTransition : MonoBehaviour
             return;
         if (playerOverlap <= 0)
             playerOverlap = 1;
+        TryAutoTransition();
     }
 
     void OnTriggerExit(Collider other)
@@ -57,26 +56,16 @@ public class DoorTransition : MonoBehaviour
 
         playerOverlap = Mathf.Max(0, playerOverlap - 1);
         if (playerOverlap == 0)
-        {
             SceneTransitionState.MustLeaveTrigger = false;
-            InteractionPromptUI.Hide();
-        }
     }
 
-    void Update()
+    void TryAutoTransition()
     {
-        bool inside = playerOverlap > 0 || PlayerOverlappingNow();
-        if (!inside)
+        if (SceneTransitionState.IsLoading)
             return;
-
         if (SceneTransitionState.MustLeaveTrigger)
-        {
-            InteractionPromptUI.Hide();
             return;
-        }
-
-        InteractionPromptUI.Show(promptText);
-        if (!SceneTransitionManager.TryConsumeInteractPress())
+        if (!PlayerIsInside && !PlayerOverlappingNow())
             return;
 
         SceneTransitionManager.Request(targetSceneName, targetSpawnId);
@@ -103,14 +92,6 @@ public class DoorTransition : MonoBehaviour
         }
 
         return false;
-    }
-
-    void RefreshPrompt()
-    {
-        if (playerOverlap > 0 && !SceneTransitionState.IsLocked)
-            InteractionPromptUI.Show(promptText);
-        else
-            InteractionPromptUI.Hide();
     }
 
     public bool OverlapsPlayer(Transform player)

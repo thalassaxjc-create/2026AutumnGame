@@ -215,19 +215,15 @@ public static class WhiteboxSceneSetup
 
         SerializedObject serializedFollow = new SerializedObject(follow);
         serializedFollow.FindProperty("target").objectReferenceValue = target;
-        serializedFollow.FindProperty("horizontalDistance").floatValue = 12f;
-        serializedFollow.FindProperty("height").floatValue = 12f;
-        serializedFollow.FindProperty("smoothTime").floatValue = 0.15f;
-        serializedFollow.FindProperty("lookAtHeight").floatValue = 0f;
         serializedFollow.ApplyModifiedPropertiesWithoutUndo();
-        follow.SnapToTarget();
+        follow.ApplyGameplayView(target);
     }
 
     static void WirePlayerCamera(GameObject player, Camera cameraComponent)
     {
         PlayerController controller = player.GetComponent<PlayerController>();
         SerializedObject serializedController = new SerializedObject(controller);
-        serializedController.FindProperty("moveSpeed").floatValue = 5f;
+        serializedController.FindProperty("moveSpeed").floatValue = 7f;
         serializedController.FindProperty("turnSpeed").floatValue = 540f;
         serializedController.FindProperty("gameplayCamera").objectReferenceValue = cameraComponent;
         serializedController.ApplyModifiedPropertiesWithoutUndo();
@@ -246,8 +242,8 @@ public static class WhiteboxSceneSetup
     {
         cameraComponent.orthographic = false;
         cameraComponent.fieldOfView = 40f;
-        cameraComponent.nearClipPlane = 0.3f;
-        cameraComponent.farClipPlane = 250f;
+        cameraComponent.nearClipPlane = 0.2f;
+        cameraComponent.farClipPlane = 400f;
         cameraComponent.clearFlags = CameraClearFlags.Skybox;
         cameraComponent.depth = -1f;
     }

@@ -5,23 +5,32 @@ public static class SceneTransitionState
 {
     public const string WorldSceneName = "WorldScene";
     public const string WorkshopSceneName = "WorkshopScene";
+    public const string HomeSceneName = "HomeScene";
     public const string WorldScenePath = "Assets/Scenes/WorldScene.unity";
     public const string WorkshopScenePath = "Assets/Scenes/WorkshopScene.unity";
+    public const string HomeScenePath = "Assets/Scenes/HomeScene.unity";
     public const string SpawnWorkshopEntrance = "WorkshopEntrance";
+    public const string SpawnWorkshopEntranceSouth = "WorkshopEntranceSouth";
+    public const string SpawnWorkshopNorth = "WorkshopNorth";
+    public const string SpawnWorkshopSouth = "WorkshopSouth";
     public const string SpawnWorkshopExterior = "WorkshopExterior";
+    public const string SpawnHomeEntrance = "HomeEntrance";
+    public const string SpawnHomeEntranceEast = "HomeEntranceEast";
+    public const string SpawnHomeExterior = "HomeExterior";
+    public const string SpawnHomeExteriorEast = "HomeExteriorEast";
 
     public static string PendingSpawnId { get; set; }
     public static bool IsLoading { get; set; }
     public static bool WaitForInteractRelease { get; set; }
     public static bool MustLeaveTrigger { get; set; }
 
-    public static bool IsLocked => IsLoading || WaitForInteractRelease || MustLeaveTrigger;
+    public static bool IsLocked => IsLoading || MustLeaveTrigger;
 
     public static void BeginLoad(string spawnId)
     {
         IsLoading = true;
         PendingSpawnId = spawnId;
-        WaitForInteractRelease = true;
+        WaitForInteractRelease = false;
         MustLeaveTrigger = false;
     }
 
