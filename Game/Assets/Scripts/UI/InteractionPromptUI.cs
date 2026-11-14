@@ -32,7 +32,7 @@ public class InteractionPromptUI : MonoBehaviour
 
     public static void Show(string message)
     {
-        if (instance == null)
+        if (instance == null || GameFlowModalState.IsInteractionBlocked)
             return;
         instance.EnsureLabel();
         instance.label.text = message;

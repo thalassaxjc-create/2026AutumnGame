@@ -99036,6 +99036,8 @@ GameObject:
   - component: {fileID: 1513839186}
   - component: {fileID: 1513839185}
   - component: {fileID: 1513839184}
+  - component: {fileID: 1513839190}
+  - component: {fileID: 1513839191}
   m_Layer: 0
   m_Name: "\u6751\u53E3\u5927\u7237"
   m_TagString: Untagged
@@ -99072,6 +99074,35 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NpcCharacter
   displayName: "\u6751\u53E3\u5927\u7237"
+--- !u!114 &1513839190
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1513839182}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f17c923b6c44466487a3b8cd20e41a10, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TemporaryDialogueEntryPoint
+  placeholderMessage: "Temporary dialogue entry point.\nThe order/dialogue system can be connected here."
+  closeHint: Press E, Enter, or Esc to close
+--- !u!114 &1513839191
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1513839182}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed1008002e99454cb9953511d809a503, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::NpcDialogueInteraction
+  dialogueEntryPoint: {fileID: 1513839190}
+  promptText: Press E to talk
+  interactionRadius: 3
 --- !u!23 &1513839185
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -118487,6 +118518,8 @@ GameObject:
   m_Component:
   - component: {fileID: 1822752250}
   - component: {fileID: 1822752249}
+  - component: {fileID: 1822752251}
+  - component: {fileID: 1822752252}
   m_Layer: 0
   m_Name: SceneTransition
   m_TagString: Untagged
@@ -118506,6 +118539,44 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 282211ad63811484ca7ca5025016f584, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::SceneTransitionManager
+--- !u!114 &1822752251
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1822752248}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a5540161dd1843ffac94d000e8787315, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::SettlementExitController
+  settlementRoot: {fileID: 0}
+  controlledPlayer: {fileID: 2042014061}
+  returnMode: 0
+  returnSceneName: WorldScene
+  returnSpawnId: WorkshopNorth
+  avoidReloadingCurrentScene: 1
+  settlementOpened:
+    m_PersistentCalls:
+      m_Calls: []
+  settlementClosed:
+    m_PersistentCalls:
+      m_Calls: []
+--- !u!114 &1822752252
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1822752248}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 987b5109886f4b7aa25c7c1d6d93b818, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::SettlementDevelopmentHarness
+  exitController: {fileID: 1822752251}
+  testMessage: "Development settlement placeholder\nNo economy or inventory logic is performed."
 --- !u!4 &1822752250
 Transform:
   m_ObjectHideFlags: 0

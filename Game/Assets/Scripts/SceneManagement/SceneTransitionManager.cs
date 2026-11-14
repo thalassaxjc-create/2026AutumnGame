@@ -35,6 +35,9 @@ public class SceneTransitionManager : MonoBehaviour
         if (SceneTransitionState.WaitForInteractRelease && !IsInteractHeld())
             SceneTransitionState.WaitForInteractRelease = false;
 
+        if (GameFlowModalState.WaitForInteractRelease && !IsInteractHeld())
+            GameFlowModalState.NotifyInteractReleased();
+
         if (!SceneTransitionState.MustLeaveTrigger)
             return;
 
@@ -45,7 +48,7 @@ public class SceneTransitionManager : MonoBehaviour
 
     public static bool TryConsumeInteractPress()
     {
-        if (SceneTransitionState.IsLocked)
+        if (SceneTransitionState.IsLocked || GameFlowModalState.IsInteractionBlocked)
             return false;
 
         SceneTransitionManager manager = FindInstance();
@@ -75,6 +78,19 @@ public class SceneTransitionManager : MonoBehaviour
         InteractionPromptUI.HideImmediate();
         SceneTransitionState.BeginLoad(spawnId);
         SceneTransitionFader.Go(buildIndex);
+    }
+
+    /// <summary>
+    /// Requests the existing fade-backed transition and reports whether it was accepted.
+    /// The original Request API remains available for doors and existing callers.
+    /// </summary>
+    public static bool TryRequest(string sceneName, string spawnId)
+    {
+        if (SceneTransitionState.IsLoading)
+            return false;
+
+        Request(sceneName, spawnId);
+        return SceneTransitionState.IsLoading;
     }
 
     void ApplyPendingSpawn()

@@ -63,6 +63,8 @@ public class DoorTransition : MonoBehaviour
     {
         if (SceneTransitionState.IsLoading)
             return;
+        if (GameFlowModalState.IsInteractionBlocked)
+            return;
         if (SceneTransitionState.MustLeaveTrigger)
             return;
         if (!PlayerIsInside && !PlayerOverlappingNow())
