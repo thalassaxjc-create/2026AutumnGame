@@ -795,6 +795,7 @@ GameObject:
   m_Component:
   - component: {fileID: 147522727}
   - component: {fileID: 147522728}
+  - component: {fileID: 147522729}
   m_Layer: 0
   m_Name: ComputerInteractionPoint
   m_TagString: Untagged
@@ -831,6 +832,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InteractionPoint
   pointId: ComputerInteractionPoint
   gizmoColor: {r: 1, g: 0.82, b: 0.2, a: 0.95}
+--- !u!114 &147522729
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 147522726}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6dc21aaabb1536749b5944efff90e33f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WorkshopComputer
+  interfacePrefab: {fileID: 7118496736245361468, guid: 78fb7257138be034586e7db2cb855317, type: 3}
+  player: {fileID: 561502356}
+  cameraFollow: {fileID: 2042014064}
+  interactionDistance: 2
 --- !u!1 &148645955
 GameObject:
   m_ObjectHideFlags: 0
