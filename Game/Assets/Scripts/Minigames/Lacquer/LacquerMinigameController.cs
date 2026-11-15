@@ -97,8 +97,8 @@ public sealed class LacquerMinigameController : MonoBehaviour
     [SerializeField, Min(1)] int gameMinutesCost = 20;
 
     [Header("扫描与判定")]
-    [SerializeField, Min(2f)] float scanPassDuration = 4.2f;
-    [SerializeField, Min(0.3f)] float preShowTime = 1.25f;
+    [SerializeField, Min(2f)] float scanPassDuration = 6.4f;
+    [SerializeField, Min(0.3f)] float preShowTime = 0.9f;
     [SerializeField, Min(0.03f)] float perfectWindow = 0.10f;
     [SerializeField, Min(0.05f)] float greatWindow = 0.20f;
     [SerializeField, Min(0.08f)] float goodWindow = 0.32f;
@@ -106,7 +106,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
     [SerializeField, Min(0.5f)] float dragDeadline = 1.7f;
     [SerializeField, Min(20f)] float dragCorridor = 66f;
 
-    const int MarksPerPass = 8;
+    const int MarksPerPass = 5;
     const float LeftBound = -535f;
     const float RightBound = 535f;
     const float BottomBound = -255f;

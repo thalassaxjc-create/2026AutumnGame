@@ -30,6 +30,11 @@ public static class MergedProjectIntegration
         VerifyStation<LacquerMinigameController, LacquerStationTrigger>(
             "LacquerInteractionPoint", "LacquerMinigameCanvas");
 
+        AudioClip weavingMusic = Resources.Load<AudioClip>("Audio/Weaving_11_15");
+        Require(weavingMusic != null, "Weaving music could not be loaded from Resources.");
+        Require(weavingMusic.length > 83f && weavingMusic.length < 84f,
+            "Weaving music duration is unexpected: " + weavingMusic.length + " seconds.");
+
         GameObject computerPoint = FindDeep("ComputerInteractionPoint");
         Require(computerPoint != null, "ComputerInteractionPoint was lost during the merge.");
         Require(computerPoint.GetComponent<WorkshopComputer>() != null,

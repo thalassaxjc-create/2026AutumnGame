@@ -96,6 +96,29 @@ public sealed class WeavingMinigameController : MonoBehaviour
     const float HitY = -250f;
     const float LeftLaneX = -118f;
     const float RightLaneX = 118f;
+    const string MusicResourcePath = "Audio/Weaving_11_15";
+
+    // 依据《11月15日.wav》的明显起音制作：100 个目标覆盖整首 83.48 秒音乐。
+    // 相邻目标最短约 0.51 秒、最长约 1.42 秒，作为中等难度固定谱面。
+    static readonly float[] MusicBeatTimes =
+    {
+        0.511f, 1.579f, 2.415f, 3.135f, 3.808f, 4.853f, 5.550f, 6.594f, 7.616f, 8.313f,
+        8.847f, 9.706f, 10.565f, 11.099f, 12.121f, 13.166f, 13.886f, 14.907f, 15.952f, 16.649f,
+        17.160f, 18.204f, 19.064f, 19.760f, 20.805f, 21.664f, 22.198f, 22.709f, 23.917f, 24.961f,
+        25.472f, 26.680f, 27.562f, 28.259f, 28.770f, 29.466f, 30.511f, 31.022f, 32.229f, 33.112f,
+        33.808f, 35.016f, 35.712f, 36.571f, 37.082f, 37.779f, 38.638f, 39.358f, 40.565f, 41.610f,
+        42.121f, 42.655f, 43.328f, 44.373f, 45.279f, 46.161f, 46.881f, 47.740f, 48.623f, 49.459f,
+        50.155f, 51.061f, 51.711f, 52.779f, 53.290f, 54.149f, 55.565f, 56.216f, 56.959f, 57.771f,
+        58.305f, 59.025f, 60.070f, 61.092f, 61.765f, 62.462f, 63.181f, 64.087f, 64.853f, 65.620f,
+        66.664f, 67.500f, 68.360f, 69.404f, 70.287f, 70.798f, 71.494f, 72.539f, 73.584f, 74.443f,
+        74.954f, 75.836f, 76.347f, 77.740f, 78.600f, 79.110f, 79.993f, 80.527f, 81.363f, 82.245f
+    };
+
+    // 每组四个单键后接一次双键打结；轮换型谱面避免长时间只按一侧。
+    static readonly string[] MusicLanePatterns =
+    {
+        "FJFJ", "JFJF", "FFJF", "JJFJ", "FJFF", "JFJJ", "FJJF", "JFFJ"
+    };
 
     readonly List<NoteSpec> schedule = new List<NoteSpec>(128);
     readonly List<ActiveNote> activeNotes = new List<ActiveNote>(12);
@@ -108,6 +131,8 @@ public sealed class WeavingMinigameController : MonoBehaviour
     AudioClip rightClip;
     AudioClip knotClip;
     AudioClip missClip;
+    AudioClip musicClip;
+    AudioSource musicSource;
 
     RectTransform noteLayer;
     RectTransform progressFill;
@@ -135,6 +160,8 @@ public sealed class WeavingMinigameController : MonoBehaviour
     float countdownRemaining;
     float feedbackRemaining;
     bool initialized;
+    bool musicClockActive;
+    double musicDspStart;
 
     ActiveNote pendingChord;
     bool pendingChordFirstWasLeft;
@@ -215,6 +242,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
     public void Close()
     {
+        StopMusic();
         if (phase == Phase.Closed && (canvasRoot == null || !canvasRoot.activeSelf))
             return;
 
@@ -271,6 +299,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
     void ResetToReady()
     {
+        StopMusic();
         ClearActiveNotes();
         ResetScore();
         phase = Phase.Ready;
@@ -285,6 +314,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
     void BeginCountdown()
     {
+        StopMusic();
         ClearActiveNotes();
         ResetScore();
         introPanel.SetActive(false);
@@ -317,15 +347,47 @@ public sealed class WeavingMinigameController : MonoBehaviour
         countdownText.gameObject.SetActive(false);
         GenerateSchedule();
         nextSpawnIndex = 0;
-        songTime = 0f;
+        if (!StartMusicChart())
+            songTime = 0f;
         phase = Phase.Playing;
-        ShowFeedback("听梭落线", new Color32(255, 237, 190, 255));
+        ShowFeedback(musicClockActive ? "跟住音乐，听梭落线" : "听梭落线",
+            new Color32(255, 237, 190, 255));
     }
 
     void GenerateSchedule()
     {
         schedule.Clear();
         roundNumber++;
+
+        if (CanUseMusicChart())
+        {
+            int groupSize = Mathf.Max(2, knotEvery);
+            for (int i = 0; i < requiredThreads; i++)
+            {
+                NoteKind kind;
+                if ((i + 1) % groupSize == 0)
+                {
+                    kind = NoteKind.Knot;
+                }
+                else
+                {
+                    int group = i / groupSize;
+                    int slot = i % groupSize;
+                    string pattern = MusicLanePatterns[group % MusicLanePatterns.Length];
+                    kind = pattern[slot % pattern.Length] == 'F' ? NoteKind.Left : NoteKind.Right;
+                }
+
+                schedule.Add(new NoteSpec
+                {
+                    kind = kind,
+                    index = i,
+                    targetTime = MusicBeatTimes[i]
+                });
+            }
+
+            return;
+        }
+
         var random = new System.Random(20261113 + roundNumber * 31);
         NoteKind previous = NoteKind.Left;
         int repeated = 0;
@@ -366,7 +428,9 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
     void UpdatePlaying(Keyboard keyboard)
     {
-        songTime += Time.unscaledDeltaTime;
+        songTime = musicClockActive
+            ? (float)(AudioSettings.dspTime - musicDspStart)
+            : songTime + Time.unscaledDeltaTime;
         SpawnDueNotes();
         UpdateNotePositions();
 
@@ -810,6 +874,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
         Stretch(root);
 
         RectTransform arcRect = CreateRect(root, "ThreadArc", new Vector2(0.5f, 0.5f), new Vector2(-350f, -50f), new Vector2(900f, 300f));
+        arcRect.localEulerAngles = new Vector3(0f, 0f, -90f);
         arcGraphic = arcRect.gameObject.AddComponent<WeavingArcGraphic>();
         arcGraphic.color = Color.white;
 
@@ -880,7 +945,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
             new Vector2(0f, 205f), new Vector2(650f, 80f), new Color32(248, 224, 170, 255));
         AddOutline(introTitle.gameObject, new Color(0f, 0f, 0f, 0.9f), new Vector2(2f, -2f));
         CreateText(introRect, "Body",
-            "材料检查：竹丝 100 / 100\n\n竹丝落到横线时按 F 或 J\n白色弧线代表木梭带线摆过帘面\n每第 5 根会出现“结”，请同时按 F + J\n\n失误不会卡住进度，但会影响最终评级",
+            "材料检查：竹丝 100 / 100\n音乐谱面：中等难度\n\n跟随音乐，在竹丝落到横线时按 F 或 J\n白色弧线代表木梭带线摆过帘面\n每第 5 根会出现“结”，请同时按 F + J\n\n失误不会卡住进度，但会影响最终评级",
             27, TextAnchor.MiddleCenter, new Vector2(0f, 25f), new Vector2(650f, 310f),
             new Color32(229, 219, 197, 255));
         Text startText = CreateText(introRect, "Start", "按 SPACE 开始", 33, TextAnchor.MiddleCenter,
@@ -980,6 +1045,49 @@ public sealed class WeavingMinigameController : MonoBehaviour
         rightClip = CreateTone("Weaving_Right", 640f, 0.075f, 0.04f);
         knotClip = CreateTone("Weaving_Knot", 790f, 0.13f, 0.02f);
         missClip = CreateTone("Weaving_Miss", 125f, 0.11f, 0.12f);
+
+        musicClip = Resources.Load<AudioClip>(MusicResourcePath);
+        musicSource = gameObject.AddComponent<AudioSource>();
+        musicSource.playOnAwake = false;
+        musicSource.loop = false;
+        musicSource.spatialBlend = 0f;
+        musicSource.volume = 0.46f;
+        musicSource.priority = 32;
+
+        if (musicClip == null)
+            Debug.LogWarning("未找到编帘音乐 Resources/" + MusicResourcePath + "，将使用原有匀速谱面。", this);
+        else if (musicClip.loadState == AudioDataLoadState.Unloaded)
+            musicClip.LoadAudioData();
+    }
+
+    bool CanUseMusicChart()
+    {
+        return musicClip != null && musicSource != null && MusicBeatTimes.Length >= requiredThreads;
+    }
+
+    bool StartMusicChart()
+    {
+        StopMusic();
+        if (!CanUseMusicChart())
+            return false;
+
+        musicSource.clip = musicClip;
+        musicSource.time = 0f;
+
+        // 在音乐开始前让第一根竹丝从顶部完整下落，首个鼓点仍与谱面精确对齐。
+        float leadIn = Mathf.Max(0.1f, noteTravelTime - MusicBeatTimes[0]);
+        musicDspStart = AudioSettings.dspTime + leadIn;
+        songTime = -leadIn;
+        musicSource.PlayScheduled(musicDspStart);
+        musicClockActive = true;
+        return true;
+    }
+
+    void StopMusic()
+    {
+        musicClockActive = false;
+        if (musicSource != null)
+            musicSource.Stop();
     }
 
     static AudioClip CreateTone(string name, float frequency, float duration, float noiseAmount)

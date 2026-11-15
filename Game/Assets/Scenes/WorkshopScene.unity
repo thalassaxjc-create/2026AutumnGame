@@ -5376,8 +5376,8 @@ MonoBehaviour:
   totalMarks: 32
   strokeEvery: 4
   gameMinutesCost: 20
-  scanPassDuration: 4.2
-  preShowTime: 1.25
+  scanPassDuration: 6.4
+  preShowTime: 0.9
   perfectWindow: 0.1
   greatWindow: 0.2
   goodWindow: 0.32
