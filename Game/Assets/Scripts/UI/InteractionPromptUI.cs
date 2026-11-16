@@ -2,12 +2,16 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// 门口交互提示。只在玩家进入 Trigger 时显示，不跨场景持久化。
+/// 场景内共用的交互提示，不跨场景持久化。
 /// </summary>
 [DisallowMultipleComponent]
 public class InteractionPromptUI : MonoBehaviour
 {
     static InteractionPromptUI instance;
+    static Font sharedChineseFont;
+
+    public static bool IsVisible => instance != null && instance.label != null && instance.label.enabled;
+    public static string CurrentMessage => IsVisible ? instance.label.text : string.Empty;
 
     [SerializeField] Text label;
     [SerializeField] CanvasGroup canvasGroup;
@@ -16,6 +20,7 @@ public class InteractionPromptUI : MonoBehaviour
     {
         instance = this;
         EnsureLabel();
+        EnsureChineseFont(label);
         HideImmediate();
     }
 
@@ -35,6 +40,10 @@ public class InteractionPromptUI : MonoBehaviour
         if (instance == null)
             return;
         instance.EnsureLabel();
+        if (instance.label == null)
+            return;
+
+        EnsureChineseFont(instance.label);
         instance.label.text = message;
         SetVisible(true);
     }
@@ -70,15 +79,8 @@ public class InteractionPromptUI : MonoBehaviour
     {
         if (canvasGroup == null)
             canvasGroup = GetComponent<CanvasGroup>();
-        if (label != null)
-        {
-            EnsureChineseFont(label);
-            return;
-        }
-
-        label = GetComponentInChildren<Text>(true);
-        if (label != null)
-            EnsureChineseFont(label);
+        if (label == null)
+            label = GetComponentInChildren<Text>(true);
     }
 
     public static void EnsureChineseFont(Text text)
@@ -86,10 +88,44 @@ public class InteractionPromptUI : MonoBehaviour
         if (text == null)
             return;
 
-        Font font = Font.CreateDynamicFontFromOSFont(
-            new[] { "Microsoft YaHei", "微软雅黑", "SimHei", "黑体", "Arial Unicode MS", "Arial" },
-            28);
-        if (font != null)
-            text.font = font;
+        // 所有提示、NPC 名字和背包文字共用一个字体。这个 API 每次都会创建原生资源，
+        // 不能放在每帧 Show/Hide 的路径上反复创建。
+        if (sharedChineseFont == null)
+        {
+            sharedChineseFont = Font.CreateDynamicFontFromOSFont(
+                new[] { "Microsoft YaHei", "微软雅黑", "SimHei", "黑体", "Arial Unicode MS", "Arial" },
+                28);
+            if (sharedChineseFont == null)
+                return;
+
+            sharedChineseFont.hideFlags = HideFlags.HideAndDontSave;
+
+#if UNITY_EDITOR
+            // 场景生成工具也会调用此方法；在静态引用丢失前释放编辑器中的原生字体。
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= ReleaseChineseFont;
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += ReleaseChineseFont;
+            UnityEditor.EditorApplication.quitting -= ReleaseChineseFont;
+            UnityEditor.EditorApplication.quitting += ReleaseChineseFont;
+#else
+            Application.quitting -= ReleaseChineseFont;
+            Application.quitting += ReleaseChineseFont;
+#endif
+        }
+
+        if (text.font != sharedChineseFont)
+            text.font = sharedChineseFont;
+    }
+
+    static void ReleaseChineseFont()
+    {
+        if (sharedChineseFont == null)
+            return;
+
+#if UNITY_EDITOR
+        DestroyImmediate(sharedChineseFont);
+#else
+        Destroy(sharedChineseFont);
+#endif
+        sharedChineseFont = null;
     }
 }

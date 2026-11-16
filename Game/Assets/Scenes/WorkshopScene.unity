@@ -11287,6 +11287,7 @@ GameObject:
   - component: {fileID: 2140793023}
   - component: {fileID: 2140793025}
   - component: {fileID: 2140793024}
+  - component: {fileID: 2140793026}
   m_Layer: 0
   m_Name: BambooAreaMat
   m_TagString: Untagged
@@ -11366,6 +11367,28 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2140793022}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &2140793026
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2140793022}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 821f2f7b5efdb374283fb4e7ab27e42d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BambooWorkbench
+  workTable: {fileID: 60238260}
+  storedCanes:
+  - {fileID: 252866517}
+  - {fileID: 1221725139}
+  - {fileID: 965045637}
+  - {fileID: 933897067}
+  - {fileID: 1641339510}
+  - {fileID: 190795553}
+  - {fileID: 1508571506}
+  - {fileID: 1850150394}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
