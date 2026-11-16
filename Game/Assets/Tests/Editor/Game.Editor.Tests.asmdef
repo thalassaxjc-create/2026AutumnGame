@@ -1,0 +1,6 @@
+{
+    "name": "Game.Editor.Tests",
+    "references": ["UnityEngine.UI"],
+    "includePlatforms": ["Editor"],
+    "optionalUnityReferences": ["TestAssemblies"]
+}

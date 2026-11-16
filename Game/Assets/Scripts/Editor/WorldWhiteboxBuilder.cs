@@ -221,6 +221,7 @@ public static class WorldWhiteboxBuilder
         BuildRoads(roads);
         BuildWorkshop(workshop);
         int bambooCount = BuildBamboo(bamboo);
+        int harvestBamboo = BambooHarvest.EnsureHarvestStalks(bamboo, BambooHarvest.HarvestCount);
         BuildCourtyard(courtyard);
         BuildKitchen(kitchen);
         BuildBedroom(bedroom);
@@ -238,7 +239,7 @@ public static class WorldWhiteboxBuilder
 
         var report = new StringBuilder();
         report.AppendLine("第二阶段大地图已生成并保存 WorldScene。");
-        report.AppendLine("地面块数量: " + groundTiles + "，竹子数量: " + bambooCount);
+        report.AppendLine("地面块数量: " + groundTiles + "，竹子数量: " + bambooCount + "，可砍伐: " + harvestBamboo);
         report.AppendLine(DescribeLayout());
         report.AppendLine(ValidateWorldMap());
         return report.ToString();
@@ -882,6 +883,7 @@ public static class WorldWhiteboxBuilder
             report.AppendLine("- HomeEastEntranceMarker: " + (GameObject.Find("HomeEastEntranceMarker") != null));
             report.AppendLine("- 村口大爷: " + DescribeNpc("村口大爷"));
             report.AppendLine("- 舅舅: " + DescribeNpc("舅舅"));
+            report.AppendLine("- 可砍伐青竹: " + Object.FindObjectsByType<ChopableBamboo>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length);
         }
         finally
         {

@@ -32474,6 +32474,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 474429692}
+  - component: {fileID: 474429693}
   m_Layer: 0
   m_Name: Bamboo_85
   m_TagString: Untagged
@@ -32502,6 +32503,23 @@ Transform:
   - {fileID: 1708907344}
   m_Father: {fileID: 1942596998}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &474429693
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 474429691}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d6cdff5d917e844ada9dd061ec74af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChopableBamboo
+  chopsToFell: 8
+  interactRadius: 3.2
+  fallDuration: 0.7
+  chopSound: {fileID: 0}
+  breakSound: {fileID: 0}
 --- !u!1 &477434140
 GameObject:
   m_ObjectHideFlags: 0
@@ -39685,6 +39703,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 581867806}
+  - component: {fileID: 581867807}
   m_Layer: 0
   m_Name: Bamboo_59
   m_TagString: Untagged
@@ -39713,6 +39732,23 @@ Transform:
   - {fileID: 1174836916}
   m_Father: {fileID: 1942596998}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &581867807
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581867805}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d6cdff5d917e844ada9dd061ec74af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChopableBamboo
+  chopsToFell: 8
+  interactRadius: 3.2
+  fallDuration: 0.7
+  chopSound: {fileID: 0}
+  breakSound: {fileID: 0}
 --- !u!1 &585422477
 GameObject:
   m_ObjectHideFlags: 0
@@ -52478,6 +52514,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 812401383}
+  - component: {fileID: 812401384}
   m_Layer: 0
   m_Name: Bamboo_07
   m_TagString: Untagged
@@ -52505,6 +52542,23 @@ Transform:
   - {fileID: 1495030941}
   m_Father: {fileID: 1942596998}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &812401384
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 812401382}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d6cdff5d917e844ada9dd061ec74af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChopableBamboo
+  chopsToFell: 8
+  interactRadius: 3.2
+  fallDuration: 0.7
+  chopSound: {fileID: 0}
+  breakSound: {fileID: 0}
 --- !u!1 &813301762
 GameObject:
   m_ObjectHideFlags: 0
@@ -94394,6 +94448,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1445108431}
+  - component: {fileID: 1445108432}
   m_Layer: 0
   m_Name: Bamboo_78
   m_TagString: Untagged
@@ -94422,6 +94477,23 @@ Transform:
   - {fileID: 513158976}
   m_Father: {fileID: 1942596998}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1445108432
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1445108430}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d6cdff5d917e844ada9dd061ec74af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChopableBamboo
+  chopsToFell: 8
+  interactRadius: 3.2
+  fallDuration: 0.7
+  chopSound: {fileID: 0}
+  breakSound: {fileID: 0}
 --- !u!1 &1445154297
 GameObject:
   m_ObjectHideFlags: 0
@@ -118609,6 +118681,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1826319232}
+  - component: {fileID: 1826319233}
   m_Layer: 0
   m_Name: Bamboo_33
   m_TagString: Untagged
@@ -118636,6 +118709,23 @@ Transform:
   - {fileID: 227547652}
   m_Father: {fileID: 1942596998}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1826319233
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1826319231}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d6cdff5d917e844ada9dd061ec74af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChopableBamboo
+  chopsToFell: 8
+  interactRadius: 3.2
+  fallDuration: 0.7
+  chopSound: {fileID: 0}
+  breakSound: {fileID: 0}
 --- !u!1 &1830825010
 GameObject:
   m_ObjectHideFlags: 0
@@ -127649,6 +127739,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1938876995}
+  - component: {fileID: 1938876996}
   m_Layer: 0
   m_Name: Bamboo_24
   m_TagString: Untagged
@@ -127676,6 +127767,23 @@ Transform:
   - {fileID: 54790598}
   m_Father: {fileID: 1942596998}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1938876996
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1938876994}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5d6cdff5d917e844ada9dd061ec74af, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ChopableBamboo
+  chopsToFell: 8
+  interactRadius: 3.2
+  fallDuration: 0.7
+  chopSound: {fileID: 0}
+  breakSound: {fileID: 0}
 --- !u!1 &1939180487
 GameObject:
   m_ObjectHideFlags: 0
@@ -128111,6 +128219,7 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1942596998}
+  - component: {fileID: 1942596999}
   m_Layer: 0
   m_Name: BambooForest
   m_TagString: Untagged
@@ -128223,6 +128332,18 @@ Transform:
   - {fileID: 250499423}
   m_Father: {fileID: 989156608}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1942596999
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1942596997}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7e401d73ed8286e44b665e0a8a391c44, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BambooHarvest
 --- !u!1 &1948913188
 GameObject:
   m_ObjectHideFlags: 0
