@@ -13,12 +13,18 @@ public sealed class LacquerStationTrigger : MonoBehaviour
     [SerializeField] string promptText = "按 E 开始刷大漆";
 
     PlayerController playerInRange;
+    CharacterController playerBody;
+    BoxCollider stationArea;
     bool minigameOpen;
+    bool playerWasEnabled;
+    WorkshopOrder order;
+    bool IsAvailable => WorkshopOrder.Current?.CanPlay(WorkshopOrder.Stage.Lacquer) ?? true;
 
     public bool IsMinigameOpen => minigameOpen;
 
     void Awake()
     {
+        stationArea = GetComponent<BoxCollider>();
         ResolveController();
         if (minigameCanvas != null)
             minigameCanvas.SetActive(false);
@@ -26,7 +32,11 @@ public sealed class LacquerStationTrigger : MonoBehaviour
 
     void Update()
     {
-        if (minigameOpen || playerInRange == null)
+        // Collider disable/teleport can bypass OnTriggerExit. Check the existing
+        // trigger bounds before letting a stale registration consume Interact.
+        if (playerInRange != null && !ContainsPlayer())
+            ClearPlayer();
+        if (minigameOpen || playerInRange == null || !IsAvailable || GameFlowModalState.IsInteractionBlocked)
             return;
 
         InteractionPromptUI.Show(promptText);
@@ -41,7 +51,8 @@ public sealed class LacquerStationTrigger : MonoBehaviour
             return;
 
         playerInRange = player;
-        if (!minigameOpen)
+        playerBody = player.GetComponent<CharacterController>();
+        if (!minigameOpen && IsAvailable && !GameFlowModalState.IsInteractionBlocked)
             InteractionPromptUI.Show(promptText);
     }
 
@@ -51,16 +62,24 @@ public sealed class LacquerStationTrigger : MonoBehaviour
         if (player == null || player != playerInRange)
             return;
 
-        if (minigameOpen)
-            CloseMinigame();
+        ClearPlayer();
+    }
 
+    bool ContainsPlayer() =>
+        playerBody != null && stationArea != null && stationArea.bounds.Intersects(playerBody.bounds);
+
+    void ClearPlayer()
+    {
+        CloseMinigame(false);
         playerInRange = null;
-        InteractionPromptUI.Hide();
+        playerBody = null;
+        if (InteractionPromptUI.CurrentMessage == promptText)
+            InteractionPromptUI.Hide();
     }
 
     public void OpenMinigame()
     {
-        if (playerInRange == null)
+        if (minigameOpen || playerInRange == null || !ContainsPlayer() || GameFlowModalState.IsInteractionBlocked)
             return;
 
         ResolveController();
@@ -70,6 +89,19 @@ public sealed class LacquerStationTrigger : MonoBehaviour
             return;
         }
 
+        order = WorkshopOrder.Current;
+        if (order != null)
+        {
+            if (minigameController == null || !order.Begin(WorkshopOrder.Stage.Lacquer))
+            {
+                order = null;
+                return;
+            }
+            minigameController.ResultConfirmed += order.ConfirmLacquer;
+            GameFlowModalState.Acquire(this);
+        }
+
+        playerWasEnabled = playerInRange.enabled;
         minigameOpen = true;
         InteractionPromptUI.Hide();
         playerInRange.enabled = false;
@@ -80,12 +112,22 @@ public sealed class LacquerStationTrigger : MonoBehaviour
             minigameCanvas.SetActive(true);
     }
 
-    public void CloseMinigame()
+    public void CloseMinigame() => CloseMinigame(true);
+
+    void CloseMinigame(bool waitForInteractRelease)
     {
         if (!minigameOpen)
             return;
 
         minigameOpen = false;
+        if (order != null)
+        {
+            if (minigameController != null)
+                minigameController.ResultConfirmed -= order.ConfirmLacquer;
+            order.Leave(WorkshopOrder.Stage.Lacquer);
+            order = null;
+            GameFlowModalState.Release(this, waitForInteractRelease);
+        }
 
         if (minigameController != null)
             minigameController.Close();
@@ -93,7 +135,7 @@ public sealed class LacquerStationTrigger : MonoBehaviour
             minigameCanvas.SetActive(false);
 
         if (playerInRange != null)
-            playerInRange.enabled = true;
+            playerInRange.enabled = playerWasEnabled;
     }
 
     public void Configure(GameObject canvasRoot, LacquerMinigameController controller)
@@ -108,18 +150,5 @@ public sealed class LacquerStationTrigger : MonoBehaviour
             minigameController = GetComponent<LacquerMinigameController>();
     }
 
-    void OnDisable()
-    {
-        InteractionPromptUI.Hide();
-
-        if (minigameController != null)
-            minigameController.Close();
-        else if (minigameCanvas != null)
-            minigameCanvas.SetActive(false);
-
-        if (playerInRange != null)
-            playerInRange.enabled = true;
-
-        minigameOpen = false;
-    }
+    void OnDisable() => ClearPlayer();
 }

@@ -38,17 +38,22 @@ public sealed class WorkshopComputer : MonoBehaviour
         Keyboard keyboard = Keyboard.current;
         if (isOpen)
         {
-            if (SceneTransitionState.IsLoading || (keyboard != null && keyboard.escapeKey.wasPressedThisFrame))
+            if (SceneTransitionState.IsLoading)
+                Close(false);
+            else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
                 Close();
             return;
         }
 
         bool canOpen = interfacePrefab != null && player != null && player.isActiveAndEnabled
             && !SceneTransitionState.IsLoading
+            && !GameFlowModalState.IsInteractionBlocked
+            && (WorkshopOrder.Current == null || WorkshopOrder.Current.CurrentPhase >= WorkshopOrder.Phase.NewOrder)
             && (player.transform.position - transform.position).sqrMagnitude
                 <= interactionDistance * interactionDistance;
         SetPrompt(canOpen);
-        if (canOpen && (interactAction?.WasPressedThisFrame() ?? (keyboard?.eKey.wasPressedThisFrame == true)))
+        if (canOpen && (WorkshopOrder.Current != null ? SceneTransitionManager.TryConsumeInteractPress()
+            : (interactAction?.WasPressedThisFrame() ?? (keyboard?.eKey.wasPressedThisFrame == true))))
             Open();
     }
 
@@ -74,16 +79,21 @@ public sealed class WorkshopComputer : MonoBehaviour
         previousCursorLock = Cursor.lockState;
 
         isOpen = true;
+        if (WorkshopOrder.Current != null)
+            GameFlowModalState.Acquire(this);
         player.enabled = false;
         if (cameraFollow != null)
             cameraFollow.enabled = false;
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
+        WorkshopOrder.Current?.OpenComputer();
         screen.gameObject.SetActive(true);
         Opened?.Invoke(screen);
     }
 
-    void Close()
+    void Close() => Close(true);
+
+    void Close(bool playerRequested)
     {
         if (!isOpen)
             return;
@@ -104,18 +114,24 @@ public sealed class WorkshopComputer : MonoBehaviour
             cameraFollow.enabled = followWasEnabled;
         Cursor.lockState = previousCursorLock;
         Cursor.visible = cursorWasVisible;
+        GameFlowModalState.Release(this, playerRequested);
+        if (playerRequested)
+            WorkshopOrder.Current?.CloseComputer();
     }
 
     void OnDisable()
     {
         SetPrompt(false);
-        Close();
+        Close(false);
     }
 
     void OnDestroy()
     {
         if (screen != null)
+        {
+            screen.CloseRequested -= Close;
             Destroy(screen.gameObject);
+        }
     }
 
     void SetPrompt(bool visible)

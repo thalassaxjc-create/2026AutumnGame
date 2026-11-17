@@ -165,6 +165,8 @@ public sealed class LacquerMinigameController : MonoBehaviour
     public bool IsOpen => phase != Phase.Closed;
     public int TotalMarks => totalMarks;
     public event Action<LacquerResult> Completed;
+    public event Action<LacquerResult> ResultConfirmed;
+    LacquerResult pendingResult;
 
     void Awake()
     {
@@ -208,7 +210,10 @@ public sealed class LacquerMinigameController : MonoBehaviour
                 if (keyboard != null && keyboard.rKey.wasPressedThisFrame)
                     BeginCountdown();
                 else if (keyboard != null && (keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame))
+                {
+                    ResultConfirmed?.Invoke(pendingResult);
                     RequestExit();
+                }
                 break;
         }
     }
@@ -749,6 +754,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
             gameMinutes = gameMinutesCost
         };
 
+        pendingResult = result;
         Completed?.Invoke(result);
         Debug.Log("刷大漆完成：评级 " + grade + "，准确率 " + (accuracy * 100f).ToString("0.0") +
                   "%；游戏内用时 " + gameMinutesCost + " 分钟。", this);

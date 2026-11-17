@@ -36,7 +36,7 @@ public class BambooWorkbench : MonoBehaviour
 
     void OnDisable()
     {
-        Close();
+        Close(false);
         GreenBambooBag.Changed -= UpdateStoredCanes;
         if (wasInArea) InteractionPromptUI.Hide();
         wasInArea = false;
@@ -64,7 +64,7 @@ public class BambooWorkbench : MonoBehaviour
         if (player == null) player = FindFirstObjectByType<PlayerController>();
         if (SceneTransitionState.IsLoading)
         {
-            Close();
+            Close(false);
             return;
         }
         if (Time.timeScale <= 0)
@@ -75,11 +75,14 @@ public class BambooWorkbench : MonoBehaviour
         Keyboard keyboard = Keyboard.current;
         if (!IsOpen)
         {
-            bool inArea = player != null && Contains(player.transform.position);
+            var order = WorkshopOrder.Current;
+            bool inArea = player != null && Contains(player.transform.position) &&
+                (order == null || order.CanWorkBamboo && !GameFlowModalState.IsInteractionBlocked);
             if (inArea) InteractionPromptUI.Show("按 E 进入篾竹工作台");
             else if (wasInArea) InteractionPromptUI.Hide();
             wasInArea = inArea;
-            if (inArea && keyboard != null && keyboard.eKey.wasPressedThisFrame) Open();
+            if (inArea && (order == null ? keyboard?.eKey.wasPressedThisFrame == true
+                : SceneTransitionManager.TryConsumeInteractPress())) Open();
             return;
         }
         if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
@@ -87,7 +90,8 @@ public class BambooWorkbench : MonoBehaviour
             Close();
             return;
         }
-        if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame)
+        WorkshopOrder.Current?.ObserveBamboo(Progress);
+        if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame && (WorkshopOrder.Current?.CanWorkBamboo ?? true))
         {
             bool changed = Progress.Advance();
             if (changed) held = false;
@@ -99,6 +103,7 @@ public class BambooWorkbench : MonoBehaviour
             float vertical = keyboard == null ? 0 : (keyboard.wKey.isPressed ? 1 : 0) - (keyboard.sKey.isPressed ? 1 : 0);
             bool pulling = Mouse.current != null && Mouse.current.rightButton.isPressed;
             Progress.TickFinishing(Time.deltaTime, vertical, pulling);
+            WorkshopOrder.Current?.ObserveBamboo(Progress);
             view.FinishingInput(pulling);
             return;
         }
@@ -136,6 +141,7 @@ public class BambooWorkbench : MonoBehaviour
             held = false;
         }
         view.Pointer(screen, held && mouse.leftButton.isPressed, speed, removed);
+        WorkshopOrder.Current?.ObserveBamboo(Progress);
     }
 
     public bool Open()
@@ -143,6 +149,15 @@ public class BambooWorkbench : MonoBehaviour
         if (IsOpen || player == null || !Contains(player.transform.position) || SceneTransitionState.IsLoading) return false;
         cameraView = player.GameplayCamera != null ? player.GameplayCamera : Camera.main;
         if (cameraView == null) return false;
+        var order = WorkshopOrder.Current;
+        if (order != null)
+        {
+            var stage = order.GetStatus(WorkshopOrder.Stage.Preparation) == WorkshopOrder.StageStatus.Complete
+                ? WorkshopOrder.Stage.BambooFinishing : WorkshopOrder.Stage.Preparation;
+            if (!order.CanWorkBamboo || GameFlowModalState.IsInteractionBlocked || !order.Begin(stage))
+                return false;
+            GameFlowModalState.Acquire(this);
+        }
         if (view == null) view = BambooWorkbenchView.Create(Progress);
         else view.gameObject.SetActive(true);
         playerEnabled = player.enabled;
@@ -167,7 +182,9 @@ public class BambooWorkbench : MonoBehaviour
         return true;
     }
 
-    public void Close()
+    public void Close() => Close(true);
+
+    void Close(bool waitForInteractRelease)
     {
         if (!IsOpen) return;
         CancelPointer();
@@ -183,6 +200,9 @@ public class BambooWorkbench : MonoBehaviour
         if (follow != null) follow.enabled = followEnabled;
         Cursor.lockState = oldCursorLock; Cursor.visible = oldCursorVisible;
         IsOpen = false;
+        WorkshopOrder.Current?.Leave(WorkshopOrder.Stage.Preparation);
+        WorkshopOrder.Current?.Leave(WorkshopOrder.Stage.BambooFinishing);
+        GameFlowModalState.Release(this, waitForInteractRelease);
     }
 
     void CancelPointer()

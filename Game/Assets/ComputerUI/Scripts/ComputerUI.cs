@@ -22,15 +22,30 @@ public sealed class ComputerUI : MonoBehaviour
     [SerializeField] TMP_Text fundsLabel;
     [SerializeField] TMP_Text timeLabel;
     [SerializeField] TMP_Text dayLabel;
+    ComputerOrderView orderView;
 
     public event Action CloseRequested;
 
     void OnEnable()
     {
         SelectPage(-1);
+        if (WorkshopOrder.Current != null)
+        {
+            if (orderView == null)
+            {
+                orderView = gameObject.AddComponent<ComputerOrderView>();
+                orderView.Configure(this, tabs[0].rectTransform, (RectTransform)orderPage.transform,
+                    (RectTransform)pagePanel.transform.parent, fundsLabel.font);
+            }
+            orderView.Refresh(WorkshopOrder.Current);
+        }
     }
 
-    public void ShowOrders() => SelectPage(0);
+    public void ShowOrders()
+    {
+        SelectPage(0);
+        WorkshopOrder.Current?.ReadOrder();
+    }
     public void ShowShop() => SelectPage(1);
     public void ShowManual() => SelectPage(2);
     public void RequestClose() => CloseRequested?.Invoke();

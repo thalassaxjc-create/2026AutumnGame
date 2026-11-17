@@ -169,7 +169,18 @@ public class BambooHarvest : MonoBehaviour
 
     void Update()
     {
-        if (SceneTransitionState.IsLoading || Time.timeScale <= 0f)
+        var order = WorkshopOrder.Current;
+        if (order != null && !order.CanHarvest)
+        {
+            locked = null;
+            if (target != null)
+            {
+                SetTarget(null);
+                InteractionPromptUI.Hide();
+            }
+            return;
+        }
+        if (SceneTransitionState.IsLoading || Time.timeScale <= 0f || GameFlowModalState.IsModalOpen)
         {
             locked = null;
             SetTarget(null);
@@ -197,7 +208,10 @@ public class BambooHarvest : MonoBehaviour
         if (space && target != null && target.CanPickup)
         {
             if (target.TryPickup(pos))
+            {
                 obtainUntil = Time.time + 1.35f;
+                order?.PickUpBamboo();
+            }
         }
         else if (space && target != null && target.CanChop)
         {

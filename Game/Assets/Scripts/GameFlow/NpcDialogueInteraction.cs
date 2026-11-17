@@ -17,6 +17,8 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     PlayerController lockedPlayer;
     bool lockedPlayerWasEnabled;
     bool dialogueOpen;
+    WorkshopOrder.Phase? storyPhase;
+    bool StoryAvailable => !storyPhase.HasValue || WorkshopOrder.Current?.CurrentPhase == storyPhase;
 
     public bool IsDialogueOpen => dialogueOpen;
     public bool PlayerIsInRange => nearbyPlayer != null;
@@ -28,7 +30,7 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     {
         RefreshNearbyPlayer();
 
-        if (dialogueOpen || nearbyPlayer == null || GameFlowModalState.IsInteractionBlocked)
+        if (dialogueOpen || nearbyPlayer == null || !StoryAvailable || GameFlowModalState.IsInteractionBlocked)
             return;
 
         InteractionPromptUI.Show(promptText);
@@ -60,7 +62,7 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     public bool TryBeginInteraction()
     {
         RefreshNearbyPlayer();
-        if (dialogueOpen || nearbyPlayer == null || GameFlowModalState.IsInteractionBlocked)
+        if (dialogueOpen || nearbyPlayer == null || !StoryAvailable || GameFlowModalState.IsInteractionBlocked)
             return false;
 
         IDialogueEntryPoint entryPoint = dialogueEntryPoint as IDialogueEntryPoint;
@@ -115,6 +117,8 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
         promptText = string.IsNullOrWhiteSpace(prompt) ? "Press E to talk" : prompt;
         interactionRadius = Mathf.Max(0.25f, radius);
     }
+
+    public void ConfigureStoryPhase(WorkshopOrder.Phase phase) => storyPhase = phase;
 
     void OnValidate()
     {

@@ -20,8 +20,16 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
     InputAction interactAction;
     bool isOpen;
     bool waitingForOpeningPressRelease;
+    WorkshopOrder.Phase? storyPhase;
 
     public bool IsOpen => isOpen;
+
+    public void ConfigureStory(WorkshopOrder.Phase phase, string message)
+    {
+        storyPhase = phase;
+        placeholderMessage = message;
+        closeHint = "按 E、Enter 或 Esc 继续";
+    }
 
     void Update()
     {
@@ -65,7 +73,9 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
         return true;
     }
 
-    public void CloseDialogue()
+    public void CloseDialogue() => CloseDialogue(true);
+
+    void CloseDialogue(bool confirmed)
     {
         if (!isOpen)
             return;
@@ -78,6 +88,8 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
         Action callback = closedCallback;
         closedCallback = null;
         callback?.Invoke();
+        if (confirmed && storyPhase.HasValue)
+            WorkshopOrder.Current?.CloseIntroduction(storyPhase.Value);
     }
 
     void CacheInteractAction()
@@ -171,6 +183,6 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
     void OnDisable()
     {
         if (isOpen)
-            CloseDialogue();
+            CloseDialogue(false);
     }
 }

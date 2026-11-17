@@ -170,6 +170,8 @@ public sealed class WeavingMinigameController : MonoBehaviour
     public bool IsOpen => phase != Phase.Closed;
     public int RequiredThreads => requiredThreads;
     public event Action<WeavingResult> Completed;
+    public event Action<WeavingResult> ResultConfirmed;
+    WeavingResult pendingResult;
 
     void Awake()
     {
@@ -213,7 +215,10 @@ public sealed class WeavingMinigameController : MonoBehaviour
                 if (keyboard.rKey.wasPressedThisFrame)
                     BeginCountdown();
                 else if (keyboard.enterKey.wasPressedThisFrame || keyboard.spaceKey.wasPressedThisFrame)
+                {
+                    ResultConfirmed?.Invoke(pendingResult);
                     RequestExit();
+                }
                 break;
         }
     }
@@ -734,6 +739,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
             gameMinutes = gameMinutesCost
         };
 
+        pendingResult = result;
         Completed?.Invoke(result);
         Debug.Log("编帘完成：评级 " + grade + "，准确率 " + (accuracy * 100f).ToString("0.0") +
                   "%；消耗 " + requiredThreads + " 根竹丝；游戏内用时 " + gameMinutesCost + " 分钟。", this);
