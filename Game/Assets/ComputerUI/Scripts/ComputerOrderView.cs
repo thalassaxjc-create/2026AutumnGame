@@ -41,13 +41,12 @@ public sealed class ComputerOrderView : MonoBehaviour
         screen.SetFunds(order.Funds);
         screen.SetTime(order.Hour, order.Minute);
         screen.SetDay(order.Days);
-        for (int index = 0; index < 4; index++)
+        for (int index = 0; index < 5; index++)
             screen.SetStepCompleted((ComputerUI.ProductionStep)index,
                 order.GetStatus((WorkshopOrder.Stage)index) == WorkshopOrder.StageStatus.Complete);
 
-        // The two remaining design labels light up once the order is ready to hand in.
-        screen.SetStepCompleted(ComputerUI.ProductionStep.Drying, order.Progress == 1f);
-        screen.SetStepCompleted(ComputerUI.ProductionStep.Delivery, order.Progress == 1f);
+        screen.SetStepCompleted(ComputerUI.ProductionStep.Delivery,
+            order.CurrentPhase == WorkshopOrder.Phase.Complete);
         notice.SetActive(order.ComputerNotice);
         submit.SetActive(order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit);
         settlement.SetActive(false);
@@ -59,8 +58,11 @@ public sealed class ComputerOrderView : MonoBehaviour
         if (order == null || !order.Submit())
             return;
         Refresh(order);
-        settlementText.text = $"编帘评级  {order.WeavingResult.Value.grade}\n刷漆评级  {order.LacquerResult.Value.grade}\n" +
-            $"最终收入  +{order.Reward} 元\n资金  {order.FundsBeforeSubmission.Value} → {order.Funds}";
+        settlementText.text = $"编帘评级  {order.WeavingResult.Value.grade}    刷漆评级  {order.LacquerResult.Value.grade}\n" +
+            $"综合评级  {order.FinalGrade.Value}    基础价  {order.BasePrice} 元\n" +
+            $"品质系数  ×{order.QualityMultiplier:0.00}    材料系数  ×{order.MaterialMultiplier:0.00}\n" +
+            $"本单收入  +{order.Reward} 元    主角资金  {order.FundsBeforeSubmission.Value} → {order.Funds}\n" +
+            $"第一天对手资金    小皮 {order.XiaoPiFunds} 元    小白 {order.XiaoBaiFunds} 元";
         settlement.SetActive(true);
     }
 

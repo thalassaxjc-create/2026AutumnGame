@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// Distance-based entry point for an existing NPC. Dialogue content and order creation are delegated
@@ -18,7 +19,21 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     bool lockedPlayerWasEnabled;
     bool dialogueOpen;
     WorkshopOrder.Phase? storyPhase;
-    bool StoryAvailable => !storyPhase.HasValue || WorkshopOrder.Current?.CurrentPhase == storyPhase;
+    bool allowDuringProduction;
+    Transform markerPivot;
+    Text markerLabel;
+    float markerHeight = 2.15f;
+    bool StoryAvailable
+    {
+        get
+        {
+            if (!storyPhase.HasValue)
+                return true;
+            WorkshopOrder order = WorkshopOrder.Current;
+            return order != null && (order.CurrentPhase == storyPhase ||
+                (allowDuringProduction && order.CurrentPhase == WorkshopOrder.Phase.Production));
+        }
+    }
 
     public bool IsDialogueOpen => dialogueOpen;
     public bool PlayerIsInRange => nearbyPlayer != null;
@@ -26,9 +41,12 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     public float InteractionRadius => interactionRadius;
     public MonoBehaviour DialogueEntryPointComponent => dialogueEntryPoint;
 
+    void Awake() => EnsureMarker();
+
     void Update()
     {
         RefreshNearbyPlayer();
+        UpdateMarker();
 
         if (dialogueOpen || nearbyPlayer == null || !StoryAvailable || GameFlowModalState.IsInteractionBlocked)
             return;
@@ -116,9 +134,72 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
         dialogueEntryPoint = entryPoint;
         promptText = string.IsNullOrWhiteSpace(prompt) ? "Press E to talk" : prompt;
         interactionRadius = Mathf.Max(0.25f, radius);
+        EnsureMarker();
     }
 
-    public void ConfigureStoryPhase(WorkshopOrder.Phase phase) => storyPhase = phase;
+    public void ConfigureStoryPhase(WorkshopOrder.Phase phase, bool availableDuringProduction = false)
+    {
+        storyPhase = phase;
+        allowDuringProduction = availableDuringProduction;
+    }
+
+    public void ConfigureMarkerHeight(float height)
+    {
+        markerHeight = Mathf.Max(.5f, height);
+        if (markerPivot != null)
+            markerPivot.localPosition = Vector3.up * markerHeight;
+    }
+
+    void UpdateMarker()
+    {
+        EnsureMarker();
+        bool visible = StoryAvailable && !dialogueOpen && !GameFlowModalState.IsModalOpen &&
+            !SceneTransitionState.IsLoading;
+        if (markerPivot.gameObject.activeSelf != visible)
+            markerPivot.gameObject.SetActive(visible);
+        if (!visible)
+            return;
+
+        markerPivot.localPosition = Vector3.up *
+            (markerHeight + Mathf.Abs(Mathf.Sin(Time.unscaledTime * 4.5f)) * .12f);
+        Camera camera = Camera.main;
+        if (camera != null)
+            markerPivot.rotation = Quaternion.LookRotation(markerPivot.position - camera.transform.position, Vector3.up);
+    }
+
+    void EnsureMarker()
+    {
+        if (markerPivot != null)
+            return;
+        var root = new GameObject("DialogueMarker", typeof(RectTransform), typeof(Canvas));
+        root.transform.SetParent(transform, false);
+        markerPivot = root.transform;
+        markerPivot.localPosition = Vector3.up * markerHeight;
+        Canvas canvas = root.GetComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        canvas.sortingOrder = 25;
+        RectTransform rootRect = root.GetComponent<RectTransform>();
+        rootRect.sizeDelta = new Vector2(100f, 100f);
+        rootRect.localScale = Vector3.one * .012f;
+
+        var labelObject = new GameObject("Marker", typeof(RectTransform), typeof(Text));
+        labelObject.transform.SetParent(root.transform, false);
+        markerLabel = labelObject.GetComponent<Text>();
+        markerLabel.rectTransform.anchorMin = Vector2.zero;
+        markerLabel.rectTransform.anchorMax = Vector2.one;
+        markerLabel.rectTransform.offsetMin = markerLabel.rectTransform.offsetMax = Vector2.zero;
+        markerLabel.text = "!";
+        markerLabel.alignment = TextAnchor.MiddleCenter;
+        markerLabel.fontSize = 72;
+        markerLabel.fontStyle = FontStyle.Bold;
+        markerLabel.color = new Color32(255, 220, 79, 255);
+        markerLabel.raycastTarget = false;
+        InteractionPromptUI.EnsureChineseFont(markerLabel);
+        var outline = labelObject.AddComponent<Outline>();
+        outline.effectColor = new Color(.12f, .07f, .02f, .96f);
+        outline.effectDistance = new Vector2(2f, -2f);
+        root.SetActive(false);
+    }
 
     void OnValidate()
     {
@@ -128,6 +209,8 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     void OnDisable()
     {
         InteractionPromptUI.Hide();
+        if (markerPivot != null)
+            markerPivot.gameObject.SetActive(false);
 
         if (dialogueOpen)
         {

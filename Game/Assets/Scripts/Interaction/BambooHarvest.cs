@@ -30,6 +30,7 @@ public static class GreenBambooBag
         EnsureLabel();
         if (label != null)
             label.text = ItemName + " ×" + Count;
+        WorkshopInventory.NotifyGreenBambooChanged();
         Changed?.Invoke();
     }
 
@@ -40,13 +41,16 @@ public static class GreenBambooBag
         Count--;
         if (label != null)
             label.text = ItemName + " ×" + Count;
+        WorkshopInventory.NotifyGreenBambooChanged();
         Changed?.Invoke();
         return true;
     }
 
     public static void EnsureLabel()
     {
-        if (label != null)
+        // The story flow owns a unified backpack HUD. Standalone harvesting
+        // previews keep the original compact bamboo counter.
+        if (label != null || WorkshopOrder.Current != null)
             return;
 
         var canvasGo = new GameObject("GreenBambooBagHud");

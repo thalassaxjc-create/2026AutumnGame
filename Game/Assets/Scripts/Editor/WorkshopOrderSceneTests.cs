@@ -47,6 +47,14 @@ public sealed class WorkshopOrderSceneTests
         var keyboard = InputSystem.AddDevice<Keyboard>();
         var order = WorkshopOrder.Current;
         Assert.That(order, Is.Not.Null);
+        Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Opening));
+        var opening = Object.FindFirstObjectByType<OpeningSequence>();
+        Assert.That(opening, Is.Not.Null);
+        opening.CompleteImmediately();
+        yield return Frames(2);
+        Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Village));
+        Assert.That(GameObject.Find("小皮"), Is.Not.Null);
+        Assert.That(GameObject.Find("小白"), Is.Not.Null);
         var task = GameObject.Find("任务提示").GetComponent<RectTransform>();
         Assert.That(task.anchorMin, Is.EqualTo(Vector2.one));
         Assert.That(task.anchorMax, Is.EqualTo(Vector2.one));
@@ -62,10 +70,14 @@ public sealed class WorkshopOrderSceneTests
         yield return Press(keyboard, Key.E);
         Assert.That(elder.IsOpen, Is.True);
         yield return Press(keyboard, Key.Enter);
+        Assert.That(elder.IsAwaitingChoice, Is.True);
+        yield return Press(keyboard, Key.Digit1);
         Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Home));
         MoveNear(uncle.transform);
         yield return Press(keyboard, Key.E);
         Assert.That(uncle.IsOpen, Is.True);
+        yield return Press(keyboard, Key.Enter);
+        yield return Press(keyboard, Key.Enter);
         yield return Press(keyboard, Key.Enter);
         Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.NewOrder));
 
@@ -113,11 +125,11 @@ public sealed class WorkshopOrderSceneTests
         CompletePreparation(workbench.Progress);
         Assert.That(workbench.Progress.Stage, Is.EqualTo(BambooCraftProgress.Step.BatchFinished));
         yield return Frames(2);
-        Assert.That(order.Progress, Is.EqualTo(.25f));
+        Assert.That(order.Progress, Is.EqualTo(.2f));
         CompleteFinishing(workbench.Progress);
         Assert.That(workbench.Progress.Stage, Is.EqualTo(BambooCraftProgress.Step.CraftFinished));
         yield return Frames(2);
-        Assert.That(order.Progress, Is.EqualTo(.50f));
+        Assert.That(order.Progress, Is.EqualTo(.4f));
         yield return Press(keyboard, Key.Escape);
         Assert.That(workbench.IsOpen, Is.False, "Esc leaves bamboo workbench");
         Assert.That(order.CanPlay(WorkshopOrder.Stage.Weaving), Is.True, "weaving unlocks");
@@ -130,14 +142,14 @@ public sealed class WorkshopOrderSceneTests
         // Drive the real result screen with a zero-score fixture. The gameplay score
         // logic is unchanged and the fixture isolates the confirmation/exit contract.
         ShowResult(weaving.GetComponent<WeavingMinigameController>());
-        Assert.That(order.Progress, Is.EqualTo(.50f));
+        Assert.That(order.Progress, Is.EqualTo(.4f));
         yield return Press(keyboard, Key.Escape);
-        Assert.That(order.Progress, Is.EqualTo(.50f));
+        Assert.That(order.Progress, Is.EqualTo(.4f));
         yield return Press(keyboard, Key.E);
         ShowResult(weaving.GetComponent<WeavingMinigameController>());
         yield return Press(keyboard, Key.Enter);
         Assert.That(order.WeavingResult.Value.grade, Is.EqualTo(WeavingMinigameController.WeavingGrade.D));
-        Assert.That(order.Progress, Is.EqualTo(.75f));
+        Assert.That(order.Progress, Is.EqualTo(.6f));
 
         var lacquer = Object.FindFirstObjectByType<LacquerStationTrigger>();
         Assert.That(order.CanPlay(WorkshopOrder.Stage.Lacquer), Is.True, "lacquer unlocks");
@@ -145,9 +157,21 @@ public sealed class WorkshopOrderSceneTests
         yield return Press(keyboard, Key.E);
         Assert.That(lacquer.IsMinigameOpen, Is.True);
         ShowResult(lacquer.GetComponent<LacquerMinigameController>());
-        Assert.That(order.Progress, Is.EqualTo(.75f));
+        Assert.That(order.Progress, Is.EqualTo(.6f));
         yield return Press(keyboard, Key.Enter);
         Assert.That(order.LacquerResult.Value.grade, Is.EqualTo(LacquerMinigameController.LacquerGrade.D));
+        Assert.That(order.Progress, Is.EqualTo(.8f));
+
+        var drying = Object.FindFirstObjectByType<DryingStationTrigger>();
+        Assert.That(drying, Is.Not.Null);
+        MoveNear(drying.transform);
+        yield return Frames(2);
+        yield return Press(keyboard, Key.E);
+        Assert.That(order.IsDrying, Is.True);
+        Assert.That(order.RemainingDryingMinutes, Is.InRange(119, 120));
+        order.AdvanceTime(order.RemainingDryingMinutes);
+        Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.ReadyToSubmit));
+        Assert.That(order.Progress, Is.EqualTo(1f));
 
         computer = Object.FindFirstObjectByType<WorkshopComputer>();
         MoveNear(computer.transform);
@@ -155,11 +179,14 @@ public sealed class WorkshopOrderSceneTests
         Click(computer.Screen, "订单");
         yield return Frames(2);
         Assert.That(Find(computer.Screen, "进度数值").GetComponent<TMP_Text>().text, Does.EndWith("100%"));
-        Assert.That(Find(computer.Screen, "时间").GetComponent<TMP_Text>().text, Is.EqualTo("15:25"));
-        Assert.That(order.Funds, Is.EqualTo(102));
+        Assert.That(Find(computer.Screen, "时间").GetComponent<TMP_Text>().text,
+            Is.EqualTo($"{order.Hour:00}:{order.Minute:00}"));
+        Assert.That(order.Funds, Is.Zero);
         Click(computer.Screen, "提交订单");
-        Assert.That(Find(computer.Screen, "结算明细").GetComponent<TMP_Text>().text, Does.Contain("+400"));
-        Assert.That(order.Funds, Is.EqualTo(502));
+        Assert.That(Find(computer.Screen, "结算明细").GetComponent<TMP_Text>().text, Does.Contain("+80"));
+        Assert.That(order.Funds, Is.EqualTo(80));
+        Assert.That(order.XiaoPiFunds, Is.EqualTo(95));
+        Assert.That(order.XiaoBaiFunds, Is.EqualTo(75));
         Assert.That(order.Submit(), Is.False);
         Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Complete));
         yield return Press(keyboard, Key.Escape);

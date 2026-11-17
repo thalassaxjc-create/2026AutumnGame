@@ -12,15 +12,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2d9d296afa4d4217acc859749014cb7b, type: 3}
   m_Name: WorkshopOrderSettings
   m_EditorClassIdentifier:
-  initialFunds: 102
-  initialDay: 1
-  initialHour: 13
-  initialMinute: 5
-  preparationMinutes: 30
-  bambooFinishingMinutes: 30
-  baseReward: 1000
-  rewardS: 1
-  rewardA: 0.9
-  rewardB: 0.8
-  rewardC: 0.65
-  rewardD: 0.4
+  initialFunds: 0
+  initialXiaoPiFunds: 0
+  initialXiaoBaiFunds: 0
+  initialHour: 6
+  initialMinute: 0
+  realSecondsPerGameMinute: 2
+  harvestMinutes: 10
+  preparationMinutes: 35
+  bambooFinishingMinutes: 40
+  dryingMinutes: 120
+  baseReward: 100
+  rewardS: 1.3
+  rewardA: 1.15
+  rewardB: 1
+  rewardC: 0.9
+  rewardD: 0.8
+  defectiveMaterialMultiplier: 0.8
+  xiaoPiDayOneIncome: 95
+  xiaoBaiDayOneIncome: 75

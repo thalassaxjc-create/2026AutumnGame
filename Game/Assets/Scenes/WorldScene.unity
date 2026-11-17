@@ -30418,6 +30418,8 @@ GameObject:
   - component: {fileID: 448169714}
   - component: {fileID: 448169713}
   - component: {fileID: 448169712}
+  - component: {fileID: 448169717}
+  - component: {fileID: 448169716}
   m_Layer: 0
   m_Name: "\u6751\u53E3\u5927\u7237"
   m_TagString: Untagged
@@ -30534,6 +30536,38 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 448169710}
   m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &448169716
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 448169710}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ed1008002e99454cb9953511d809a503, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::NpcDialogueInteraction
+  dialogueEntryPoint: {fileID: 448169717}
+  promptText: "\u6309 E \u4EA4\u8C08"
+  interactionRadius: 3
+--- !u!114 &448169717
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 448169710}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f17c923b6c44466487a3b8cd20e41a10, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::TemporaryDialogueEntryPoint
+  placeholderMessage: 'Temporary dialogue entry point.
+
+    The order/dialogue system
+    can be connected here.'
+  closeHint: Press E, Enter, or Esc to close
 --- !u!1 &449331079
 GameObject:
   m_ObjectHideFlags: 0
