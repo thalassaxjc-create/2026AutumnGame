@@ -38,7 +38,7 @@ public static class WorldWhiteboxBuilder
 
     static readonly Vector3 WorkshopCenter = new Vector3(-48f, 0f, 10f);
     static readonly Vector3 WorkshopSize = new Vector3(34f, 5.5f, 22f);
-    static readonly Vector3 WorkshopNorthDoor = new Vector3(-58f, 0f, 21f);
+    static readonly Vector3 WorkshopNorthDoor = new Vector3(-65f, 0f, 16.5f);
     static readonly Vector3 WorkshopSouthDoor = new Vector3(-36f, 0f, -1f);
 
     static readonly Vector3 StreetHouseACenter = new Vector3(0f, 0f, 64f);
@@ -84,16 +84,17 @@ public static class WorldWhiteboxBuilder
 
     static readonly Vector3[] NorthToBamboo =
     {
-        new Vector3(-58f, 0f, 24.5f),
-        new Vector3(-68f, 0f, 30f),
-        new Vector3(-78f, 0f, 36f),
+        new Vector3(-69.2f, 0f, 16.5f),
+        new Vector3(-78f, 0f, 24f),
+        new Vector3(-86f, 0f, 34f),
         new Vector3(-90f, 0f, 40f)
     };
 
     static readonly Vector3[] NorthToStreet =
     {
-        new Vector3(-58f, 0f, 24.5f),
-        new Vector3(-44f, 0f, 32f),
+        new Vector3(-69.2f, 0f, 16.5f),
+        new Vector3(-72f, 0f, 26f),
+        new Vector3(-58f, 0f, 34f),
         new Vector3(-24f, 0f, 40f),
         new Vector3(-8f, 0f, 48f),
         new Vector3(0f, 0f, 52f)
@@ -419,7 +420,7 @@ public static class WorldWhiteboxBuilder
         BuildRoadStrip(parent, "HomeToBridge", HomeToBridge, Palette.Road);
         BuildRoadStrip(parent, "StreetLink", StreetLink, Palette.Road);
         BuildRoadStrip(parent, "EastHouseRoad", EastHouseRoad, Palette.Road);
-        CreateBox(parent, "NorthForkPlaza", new Vector3(-58f, RoadHeight * 0.5f, 26f), new Vector3(9f, RoadHeight, 8f), Palette.Road, true);
+        CreateBox(parent, "NorthForkPlaza", new Vector3(-70.4f, RoadHeight * 0.5f, 16.5f), new Vector3(8.4f, RoadHeight, 9f), Palette.Road, true);
     }
 
     static void BuildRoadStrip(Transform parent, string name, Vector3[] waypoints, Material material)
@@ -454,17 +455,18 @@ public static class WorldWhiteboxBuilder
         float wallY = height * 0.5f;
 
         CreateBox(building, "Foundation", center + Vector3.up * 0.1f, new Vector3(width + 0.4f, 0.2f, depth + 0.4f), Palette.Workshop, true);
-        CreateBox(building, "InteriorFill", center + Vector3.up * wallY, new Vector3(width - 1.2f, height, depth - 3.4f), Palette.Workshop, true);
-        CreateBox(building, "WallWest", center + Vector3.left * (width * 0.5f - wall * 0.5f) + Vector3.up * wallY, new Vector3(wall, height, depth), Palette.Workshop, true);
+        CreateBox(building, "InteriorFill", center + new Vector3(2.2f, wallY, 0.8f), new Vector3(width - 5.6f, height, depth - 2.6f), Palette.Workshop, true);
         CreateBox(building, "WallEast", center + Vector3.right * (width * 0.5f - wall * 0.5f) + Vector3.up * wallY, new Vector3(wall, height, depth), Palette.Workshop, true);
 
+        float westX = center.x - width * 0.5f + wall * 0.5f;
         float northZ = center.z + depth * 0.5f - wall * 0.5f;
         float southZ = center.z - depth * 0.5f + wall * 0.5f;
-        CreateWallRun(building, "North", new Vector3(center.x, wallY, northZ), width, height, wall, WorkshopNorthDoor.x - center.x, WorkshopDoorWidth, WorkshopDoorHeight, Palette.Workshop);
+        CreateWallRunAlongZ(building, "West", new Vector3(westX, wallY, center.z), depth, height, wall, WorkshopNorthDoor.z - center.z, WorkshopDoorWidth, WorkshopDoorHeight, Palette.Workshop);
+        CreateBox(building, "WallNorth", new Vector3(center.x, wallY, northZ), new Vector3(width, height, wall), Palette.Workshop, true);
         CreateWallRun(building, "South", new Vector3(center.x, wallY, southZ), width, height, wall, WorkshopSouthDoor.x - center.x, WorkshopDoorWidth, WorkshopDoorHeight, Palette.Workshop);
         CreateBox(building, "Roof", center + Vector3.up * (height + 0.2f), new Vector3(width + 1f, 0.4f, depth + 1f), Palette.Roof, true);
 
-        CreateDoorMarker(building, "WorkshopNorthMarker", WorkshopNorthDoor, Vector3.forward);
+        CreateDoorMarker(building, "WorkshopNorthMarker", WorkshopNorthDoor, Vector3.left);
         CreateDoorMarker(building, "WorkshopSouthMarker", WorkshopSouthDoor, Vector3.back);
     }
 
@@ -481,6 +483,21 @@ public static class WorldWhiteboxBuilder
 
         float lintelHeight = Mathf.Max(0.25f, height - doorHeight);
         CreateBox(parent, prefix + "Lintel", new Vector3(center.x + doorOffset, doorHeight + lintelHeight * 0.5f, center.z), new Vector3(doorWidth, lintelHeight, thickness), material, true);
+    }
+
+    static void CreateWallRunAlongZ(Transform parent, string prefix, Vector3 center, float length, float height, float thickness, float doorOffset, float doorWidth, float doorHeight, Material material)
+    {
+        float southWidth = (length * 0.5f + doorOffset) - doorWidth * 0.5f;
+        float northWidth = (length * 0.5f - doorOffset) - doorWidth * 0.5f;
+        float southCenterZ = center.z - length * 0.5f + southWidth * 0.5f;
+        float northCenterZ = center.z + length * 0.5f - northWidth * 0.5f;
+        if (southWidth > 0.2f)
+            CreateBox(parent, prefix + "South", new Vector3(center.x, center.y, southCenterZ), new Vector3(thickness, height, southWidth), material, true);
+        if (northWidth > 0.2f)
+            CreateBox(parent, prefix + "North", new Vector3(center.x, center.y, northCenterZ), new Vector3(thickness, height, northWidth), material, true);
+
+        float lintelHeight = Mathf.Max(0.25f, height - doorHeight);
+        CreateBox(parent, prefix + "Lintel", new Vector3(center.x, doorHeight + lintelHeight * 0.5f, center.z + doorOffset), new Vector3(thickness, lintelHeight, doorWidth), material, true);
     }
 
     static void CreateDoorMarker(Transform parent, string name, Vector3 doorPosition, Vector3 outward)
@@ -869,7 +886,7 @@ public static class WorldWhiteboxBuilder
         {
             Physics.SyncTransforms();
             report.AppendLine(CheckSpawnClearance());
-            report.AppendLine(CheckApproach("工坊北门", WorkshopNorthDoor, Vector3.forward));
+            report.AppendLine(CheckApproach("工坊西门", WorkshopNorthDoor, Vector3.left));
             report.AppendLine(CheckApproach("工坊南门", WorkshopSouthDoor, Vector3.back));
             report.AppendLine(CheckPathAlong("北门到竹林", NorthToBamboo));
             report.AppendLine(CheckPathAlong("北门到街坊", NorthToStreet));
@@ -899,7 +916,7 @@ public static class WorldWhiteboxBuilder
         report.AppendLine("布局（对照草图，+Z 为北）:");
         report.AppendLine("- 地图: X=" + MapWidth + ", Z=" + MapDepth + "，地面铺满，山在外圈");
         report.AppendLine("- 工坊: 中心 " + WorkshopCenter + " 尺寸 " + WorkshopSize);
-        report.AppendLine("- 北门 " + WorkshopNorthDoor + "：向左进竹林，向右去街坊");
+        report.AppendLine("- 西侧靠北门 " + WorkshopNorthDoor + "：出门进竹林，绕北去街坊");
         report.AppendLine("- 南门 " + WorkshopSouthDoor + "：出门去家里");
         report.AppendLine("- 竹林: 中心 " + BambooCenter + " 范围 " + BambooArea);
         report.AppendLine("- 街坊 A/B/C: " + StreetHouseACenter + " / " + StreetHouseBCenter + " / " + StreetHouseCCenter);

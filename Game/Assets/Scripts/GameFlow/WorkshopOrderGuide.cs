@@ -1,7 +1,9 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
+[DefaultExecutionOrder(200)]
 public sealed class WorkshopOrderGuide : MonoBehaviour
 {
     Transform elder;
@@ -11,10 +13,15 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     WeavingStationTrigger weaving;
     LacquerStationTrigger lacquer;
     Transform forestTarget;
+    Transform player;
     Camera sceneCamera;
     Text task;
     Text marker;
+    Transform groundArrow;
+    Mesh arrowMesh;
+    Material arrowMaterial;
     int displayedRevision = -1;
+    bool canvasReady;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetSession()
@@ -61,6 +68,9 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     void Configure(Scene scene)
     {
         sceneCamera = Camera.main;
+        PlayerController playerController = FindFirstObjectByType<PlayerController>();
+        if (playerController != null)
+            player = playerController.transform;
         if (scene.name == SceneTransitionState.WorldSceneName)
         {
             elder = ConfigureDialogue("村口大爷", WorkshopOrder.Phase.Village, "你舅爷好像有事情要和你说嘞。");
@@ -90,6 +100,11 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             lacquer = FindFirstObjectByType<LacquerStationTrigger>();
         }
 
+        var canvasRect = (RectTransform)transform;
+        canvasRect.anchorMin = Vector2.zero;
+        canvasRect.anchorMax = Vector2.one;
+        canvasRect.offsetMin = Vector2.zero;
+        canvasRect.offsetMax = Vector2.zero;
         var canvas = GetComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 85;
@@ -97,6 +112,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1920, 1080);
         scaler.matchWidthOrHeight = .5f;
+        Canvas.ForceUpdateCanvases();
 
         task = CreateLabel("任务提示", 30, new Vector2(580, 58));
         // Keep the order objective in its own top-right row. The bamboo inventory
@@ -109,6 +125,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         marker = CreateLabel("当前目标", 54, new Vector2(64, 76));
         marker.rectTransform.anchorMin = marker.rectTransform.anchorMax = Vector2.zero;
         marker.text = "!";
+        marker.enabled = false;
+        CreateGroundArrow();
     }
 
     static Transform ConfigureDialogue(string name, WorkshopOrder.Phase phase, string line)
@@ -148,6 +166,92 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         return label;
     }
 
+    void CreateGroundArrow()
+    {
+        arrowMesh = BuildArrowMesh();
+        arrowMaterial = CreateArrowMaterial();
+
+        var arrow = new GameObject("地面指引");
+        SceneManager.MoveGameObjectToScene(arrow, gameObject.scene);
+        arrow.AddComponent<MeshFilter>().sharedMesh = arrowMesh;
+        var renderer = arrow.AddComponent<MeshRenderer>();
+        renderer.sharedMaterial = arrowMaterial;
+        renderer.shadowCastingMode = ShadowCastingMode.Off;
+        renderer.receiveShadows = false;
+        renderer.lightProbeUsage = LightProbeUsage.Off;
+        renderer.reflectionProbeUsage = ReflectionProbeUsage.Off;
+
+        groundArrow = arrow.transform;
+        groundArrow.gameObject.SetActive(false);
+    }
+
+    static Mesh BuildArrowMesh()
+    {
+        var mesh = new Mesh
+        {
+            name = "GroundGuideArrow",
+            hideFlags = HideFlags.HideAndDontSave
+        };
+        mesh.vertices = new[]
+        {
+            new Vector3(0f, 0f, 0.95f),
+            new Vector3(-0.55f, 0f, 0.08f),
+            new Vector3(-0.18f, 0f, 0.08f),
+            new Vector3(-0.18f, 0f, -0.78f),
+            new Vector3(0.18f, 0f, -0.78f),
+            new Vector3(0.18f, 0f, 0.08f),
+            new Vector3(0.55f, 0f, 0.08f)
+        };
+        mesh.triangles = new[]
+        {
+            0, 1, 2, 0, 2, 5, 0, 5, 6, 2, 3, 4, 2, 4, 5,
+            0, 2, 1, 0, 5, 2, 0, 6, 5, 2, 4, 3, 2, 5, 4
+        };
+        mesh.RecalculateNormals();
+        mesh.RecalculateBounds();
+        return mesh;
+    }
+
+    static Material CreateArrowMaterial()
+    {
+        Shader shader = Shader.Find("Universal Render Pipeline/Unlit");
+        if (shader == null)
+            shader = Shader.Find("Unlit/Color");
+        if (shader == null)
+            shader = Shader.Find("Sprites/Default");
+
+        var color = new Color(1f, 0.86f, 0.28f, 0.82f);
+        var material = new Material(shader)
+        {
+            hideFlags = HideFlags.HideAndDontSave,
+            color = color
+        };
+        if (material.HasProperty("_BaseColor"))
+            material.SetColor("_BaseColor", color);
+        if (material.HasProperty("_Surface"))
+        {
+            material.SetFloat("_Surface", 1f);
+            material.SetFloat("_ZWrite", 0f);
+            material.SetFloat("_Cull", 0f);
+            material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            material.SetFloat("_DstBlend", (float)BlendMode.OneMinusSrcAlpha);
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+        }
+
+        material.renderQueue = (int)RenderQueue.Transparent + 80;
+        return material;
+    }
+
+    void OnDestroy()
+    {
+        if (groundArrow != null)
+            Destroy(groundArrow.gameObject);
+        if (arrowMaterial != null)
+            Destroy(arrowMaterial);
+        if (arrowMesh != null)
+            Destroy(arrowMesh);
+    }
+
     void LateUpdate()
     {
         var order = WorkshopOrder.Current;
@@ -167,6 +271,15 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             };
         }
 
+        if (sceneCamera == null)
+            sceneCamera = Camera.main;
+        if (player == null)
+        {
+            PlayerController playerController = FindFirstObjectByType<PlayerController>();
+            if (playerController != null)
+                player = playerController.transform;
+        }
+
         bool unobstructed = !GameFlowModalState.IsModalOpen && !SceneTransitionState.IsLoading;
         task.enabled = unobstructed;
         Transform target = order.CurrentPhase switch
@@ -182,17 +295,98 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             _ => null
         };
 
-        marker.enabled = false;
-        if (!unobstructed || target == null || sceneCamera == null)
-            return;
+        bool showArrow = unobstructed
+            && order.CurrentPhase == WorkshopOrder.Phase.Home
+            && uncle != null
+            && player != null;
+        if (showArrow)
+            PlaceGroundArrow(uncle);
+        else if (groundArrow != null && groundArrow.gameObject.activeSelf)
+            groundArrow.gameObject.SetActive(false);
 
-        float bounce = Mathf.Abs(Mathf.Sin(Time.unscaledTime * 5f)) * .38f;
-        Vector3 point = sceneCamera.WorldToScreenPoint(target.position + Vector3.up * (2.5f + bounce));
-        if (point.z <= 0)
+        if (!unobstructed || target == null || sceneCamera == null)
+        {
+            marker.enabled = false;
             return;
-        RectTransformUtility.ScreenPointToLocalPointInRectangle((RectTransform)transform, point, null, out Vector2 local);
-        marker.rectTransform.anchoredPosition = local + ((RectTransform)transform).rect.size * .5f;
-        marker.color = order.CurrentPhase == WorkshopOrder.Phase.NewOrder
+        }
+
+        PlaceMarker(target.position);
+    }
+
+    void PlaceGroundArrow(Transform target)
+    {
+        Vector3 toTarget = target.position - player.position;
+        toTarget.y = 0f;
+        if (toTarget.sqrMagnitude < 2.4f * 2.4f)
+        {
+            if (groundArrow.gameObject.activeSelf)
+                groundArrow.gameObject.SetActive(false);
+            return;
+        }
+
+        Vector3 direction = toTarget.normalized;
+        Vector3 position = player.position + direction * 1.4f;
+        position.y = SurfaceHeight(position) + 0.16f;
+        groundArrow.SetPositionAndRotation(position, Quaternion.LookRotation(direction, Vector3.up));
+        if (!groundArrow.gameObject.activeSelf)
+            groundArrow.gameObject.SetActive(true);
+    }
+
+    float SurfaceHeight(Vector3 sample)
+    {
+        float feetY = player.position.y - 1f;
+        if (player.TryGetComponent(out CharacterController controller))
+            feetY = player.position.y + controller.center.y - controller.height * 0.5f;
+
+        Vector3 origin = new Vector3(sample.x, player.position.y + 2f, sample.z);
+        RaycastHit[] hits = Physics.RaycastAll(origin, Vector3.down, 6f, ~0, QueryTriggerInteraction.Ignore);
+        float bestY = feetY;
+        float bestDistance = float.PositiveInfinity;
+        for (int i = 0; i < hits.Length; i++)
+        {
+            RaycastHit hit = hits[i];
+            if (hit.transform == player || hit.transform.IsChildOf(player))
+                continue;
+            if (groundArrow != null && (hit.transform == groundArrow || hit.transform.IsChildOf(groundArrow)))
+                continue;
+            if (hit.distance >= bestDistance)
+                continue;
+            bestDistance = hit.distance;
+            bestY = hit.point.y;
+        }
+
+        return bestY;
+    }
+
+    void PlaceMarker(Vector3 worldPosition)
+    {
+        var canvasRect = (RectTransform)transform;
+        if (!canvasReady)
+        {
+            Canvas.ForceUpdateCanvases();
+            canvasReady = canvasRect.rect.width > 200f && canvasRect.rect.height > 200f;
+            if (!canvasReady)
+            {
+                marker.enabled = false;
+                return;
+            }
+        }
+
+        Vector3 point = sceneCamera.WorldToScreenPoint(worldPosition + Vector3.up * 2.5f);
+        if (point.z <= 0f)
+        {
+            marker.enabled = false;
+            return;
+        }
+
+        if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, point, null, out Vector2 local))
+        {
+            marker.enabled = false;
+            return;
+        }
+
+        marker.rectTransform.anchoredPosition = local + canvasRect.rect.size * 0.5f;
+        marker.color = WorkshopOrder.Current != null && WorkshopOrder.Current.CurrentPhase == WorkshopOrder.Phase.NewOrder
             ? new Color32(227, 36, 36, 255) : new Color32(247, 85, 35, 255);
         marker.enabled = true;
     }
