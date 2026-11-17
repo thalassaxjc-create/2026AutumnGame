@@ -32,8 +32,20 @@ public static class MergedProjectIntegration
 
         AudioClip weavingMusic = Resources.Load<AudioClip>("Audio/Weaving_11_15");
         Require(weavingMusic != null, "Weaving music could not be loaded from Resources.");
-        Require(weavingMusic.length > 83f && weavingMusic.length < 84f,
+        Require(weavingMusic.length > 66.4f && weavingMusic.length < 66.7f,
             "Weaving music duration is unexpected: " + weavingMusic.length + " seconds.");
+        Require(WeavingMinigameController.MusicChartNoteCount == 100,
+            "Weaving music chart must contain exactly 100 notes.");
+        Require(WeavingMinigameController.MusicChartEndTime < weavingMusic.length - .5f,
+            "Weaving music chart must finish before the shortened music ends.");
+
+        var lacquerController = FindDeep("LacquerInteractionPoint").GetComponent<LacquerMinigameController>();
+        Require(LacquerMinigameController.MarksPerScanPass == 6,
+            "Lacquer difficulty must use six marks per scan pass.");
+        Require(Mathf.Approximately(lacquerController.ScanPassDuration, 5.6f),
+            "Lacquer scan pass duration must use the balanced 5.6 second preset.");
+        Require(Mathf.Approximately(lacquerController.PreShowTime, 1.05f),
+            "Lacquer mark lead time must use the balanced 1.05 second preset.");
 
         GameObject computerPoint = FindDeep("ComputerInteractionPoint");
         Require(computerPoint != null, "ComputerInteractionPoint was lost during the merge.");
