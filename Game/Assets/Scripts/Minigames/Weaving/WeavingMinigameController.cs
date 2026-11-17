@@ -98,20 +98,20 @@ public sealed class WeavingMinigameController : MonoBehaviour
     const float RightLaneX = 118f;
     const string MusicResourcePath = "Audio/Weaving_11_15";
 
-    // 依据《11月15日.wav》的明显起音制作：100 个目标覆盖整首 83.48 秒音乐。
-    // 相邻目标最短约 0.51 秒、最长约 1.42 秒，作为中等难度固定谱面。
+    // 依据缩短版《11月15日(1).wav》的明显起音制作：100 个目标覆盖 66.55 秒音乐。
+    // 保留原曲前 66 秒的落点，并在较长间隔补入半拍，避免把未加速的音乐整体压缩。
     static readonly float[] MusicBeatTimes =
     {
-        0.511f, 1.579f, 2.415f, 3.135f, 3.808f, 4.853f, 5.550f, 6.594f, 7.616f, 8.313f,
-        8.847f, 9.706f, 10.565f, 11.099f, 12.121f, 13.166f, 13.886f, 14.907f, 15.952f, 16.649f,
-        17.160f, 18.204f, 19.064f, 19.760f, 20.805f, 21.664f, 22.198f, 22.709f, 23.917f, 24.961f,
-        25.472f, 26.680f, 27.562f, 28.259f, 28.770f, 29.466f, 30.511f, 31.022f, 32.229f, 33.112f,
-        33.808f, 35.016f, 35.712f, 36.571f, 37.082f, 37.779f, 38.638f, 39.358f, 40.565f, 41.610f,
-        42.121f, 42.655f, 43.328f, 44.373f, 45.279f, 46.161f, 46.881f, 47.740f, 48.623f, 49.459f,
-        50.155f, 51.061f, 51.711f, 52.779f, 53.290f, 54.149f, 55.565f, 56.216f, 56.959f, 57.771f,
-        58.305f, 59.025f, 60.070f, 61.092f, 61.765f, 62.462f, 63.181f, 64.087f, 64.853f, 65.620f,
-        66.664f, 67.500f, 68.360f, 69.404f, 70.287f, 70.798f, 71.494f, 72.539f, 73.584f, 74.443f,
-        74.954f, 75.836f, 76.347f, 77.740f, 78.600f, 79.110f, 79.993f, 80.527f, 81.363f, 82.245f
+        0.511f, 1.045f, 1.579f, 2.415f, 3.135f, 3.808f, 4.330f, 4.853f, 5.550f, 6.072f,
+        6.594f, 7.616f, 8.313f, 8.847f, 9.706f, 10.565f, 11.099f, 11.610f, 12.121f, 12.643f,
+        13.166f, 13.886f, 14.907f, 15.430f, 15.952f, 16.649f, 17.160f, 17.682f, 18.204f, 19.064f,
+        19.760f, 20.282f, 20.805f, 21.664f, 22.198f, 22.709f, 23.313f, 23.917f, 24.439f, 24.961f,
+        25.472f, 26.076f, 26.680f, 27.562f, 28.259f, 28.770f, 29.466f, 29.989f, 30.511f, 31.022f,
+        31.625f, 32.229f, 33.112f, 33.808f, 34.412f, 35.016f, 35.712f, 36.571f, 37.082f, 37.779f,
+        38.638f, 39.358f, 39.962f, 40.565f, 41.087f, 41.610f, 42.121f, 42.655f, 43.328f, 43.850f,
+        44.373f, 45.279f, 46.161f, 46.881f, 47.740f, 48.623f, 49.459f, 50.155f, 51.061f, 51.711f,
+        52.245f, 52.779f, 53.290f, 54.149f, 54.857f, 55.565f, 56.216f, 56.959f, 57.771f, 58.305f,
+        59.025f, 59.547f, 60.070f, 61.092f, 61.765f, 62.462f, 63.181f, 64.087f, 64.853f, 65.620f
     };
 
     // 每组四个单键后接一次双键打结；轮换型谱面避免长时间只按一侧。
@@ -169,6 +169,8 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
     public bool IsOpen => phase != Phase.Closed;
     public int RequiredThreads => requiredThreads;
+    public static int MusicChartNoteCount => MusicBeatTimes.Length;
+    public static float MusicChartEndTime => MusicBeatTimes[MusicBeatTimes.Length - 1];
     public event Action<WeavingResult> Completed;
     public event Action<WeavingResult> ResultConfirmed;
     WeavingResult pendingResult;
@@ -1068,7 +1070,9 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
     bool CanUseMusicChart()
     {
-        return musicClip != null && musicSource != null && MusicBeatTimes.Length >= requiredThreads;
+        return musicClip != null && musicSource != null && requiredThreads > 0 &&
+               MusicBeatTimes.Length >= requiredThreads &&
+               MusicBeatTimes[requiredThreads - 1] + missWindow < musicClip.length;
     }
 
     bool StartMusicChart()

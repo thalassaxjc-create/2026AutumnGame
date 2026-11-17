@@ -11,6 +11,10 @@ using UnityEngine.UI;
 [DisallowMultipleComponent]
 public sealed class LacquerMinigameController : MonoBehaviour
 {
+    const int CurrentDifficultyPresetVersion = 1;
+    const float BalancedScanPassDuration = 5.6f;
+    const float BalancedPreShowTime = 1.05f;
+
     public enum LacquerGrade
     {
         S,
@@ -97,8 +101,9 @@ public sealed class LacquerMinigameController : MonoBehaviour
     [SerializeField, Min(1)] int gameMinutesCost = 20;
 
     [Header("扫描与判定")]
-    [SerializeField, Min(2f)] float scanPassDuration = 6.4f;
-    [SerializeField, Min(0.3f)] float preShowTime = 0.9f;
+    [SerializeField, Min(2f)] float scanPassDuration = BalancedScanPassDuration;
+    [SerializeField, Min(0.3f)] float preShowTime = BalancedPreShowTime;
+    [SerializeField, HideInInspector] int difficultyPresetVersion;
     [SerializeField, Min(0.03f)] float perfectWindow = 0.10f;
     [SerializeField, Min(0.05f)] float greatWindow = 0.20f;
     [SerializeField, Min(0.08f)] float goodWindow = 0.32f;
@@ -106,7 +111,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
     [SerializeField, Min(0.5f)] float dragDeadline = 1.7f;
     [SerializeField, Min(20f)] float dragCorridor = 66f;
 
-    const int MarksPerPass = 5;
+    const int MarksPerPass = 6;
     const float LeftBound = -535f;
     const float RightBound = 535f;
     const float BottomBound = -255f;
@@ -164,12 +169,16 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
     public bool IsOpen => phase != Phase.Closed;
     public int TotalMarks => totalMarks;
+    public float ScanPassDuration => scanPassDuration;
+    public float PreShowTime => preShowTime;
+    public static int MarksPerScanPass => MarksPerPass;
     public event Action<LacquerResult> Completed;
     public event Action<LacquerResult> ResultConfirmed;
     LacquerResult pendingResult;
 
     void Awake()
     {
+        ApplyDifficultyPreset();
         EnsureInitialized();
         if (canvasRoot != null)
             canvasRoot.SetActive(false);
@@ -220,6 +229,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
     public void Configure(GameObject root)
     {
+        ApplyDifficultyPreset();
         canvasRoot = root;
     }
 
@@ -1147,8 +1157,19 @@ public sealed class LacquerMinigameController : MonoBehaviour
             audioSource.PlayOneShot(clip, volume);
     }
 
+    void ApplyDifficultyPreset()
+    {
+        if (difficultyPresetVersion >= CurrentDifficultyPresetVersion)
+            return;
+
+        scanPassDuration = BalancedScanPassDuration;
+        preShowTime = BalancedPreShowTime;
+        difficultyPresetVersion = CurrentDifficultyPresetVersion;
+    }
+
     void OnValidate()
     {
+        ApplyDifficultyPreset();
         totalMarks = Mathf.Max(8, totalMarks);
         strokeEvery = Mathf.Max(2, strokeEvery);
         scanPassDuration = Mathf.Max(2f, scanPassDuration);
