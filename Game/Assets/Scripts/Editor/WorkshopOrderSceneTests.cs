@@ -47,6 +47,12 @@ public sealed class WorkshopOrderSceneTests
         var keyboard = InputSystem.AddDevice<Keyboard>();
         var order = WorkshopOrder.Current;
         Assert.That(order, Is.Not.Null);
+        var task = GameObject.Find("任务提示").GetComponent<RectTransform>();
+        Assert.That(task.anchorMin, Is.EqualTo(Vector2.one));
+        Assert.That(task.anchorMax, Is.EqualTo(Vector2.one));
+        Assert.That(task.pivot, Is.EqualTo(Vector2.one));
+        Assert.That(task.anchoredPosition, Is.EqualTo(new Vector2(-32f, -48f)),
+            "订单任务应独占右上区域，不能与左上角竹子背包重叠");
         var elder = GameObject.Find("村口大爷").GetComponent<TemporaryDialogueEntryPoint>();
         var uncle = GameObject.Find("舅舅").GetComponent<TemporaryDialogueEntryPoint>();
         MoveNear(uncle.transform);

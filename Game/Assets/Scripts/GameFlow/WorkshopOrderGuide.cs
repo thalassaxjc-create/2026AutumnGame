@@ -99,10 +99,13 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         scaler.matchWidthOrHeight = .5f;
 
         task = CreateLabel("任务提示", 30, new Vector2(580, 58));
-        task.alignment = TextAnchor.MiddleLeft;
-        task.rectTransform.anchorMin = task.rectTransform.anchorMax = new Vector2(0, 1);
-        task.rectTransform.pivot = new Vector2(0, 1);
-        task.rectTransform.anchoredPosition = new Vector2(32, -24);
+        // Keep the order objective in its own top-right row. The bamboo inventory
+        // HUD occupies the top-left row, so sharing its position makes both labels
+        // unreadable as soon as the player picks up the first bamboo.
+        task.alignment = TextAnchor.MiddleRight;
+        task.rectTransform.anchorMin = task.rectTransform.anchorMax = Vector2.one;
+        task.rectTransform.pivot = Vector2.one;
+        task.rectTransform.anchoredPosition = new Vector2(-32, -48);
         marker = CreateLabel("当前目标", 54, new Vector2(64, 76));
         marker.rectTransform.anchorMin = marker.rectTransform.anchorMax = Vector2.zero;
         marker.text = "!";
