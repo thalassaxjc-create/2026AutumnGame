@@ -134,6 +134,7 @@ public static class WorkshopWhiteboxBuilder
 
         GameObject player = EnsurePlayer();
         GameObject cameraGo = EnsureCamera(player);
+        EnsureWorkshopComputer(player, cameraGo);
 
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
         EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), WorkshopScenePath);
@@ -370,6 +371,30 @@ public static class WorkshopWhiteboxBuilder
         CreateBox(furniture, "ChairSeat", desk + new Vector3(-1.05f, 0.42f, 0f), new Vector3(0.48f, 0.08f, 0.48f), Palette.Computer, true);
         CreateBox(furniture, "ChairBack", desk + new Vector3(-1.26f, 0.72f, 0f), new Vector3(0.08f, 0.52f, 0.48f), Palette.Computer, true);
         CreateInteractionPoint(parent, "ComputerInteractionPoint", desk + new Vector3(-1.15f, 0.2f, 0f), Vector3.right);
+    }
+
+    public static void EnsureWorkshopComputer(GameObject player = null, GameObject cameraGo = null)
+    {
+        GameObject point = GameObject.Find("ComputerInteractionPoint");
+        if (point == null)
+            return;
+        if (player == null)
+            player = GameObject.Find("Player");
+        if (cameraGo == null)
+            cameraGo = GameObject.Find("Main Camera");
+
+        WorkshopComputer computer = point.GetComponent<WorkshopComputer>();
+        if (computer == null)
+            computer = point.AddComponent<WorkshopComputer>();
+
+        ComputerUI prefab = AssetDatabase.LoadAssetAtPath<ComputerUI>("Assets/ComputerUI/ComputerUI.prefab");
+        SerializedObject serialized = new SerializedObject(computer);
+        serialized.FindProperty("interfacePrefab").objectReferenceValue = prefab;
+        serialized.FindProperty("player").objectReferenceValue = player != null ? player.GetComponent<PlayerController>() : null;
+        serialized.FindProperty("cameraFollow").objectReferenceValue = cameraGo != null ? cameraGo.GetComponent<CameraFollow>() : null;
+        serialized.FindProperty("interactionDistance").floatValue = 2f;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        EditorUtility.SetDirty(computer);
     }
 
     static void BuildToolStorage(Transform parent)

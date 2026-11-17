@@ -4155,6 +4155,7 @@ GameObject:
   m_Component:
   - component: {fileID: 768133877}
   - component: {fileID: 768133878}
+  - component: {fileID: 768133879}
   m_Layer: 0
   m_Name: ComputerInteractionPoint
   m_TagString: Untagged
@@ -4191,6 +4192,22 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InteractionPoint
   pointId: ComputerInteractionPoint
   gizmoColor: {r: 1, g: 0.82, b: 0.2, a: 0.95}
+--- !u!114 &768133879
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 768133876}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6dc21aaabb1536749b5944efff90e33f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WorkshopComputer
+  interfacePrefab: {fileID: 7118496736245361468, guid: 78fb7257138be034586e7db2cb855317, type: 3}
+  player: {fileID: 561502356}
+  cameraFollow: {fileID: 2042014064}
+  interactionDistance: 2
 --- !u!1 &776162817
 GameObject:
   m_ObjectHideFlags: 0
@@ -4314,6 +4331,7 @@ GameObject:
   - component: {fileID: 786223828}
   - component: {fileID: 786223830}
   - component: {fileID: 786223829}
+  - component: {fileID: 786223831}
   m_Layer: 0
   m_Name: BambooAreaMat
   m_TagString: Untagged
@@ -4393,6 +4411,28 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 786223827}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &786223831
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 786223827}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 821f2f7b5efdb374283fb4e7ab27e42d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BambooWorkbench
+  workTable: {fileID: 42487721}
+  storedCanes:
+  - {fileID: 49407041}
+  - {fileID: 380131189}
+  - {fileID: 233167626}
+  - {fileID: 1620969898}
+  - {fileID: 2095911965}
+  - {fileID: 1267338120}
+  - {fileID: 1628541179}
+  - {fileID: 843433303}
 --- !u!1 &825018939
 GameObject:
   m_ObjectHideFlags: 0
@@ -8502,6 +8542,10 @@ GameObject:
   m_Component:
   - component: {fileID: 1557651057}
   - component: {fileID: 1557651058}
+  - component: {fileID: 1557651062}
+  - component: {fileID: 1557651061}
+  - component: {fileID: 1557651060}
+  - component: {fileID: 1557651059}
   m_Layer: 0
   m_Name: LacquerInteractionPoint
   m_TagString: Untagged
@@ -8538,6 +8582,94 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InteractionPoint
   pointId: LacquerInteractionPoint
   gizmoColor: {r: 1, g: 0.82, b: 0.2, a: 0.95}
+--- !u!114 &1557651059
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1557651056}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1c9ed20905c9b4c408fe53e66ba7f98d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LacquerStationTrigger
+  minigameCanvas: {fileID: 944791510}
+  minigameController: {fileID: 1557651060}
+  promptText: "\u6309 E \u5F00\u59CB\u5237\u5927\u6F06"
+--- !u!114 &1557651060
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1557651056}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dcd642319f91c5e4590cb2a2d0fdaadb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LacquerMinigameController
+  canvasRoot: {fileID: 944791510}
+  totalMarks: 32
+  strokeEvery: 4
+  gameMinutesCost: 20
+  scanPassDuration: 5.6
+  preShowTime: 1.05
+  difficultyPresetVersion: 1
+  perfectWindow: 0.1
+  greatWindow: 0.2
+  goodWindow: 0.32
+  missWindow: 0.48
+  dragDeadline: 1.7
+  dragCorridor: 66
+--- !u!54 &1557651061
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1557651056}
+  serializedVersion: 5
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 1
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
+--- !u!65 &1557651062
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1557651056}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 3, y: 2, z: 3}
+  m_Center: {x: 0, y: 1, z: 0}
 --- !u!1 &1580485082
 GameObject:
   m_ObjectHideFlags: 0
@@ -10357,6 +10489,10 @@ GameObject:
   m_Component:
   - component: {fileID: 1899857726}
   - component: {fileID: 1899857727}
+  - component: {fileID: 1899857731}
+  - component: {fileID: 1899857730}
+  - component: {fileID: 1899857729}
+  - component: {fileID: 1899857728}
   m_Layer: 0
   m_Name: WeavingInteractionPoint
   m_TagString: Untagged
@@ -10393,6 +10529,92 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::InteractionPoint
   pointId: WeavingInteractionPoint
   gizmoColor: {r: 1, g: 0.82, b: 0.2, a: 0.95}
+--- !u!114 &1899857728
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1899857725}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b483fc3825b26964bb1107bff9c81931, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeavingStationTrigger
+  minigameCanvas: {fileID: 542876655}
+  minigameController: {fileID: 1899857729}
+  promptText: "\u6309 E \u5F00\u59CB\u7F16\u5E18"
+--- !u!114 &1899857729
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1899857725}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e4078eccf099e446bb15d6320525f02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::WeavingMinigameController
+  canvasRoot: {fileID: 542876655}
+  requiredThreads: 100
+  knotEvery: 5
+  gameMinutesCost: 60
+  spawnInterval: 0.46
+  noteTravelTime: 2.2
+  perfectWindow: 0.075
+  greatWindow: 0.145
+  goodWindow: 0.24
+  missWindow: 0.31
+  chordGrace: 0.14
+--- !u!54 &1899857730
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1899857725}
+  serializedVersion: 5
+  m_Mass: 1
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 0
+  m_IsKinematic: 1
+  m_Interpolate: 0
+  m_Constraints: 0
+  m_CollisionDetection: 0
+--- !u!65 &1899857731
+BoxCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1899857725}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 1
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Size: {x: 3, y: 2, z: 3}
+  m_Center: {x: 0, y: 1, z: 0}
 --- !u!1 &1903999266
 GameObject:
   m_ObjectHideFlags: 0

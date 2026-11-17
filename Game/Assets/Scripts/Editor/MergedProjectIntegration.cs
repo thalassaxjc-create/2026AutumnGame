@@ -49,8 +49,15 @@ public static class MergedProjectIntegration
 
         GameObject computerPoint = FindDeep("ComputerInteractionPoint");
         Require(computerPoint != null, "ComputerInteractionPoint was lost during the merge.");
+        WorkshopWhiteboxBuilder.EnsureWorkshopComputer();
         Require(computerPoint.GetComponent<WorkshopComputer>() != null,
             "WorkshopComputer was lost during the merge.");
+        var computer = computerPoint.GetComponent<WorkshopComputer>();
+        var computerSerialized = new SerializedObject(computer);
+        Require(computerSerialized.FindProperty("interfacePrefab").objectReferenceValue != null,
+            "WorkshopComputer is missing the ComputerUI prefab.");
+        Require(computerSerialized.FindProperty("player").objectReferenceValue != null,
+            "WorkshopComputer is missing the player reference.");
 
         int missingScripts = scene.GetRootGameObjects().Sum(CountMissingScripts);
         Require(missingScripts == 0, "WorkshopScene contains " + missingScripts + " missing script(s).");
