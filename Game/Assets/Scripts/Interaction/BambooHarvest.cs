@@ -89,6 +89,7 @@ public static class GreenBambooBag
 /// 竹林砍伐。只标记六根，靠近时认最近的一根。
 /// </summary>
 [DisallowMultipleComponent]
+[DefaultExecutionOrder(-100)] // Choose today's stalks before ChopableBamboo.Awake creates their marks.
 public class BambooHarvest : MonoBehaviour
 {
     public const int HarvestCount = 6;
@@ -104,15 +105,18 @@ public class BambooHarvest : MonoBehaviour
 
     public ChopableBamboo CurrentTarget => target;
 
-    public static int EnsureHarvestStalks(Transform forest, int count)
+    public static int EnsureHarvestStalks(Transform forest, int count) => EnsureHarvestStalks(forest, count, 1);
+
+    static int EnsureHarvestStalks(Transform forest, int count, int day)
     {
         if (forest == null || count <= 0)
             return 0;
 
         count = Mathf.Min(count, HarvestCount);
 
-        var chosen = new List<Transform>();
+        var chosen = new List<Transform>(count);
         var candidates = new List<Transform>();
+        var existingStalks = new List<ChopableBamboo>();
         for (int i = 0; i < forest.childCount; i++)
         {
             Transform child = forest.GetChild(i);
@@ -121,15 +125,41 @@ public class BambooHarvest : MonoBehaviour
 
             ChopableBamboo existing = child.GetComponent<ChopableBamboo>();
             if (existing != null)
-            {
-                existing.enabled = chosen.Count < count;
-                if (existing.enabled)
-                    chosen.Add(child);
-            }
+                existingStalks.Add(existing);
+            if (existing != null && chosen.Count < count)
+                chosen.Add(child);
             else
                 candidates.Add(child);
         }
 
+        FillHarvestGroup(candidates, chosen, count);
+        // Keep the authored group on day one. Each later group uses different bamboos.
+        int additionalGroups = candidates.Count / count;
+        int groupForDay = (day - 1) % (1 + additionalGroups);
+        for (int group = 0; group < groupForDay; group++)
+        {
+            chosen.Clear();
+            FillHarvestGroup(candidates, chosen, count);
+        }
+
+        foreach (ChopableBamboo bamboo in existingStalks)
+            bamboo.enabled = chosen.Contains(bamboo.transform);
+        foreach (Transform pick in chosen)
+        {
+            if (!pick.TryGetComponent<ChopableBamboo>(out _))
+                pick.gameObject.AddComponent<ChopableBamboo>();
+        }
+
+        var harvest = forest.GetComponent<BambooHarvest>();
+        if (harvest == null)
+            harvest = forest.gameObject.AddComponent<BambooHarvest>();
+        harvest.Refresh();
+
+        return chosen.Count;
+    }
+
+    static void FillHarvestGroup(List<Transform> candidates, List<Transform> chosen, int count)
+    {
         while (chosen.Count < count && candidates.Count > 0)
         {
             int bestIndex = 0;
@@ -145,24 +175,11 @@ public class BambooHarvest : MonoBehaviour
 
             Transform pick = candidates[bestIndex];
             candidates.RemoveAt(bestIndex);
-            if (pick.GetComponent<ChopableBamboo>() == null)
-                pick.gameObject.AddComponent<ChopableBamboo>();
             chosen.Add(pick);
         }
-
-        if (forest.GetComponent<BambooHarvest>() == null)
-            forest.gameObject.AddComponent<BambooHarvest>();
-
-        forest.GetComponent<BambooHarvest>().Refresh();
-
-        return chosen.Count;
     }
 
-    void Awake()
-    {
-        EnsureHarvestStalks(transform, HarvestCount);
-        Refresh();
-    }
+    void Awake() => EnsureHarvestStalks(transform, HarvestCount, WorkshopOrder.Current?.Days ?? 1);
 
     void OnDisable()
     {
@@ -171,24 +188,31 @@ public class BambooHarvest : MonoBehaviour
         InteractionPromptUI.HideImmediate();
     }
 
+    string shownPrompt;
+
+    void ClearPrompt()
+    {
+        if (shownPrompt != null && InteractionPromptUI.CurrentMessage == shownPrompt)
+            InteractionPromptUI.Hide();
+        shownPrompt = null;
+    }
+
     void Update()
     {
         var order = WorkshopOrder.Current;
         if (order != null && !order.CanHarvest)
         {
             locked = null;
-            if (target != null)
-            {
-                SetTarget(null);
-                InteractionPromptUI.Hide();
-            }
+            SetTarget(null);
+            ClearPrompt();
             return;
         }
-        if (SceneTransitionState.IsLoading || Time.timeScale <= 0f || GameFlowModalState.IsModalOpen)
+        if (SceneTransitionState.IsLoading || Time.timeScale <= 0f || GameFlowModalState.IsModalOpen ||
+            VillageSpottedGrove.IsSneaking)
         {
             locked = null;
             SetTarget(null);
-            InteractionPromptUI.Hide();
+            ClearPrompt();
             return;
         }
 
@@ -198,7 +222,7 @@ public class BambooHarvest : MonoBehaviour
         {
             locked = null;
             SetTarget(null);
-            InteractionPromptUI.Hide();
+            ClearPrompt();
             return;
         }
 
@@ -225,12 +249,14 @@ public class BambooHarvest : MonoBehaviour
 
         // Refresh after the action to avoid displaying a felled/collected target's old prompt.
         SetTarget(locked != null ? locked : FindNearest(pos));
-        if (Time.time < obtainUntil)
-            InteractionPromptUI.Show("获得1根完整青竹");
-        else if (target != null)
-            InteractionPromptUI.Show(target.PromptText);
+        string prompt = Time.time < obtainUntil ? "获得1根完整青竹" : target?.PromptText;
+        if (prompt != null)
+        {
+            shownPrompt = prompt;
+            InteractionPromptUI.Show(prompt);
+        }
         else
-            InteractionPromptUI.Hide();
+            ClearPrompt();
     }
 
     void SetTarget(ChopableBamboo next)
@@ -263,7 +289,9 @@ public class BambooHarvest : MonoBehaviour
                 continue;
 
             float distance = FlatDistance(pos, bamboo.InteractPoint);
-            if (distance > bamboo.InteractRadius || distance >= bestDistance)
+            if (distance > bamboo.InteractRadius)
+                continue;
+            if (best != null && (best.CanPickup != bamboo.CanPickup ? best.CanPickup : distance >= bestDistance))
                 continue;
 
             best = bamboo;

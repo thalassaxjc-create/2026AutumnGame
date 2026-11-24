@@ -18,6 +18,9 @@ public sealed partial class BambooCraftProgress
         GatePassing, GateResult, DrawingReady, Drawing, CraftFinished }
     public const int Columns = 80;
     public const int Rows = 12;
+    public const int PiecesPerBatch = 4;
+    public const int PiecesPerRound = 2;
+    public const int ScrapingRounds = PiecesPerBatch / PiecesPerRound;
     public const float SafeNodeSpeed = 1.8f;
     public static readonly float[] Nodes = { 0.24f, 0.51f, 0.78f };
     public const float SplitGuideTolerance = 0.4f;
@@ -31,13 +34,18 @@ public sealed partial class BambooCraftProgress
     float strokeLength, strokeError, backtracking, startX, strokeDirection;
     float splitScoreSum, scrapeLength, unsafeLength;
     int splitAttempts, removedCount;
+    bool preparationCharged;
+    bool finishingCharged;
+    bool batchIsSpotted;
 
     public Step Stage { get; private set; }
+    public bool IsProcessingBamboo => Stage != Step.PlaceBamboo && Stage != Step.CraftFinished;
     public int Splits { get; private set; }
     public int RoughCount { get; private set; }
     public int FineCount { get; private set; }
     public int DefectiveCount { get; private set; }
     public int FinishedInBatch { get; private set; }
+    public int ScrapingRoundsCompleted => FinishedInBatch / PiecesPerRound;
     public int Damage { get; private set; }
     public int Revision { get; private set; }
     public bool LastDefective { get; private set; }
@@ -58,31 +66,58 @@ public sealed partial class BambooCraftProgress
         takeBamboo = consumeBamboo ?? GreenBambooBag.TryTakeOne;
     }
 
-    public bool Place()
+    public bool Place() => Place(takeBamboo, false);
+
+    internal bool PlaceSpotted(Func<bool> takeSpottedBamboo)
+    {
+        if (IsProcessingBamboo)
+            return false;
+        return Place(takeSpottedBamboo, true);
+    }
+
+    bool Place(Func<bool> takeMaterial, bool spotted)
     {
         if (Stage != Step.PlaceBamboo && Stage != Step.BatchFinished && Stage != Step.CraftFinished)
             return false;
-        if (!takeBamboo())
+        if (!takeMaterial())
         {
-            Say("没有完整青竹，请先到竹林采集");
+            Say(spotted ? "背包没有斑竹" : "没有完整青竹，请先到竹林采集");
             return false;
         }
         Splits = FinishedInBatch = splitAttempts = 0;
         splitScoreSum = 0;
+        preparationCharged = finishingCharged = false;
+        batchIsSpotted = spotted;
         ResetSurface();
         Stage = Step.Splitting;
-        Say("按住左键，顺着亮线横向划一次；松开获得 4 根竹丝");
+        Say($"已放置{(spotted ? "斑竹" : "青竹")}。按住左键沿亮线横划，松开获得 {PiecesPerBatch} 块粗竹片");
         return true;
+    }
+
+    internal int TakeCompletedWorkMinutes(int preparationMinutes, int finishingMinutes)
+    {
+        int minutes = 0;
+        if (!preparationCharged && FinishedInBatch == PiecesPerBatch)
+        {
+            preparationCharged = true;
+            minutes += preparationMinutes;
+        }
+        if (!finishingCharged && Stage == Step.CraftFinished && DrawingGroupsCompleted == FinishingGroups)
+        {
+            finishingCharged = true;
+            minutes += finishingMinutes;
+        }
+        return minutes;
     }
 
     public bool StartNextStrip()
     {
-        if ((Stage != Step.RoughReady && Stage != Step.StripFinished) || RoughCount <= 0)
+        if ((Stage != Step.RoughReady && Stage != Step.StripFinished) || RoughCount < PiecesPerRound)
             return false;
-        RoughCount--;
+        RoughCount -= PiecesPerRound;
         ResetSurface();
         Stage = Step.Scraping;
-        Say("按住左键持续持刀，移回竹面即可继续刮；刮净至 100% 完成");
+        Say("本轮处理两块竹片。按住左键刮竹青，刮净至 100% 完成");
         return true;
     }
 
@@ -180,12 +215,20 @@ public sealed partial class BambooCraftProgress
         Revision++;
         if (removedCount == removed.Length)
         {
-            LastDefective = random() < DefectChance;
-            if (LastDefective) DefectiveCount++; else FineCount++;
-            FinishedInBatch++;
-            Stage = FinishedInBatch == 4 ? Step.BatchFinished : Step.StripFinished;
+            int defects = 0;
+            for (int piece = 0; piece < PiecesPerRound; piece++)
+            {
+                if (random() < DefectChance)
+                    defects++;
+            }
+            LastDefective = defects > 0;
+            DefectiveCount += defects;
+            FineCount += PiecesPerRound - defects;
+            FinishedInBatch += PiecesPerRound;
+            Stage = FinishedInBatch == PiecesPerBatch ? Step.BatchFinished : Step.StripFinished;
             CancelStroke();
-            Say(LastDefective ? "深痕影响了品质：获得 1 块残次竹片" : "剐青完成：获得 1 块精竹片");
+            Say(LastDefective ? $"本轮获得 {PiecesPerRound - defects} 块精竹片、{defects} 块残次竹片"
+                : $"本轮剐青完成，获得 {PiecesPerRound} 块精竹片");
         }
         return removedCount - before;
     }
@@ -241,9 +284,9 @@ public sealed partial class BambooCraftProgress
             if (completed)
             {
                 Splits = 1;
-                RoughCount += 4;
+                RoughCount += PiecesPerBatch;
                 Stage = Step.RoughReady;
-                Say("一劈完成，获得 4 根竹丝；按空格开始剐竹青");
+                Say($"一劈完成，获得 {PiecesPerBatch} 块粗竹片；按空格开始剐竹青");
             }
             else Say("再试一次：从竹子一侧横向划向另一侧，大致顺着亮线即可");
         }

@@ -115,16 +115,16 @@ public class BambooWorkbenchTests
     }
 
     [Test]
-    public void FourCleanStripsConserveMaterialsAndGiveFourFineStrips()
+    public void TwoScrapingRoundsConserveMaterialsAndGiveFourFineStrips()
     {
         var model = Model(); PrepareRough(model);
-        for (int i = 1; i <= 4; i++)
+        for (int i = 1; i <= BambooCraftProgress.ScrapingRounds; i++)
         {
             Assert.That(model.StartNextStrip(), Is.True);
             Assert.That(model.StartNextStrip(), Is.False);
             ScrapeClean(model);
-            Assert.That(model.FineCount, Is.EqualTo(i));
-            Assert.That(model.RoughCount, Is.EqualTo(4 - i));
+            Assert.That(model.FineCount, Is.EqualTo(i * BambooCraftProgress.PiecesPerRound));
+            Assert.That(model.RoughCount, Is.EqualTo(BambooCraftProgress.PiecesPerBatch - model.FineCount));
             Assert.That(model.Damage, Is.Zero);
             Assert.That(model.Coverage, Is.EqualTo(1));
         }
@@ -137,7 +137,7 @@ public class BambooWorkbenchTests
     }
 
     [Test]
-    public void FastSweepHitsAllKnotsAndCanCreateOneDefectiveStrip()
+    public void FastSweepHitsAllKnotsAndCanDamageBothPieces()
     {
         var model = Model(0); PrepareRough(model); model.StartNextStrip();
         model.BeginStroke(new Vector2(0, 0.5f)); model.Drag(new Vector2(1, 0.5f), 0.01f); model.EndStroke();
@@ -146,9 +146,9 @@ public class BambooWorkbenchTests
         Assert.That(model.DefectChance, Is.GreaterThan(0));
         Assert.That(model.Accuracy, Is.LessThan(1));
         ScrapeClean(model);
-        Assert.That(model.DefectiveCount, Is.EqualTo(1));
+        Assert.That(model.DefectiveCount, Is.EqualTo(2));
         Assert.That(model.FineCount, Is.Zero);
-        Assert.That(model.RoughCount, Is.EqualTo(3));
+        Assert.That(model.RoughCount, Is.EqualTo(2));
     }
 
     [Test]
@@ -220,10 +220,10 @@ public class BambooWorkbenchTests
         for (int x = 0; x < BambooCraftProgress.Columns; x++)
             Assert.That(model.IsRemoved(x, y), Is.True, "All green skin, including edges and knots, must be removable.");
         Assert.That(model.Stage, Is.EqualTo(BambooCraftProgress.Step.StripFinished));
-        Assert.That(model.FineCount, Is.EqualTo(1));
+        Assert.That(model.FineCount, Is.EqualTo(2));
         model.EndStroke();
         model.BeginStroke(Vector2.zero); model.Drag(Vector2.one, 1); model.EndStroke();
-        Assert.That(model.FineCount, Is.EqualTo(1));
+        Assert.That(model.FineCount, Is.EqualTo(2));
     }
 
     [UnityTest]
@@ -274,7 +274,7 @@ public class BambooWorkbenchTests
         ScreenCapture.CaptureScreenshot("Logs/BambooHarvest/workbench-test-split-complete.png");
         yield return GameSeconds(0.1f);
         yield return KeyPress(keyboard, Key.Space);
-        Assert.That(station.Progress.RoughCount, Is.EqualTo(3));
+        Assert.That(station.Progress.RoughCount, Is.EqualTo(2));
         Vector2 outside = new Vector2(-0.08f, 0.1f);
         yield return MouseStateAt(mouse, station, outside, true);
         AssertKnifeAt(station, outside);
@@ -333,9 +333,9 @@ public class BambooWorkbenchTests
             Debug.Log("Workbench scrape row " + row + ": coverage=" + station.Progress.Coverage + ", damage=" + station.Progress.Damage);
             if (row == 1) ScreenCapture.CaptureScreenshot("Logs/BambooHarvest/workbench-test-scraping.png");
         }
-        Assert.That(station.Progress.FineCount, Is.EqualTo(1), "Coverage=" + station.Progress.Coverage + ", damage=" + station.Progress.Damage + ", stage=" + station.Progress.Stage);
+        Assert.That(station.Progress.FineCount, Is.EqualTo(2), "Coverage=" + station.Progress.Coverage + ", damage=" + station.Progress.Damage + ", stage=" + station.Progress.Stage);
         Assert.That(station.Progress.DefectiveCount, Is.Zero);
-        Assert.That(station.Progress.RoughCount, Is.EqualTo(3));
+        Assert.That(station.Progress.RoughCount, Is.EqualTo(2));
         Assert.That(station.Progress.Damage, Is.Zero);
         Assert.That(sawNearComplete, Is.True);
         Assert.That(station.Progress.Coverage, Is.EqualTo(1));
@@ -345,7 +345,7 @@ public class BambooWorkbenchTests
         yield return SceneManager.LoadSceneAsync(SceneTransitionState.HomeSceneName);
         yield return GameSeconds(0.1f);
         Assert.That(Object.FindObjectsByType<BambooWorkbenchView>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length, Is.Zero);
-        Assert.That(BambooCraftSession.Current.FineCount, Is.EqualTo(1));
+        Assert.That(BambooCraftSession.Current.FineCount, Is.EqualTo(2));
         yield return SceneManager.LoadSceneAsync(SceneTransitionState.WorkshopSceneName);
         yield return GameSeconds(0.1f);
         station = Object.FindFirstObjectByType<BambooWorkbench>();
@@ -353,8 +353,8 @@ public class BambooWorkbenchTests
         Move(player, new Vector3(0.4f, 0.1f, 4.6f));
         yield return KeyPress(keyboard, Key.E);
         Assert.That(station.IsOpen, Is.True);
-        Assert.That(station.Progress.FineCount, Is.EqualTo(1));
-        Assert.That(station.Progress.RoughCount, Is.EqualTo(3));
+        Assert.That(station.Progress.FineCount, Is.EqualTo(2));
+        Assert.That(station.Progress.RoughCount, Is.EqualTo(2));
         station.Close();
         Move(player, new Vector3(10, 0.1f, 0));
         yield return KeyPress(keyboard, Key.E);
@@ -407,7 +407,11 @@ public class BambooWorkbenchTests
         Vector3 world = rect.TransformPoint(new Vector3(rect.rect.xMin + point.x * rect.rect.width, rect.rect.yMin + point.y * rect.rect.height));
         Vector2 screen = RectTransformUtility.WorldToScreenPoint(null, world);
         var state = new MouseState { position = screen }.WithButton(MouseButton.Left, pressed);
-        yield return InputFrame(() => InputSystem.QueueStateEvent(mouse, state));
+        yield return InputFrame(() =>
+        {
+            mouse.MakeCurrent();
+            InputSystem.QueueStateEvent(mouse, state);
+        });
     }
     static IEnumerator InputFrame(Action queue)
     {

@@ -70,7 +70,15 @@ public static class BambooWorkbenchSetup
             switch (command)
             {
                 case "configure": Configure(); break;
+                case "configure-pattern": PatternStationSetup.Configure(); break;
+                case "configure-market": VillageMarketSetup.Configure(); break;
                 case "test": RunAllTests(); break;
+                case "test-story": RunTests(new Filter
+                {
+                    testMode = TestMode.EditMode,
+                    testNames = new[] { nameof(WorkshopOrderSceneTests) + "." +
+                        nameof(WorkshopOrderSceneTests.StoryOrderAndSettlementUseExistingSceneObjects) }
+                }, "Running workshop story EditMode test..."); break;
                 case "preview": Preview(); break;
                 case "resume-batch": ResumeSavedBatch(); break;
                 case "stop": EditorApplication.isPlaying = false; break;
@@ -241,14 +249,17 @@ public static class BambooWorkbenchSetup
     }
 
     [MenuItem("宣纸帘/运行完整项目测试")]
-    public static void RunAllTests()
+    public static void RunAllTests() =>
+        RunTests(new Filter { testMode = TestMode.EditMode }, "Running full project EditMode tests...");
+
+    static void RunTests(Filter filter, string message)
     {
         if (EditorApplication.isPlayingOrWillChangePlaymode) throw new InvalidOperationException("请先停止 Play Mode。");
         EditorApplication.isPaused = false;
         EditorSceneManager.SaveOpenScenes();
         Directory.CreateDirectory(DirectoryPath);
-        File.WriteAllText(DirectoryPath + "/workbench-tests-summary.txt", "Running full project EditMode tests...");
-        testApi.Execute(new ExecutionSettings(new Filter { testMode = TestMode.EditMode }));
+        File.WriteAllText(DirectoryPath + "/workbench-tests-summary.txt", message);
+        testApi.Execute(new ExecutionSettings(filter));
     }
 
     class Results : ICallbacks

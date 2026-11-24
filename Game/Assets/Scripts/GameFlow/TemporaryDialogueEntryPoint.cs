@@ -100,7 +100,8 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
         if (isOpen)
             return false;
         EnsureView();
-        bool casual = WorkshopOrder.Current?.CurrentPhase == WorkshopOrder.Phase.Production && casualMessages.Length > 0;
+        var order = WorkshopOrder.Current;
+        bool casual = casualMessages.Length > 0 && order?.CanExplore == true && order.CurrentPhase != storyPhase;
         activeMessages = casual ? casualMessages : storyMessages.Length > 0 ? storyMessages : new[] { placeholderMessage };
         activeCompletesStory = !casual;
         messageIndex = 0;

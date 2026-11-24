@@ -78,7 +78,8 @@ public class BambooWorkbench : MonoBehaviour
             var order = WorkshopOrder.Current;
             bool inArea = player != null && Contains(player.transform.position) &&
                 (order == null || order.CanWorkBamboo && !GameFlowModalState.IsInteractionBlocked);
-            if (inArea) InteractionPromptUI.Show("按 E 进入篾竹工作台");
+            if (inArea) InteractionPromptUI.Show(order != null && order.SpottedBamboo > 0
+                ? "按 E 篾竹，进台后按 V 放置斑竹" : "按 E 进入篾竹工作台");
             else if (wasInArea) InteractionPromptUI.Hide();
             wasInArea = inArea;
             if (inArea && (order == null ? keyboard?.eKey.wasPressedThisFrame == true
@@ -90,8 +91,19 @@ public class BambooWorkbench : MonoBehaviour
             Close();
             return;
         }
-        WorkshopOrder.Current?.ObserveBamboo(Progress);
-        if (keyboard != null && keyboard.spaceKey.wasPressedThisFrame && (WorkshopOrder.Current?.CanWorkBamboo ?? true))
+        var activeOrder = WorkshopOrder.Current;
+        if (activeOrder != null && !activeOrder.CanExplore)
+        {
+            Close();
+            return;
+        }
+        if (keyboard?.vKey.wasPressedThisFrame == true && activeOrder != null)
+        {
+            if (Progress.PlaceSpotted(activeOrder.TryTakeSpottedBamboo)) held = false;
+            activeOrder.ObserveBamboo(Progress);
+            view.Refresh();
+        }
+        else if (keyboard?.spaceKey.wasPressedThisFrame == true)
         {
             bool changed = Progress.Advance();
             if (changed) held = false;
@@ -152,9 +164,7 @@ public class BambooWorkbench : MonoBehaviour
         var order = WorkshopOrder.Current;
         if (order != null)
         {
-            var stage = order.GetStatus(WorkshopOrder.Stage.Preparation) == WorkshopOrder.StageStatus.Complete
-                ? WorkshopOrder.Stage.BambooFinishing : WorkshopOrder.Stage.Preparation;
-            if (!order.CanWorkBamboo || GameFlowModalState.IsInteractionBlocked || !order.Begin(stage))
+            if (!order.CanWorkBamboo || GameFlowModalState.IsInteractionBlocked)
                 return false;
             GameFlowModalState.Acquire(this);
         }
@@ -200,8 +210,6 @@ public class BambooWorkbench : MonoBehaviour
         if (follow != null) follow.enabled = followEnabled;
         Cursor.lockState = oldCursorLock; Cursor.visible = oldCursorVisible;
         IsOpen = false;
-        WorkshopOrder.Current?.Leave(WorkshopOrder.Stage.Preparation);
-        WorkshopOrder.Current?.Leave(WorkshopOrder.Stage.BambooFinishing);
         GameFlowModalState.Release(this, waitForInteractRelease);
     }
 

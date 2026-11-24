@@ -8,3 +8,8 @@ public interface IDialogueEntryPoint
 {
     bool TryBeginDialogue(NpcDialogueInteraction source, Action onDialogueClosed);
 }
+
+public interface IDialogueAvailability
+{
+    bool IsDialogueAvailable { get; }
+}

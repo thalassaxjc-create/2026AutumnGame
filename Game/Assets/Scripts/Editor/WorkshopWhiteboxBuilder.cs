@@ -27,9 +27,9 @@ public static class WorkshopWhiteboxBuilder
     const float SouthLowWallHeight = 1f;
     const float TableTopY = 0.86f;
 
-    static readonly Vector3 DoorACenter = new Vector3(-RoomWidth * 0.5f, 0f, 6.5f);
+    static readonly Vector3 DoorACenter = new Vector3(-9f, 0f, RoomDepth * 0.5f);
     static readonly Vector3 DoorBCenter = new Vector3(11f, 0f, -RoomDepth * 0.5f);
-    static readonly Vector3 PlayerSpawn = new Vector3(-11.2f, 1f, 6.5f);
+    static readonly Vector3 PlayerSpawn = new Vector3(-9f, 1f, 7.2f);
 
     static readonly Vector3 BambooAreaCenter = new Vector3(1.5f, 0f, 6f);
     static readonly Vector3 BambooAreaSize = new Vector3(12f, 0f, 7f);
@@ -134,7 +134,6 @@ public static class WorkshopWhiteboxBuilder
 
         GameObject player = EnsurePlayer();
         GameObject cameraGo = EnsureCamera(player);
-        EnsureWorkshopComputer(player, cameraGo);
 
         EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
         EditorSceneManager.SaveScene(SceneManager.GetActiveScene(), WorkshopScenePath);
@@ -213,8 +212,8 @@ public static class WorkshopWhiteboxBuilder
         float xWest = -halfW + WallThickness * 0.5f;
         float xEast = halfW - WallThickness * 0.5f;
 
-        CreateBox(parent, "NorthWall", new Vector3(0f, wallY, zNorth), new Vector3(RoomWidth, WallHeight, WallThickness), Palette.Wall, true);
-        CreateSplitWallAlongZ(parent, "West", new Vector3(xWest, wallY, 0f), RoomDepth, WallHeight, DoorACenter.z, DoorWidth, DoorHeight, true, Palette.Wall);
+        CreateSplitWall(parent, "North", new Vector3(0f, wallY, zNorth), RoomWidth, WallHeight, DoorACenter.x, DoorWidth, DoorHeight, true, Palette.Wall);
+        CreateBox(parent, "WestWall", new Vector3(xWest, wallY, 0f), new Vector3(WallThickness, WallHeight, RoomDepth), Palette.Wall, true);
         CreateBox(parent, "EastWall", new Vector3(xEast, wallY, 0f), new Vector3(WallThickness, WallHeight, RoomDepth), Palette.Wall, true);
 
         Transform low = CreateGroup(parent, "SouthLow");
@@ -242,28 +241,11 @@ public static class WorkshopWhiteboxBuilder
         CreateBox(parent, prefix + "Lintel", new Vector3(doorX, doorHeight + lintelHeight * 0.5f, center.z), new Vector3(doorWidth, lintelHeight, WallThickness), material, true);
     }
 
-    static void CreateSplitWallAlongZ(Transform parent, string prefix, Vector3 center, float length, float height, float doorOffset, float doorWidth, float doorHeight, bool lintel, Material material)
-    {
-        float southWidth = (length * 0.5f + doorOffset) - doorWidth * 0.5f;
-        float northWidth = (length * 0.5f - doorOffset) - doorWidth * 0.5f;
-        float southCenterZ = center.z - length * 0.5f + southWidth * 0.5f;
-        float northCenterZ = center.z + length * 0.5f - northWidth * 0.5f;
-        if (southWidth > 0.2f)
-            CreateBox(parent, prefix + "South", new Vector3(center.x, center.y, southCenterZ), new Vector3(WallThickness, height, southWidth), material, true);
-        if (northWidth > 0.2f)
-            CreateBox(parent, prefix + "North", new Vector3(center.x, center.y, northCenterZ), new Vector3(WallThickness, height, northWidth), material, true);
-        if (!lintel)
-            return;
-
-        float lintelHeight = Mathf.Max(0.2f, height - doorHeight);
-        CreateBox(parent, prefix + "Lintel", new Vector3(center.x, doorHeight + lintelHeight * 0.5f, center.z + doorOffset), new Vector3(WallThickness, lintelHeight, doorWidth), material, true);
-    }
-
     static void BuildDoors(Transform parent)
     {
         Transform doorA = CreateGroup(parent, "DoorA");
         doorA.position = new Vector3(DoorACenter.x, 0.05f, DoorACenter.z);
-        doorA.rotation = Quaternion.LookRotation(Vector3.right, Vector3.up);
+        doorA.rotation = Quaternion.LookRotation(Vector3.back, Vector3.up);
         CreateBox(doorA, "DoorASill", new Vector3(0f, 0.03f, 0f), new Vector3(DoorWidth, 0.06f, 0.6f), Palette.Wood, false);
 
         Transform doorB = CreateGroup(parent, "DoorB");
@@ -373,30 +355,6 @@ public static class WorkshopWhiteboxBuilder
         CreateInteractionPoint(parent, "ComputerInteractionPoint", desk + new Vector3(-1.15f, 0.2f, 0f), Vector3.right);
     }
 
-    public static void EnsureWorkshopComputer(GameObject player = null, GameObject cameraGo = null)
-    {
-        GameObject point = GameObject.Find("ComputerInteractionPoint");
-        if (point == null)
-            return;
-        if (player == null)
-            player = GameObject.Find("Player");
-        if (cameraGo == null)
-            cameraGo = GameObject.Find("Main Camera");
-
-        WorkshopComputer computer = point.GetComponent<WorkshopComputer>();
-        if (computer == null)
-            computer = point.AddComponent<WorkshopComputer>();
-
-        ComputerUI prefab = AssetDatabase.LoadAssetAtPath<ComputerUI>("Assets/ComputerUI/ComputerUI.prefab");
-        SerializedObject serialized = new SerializedObject(computer);
-        serialized.FindProperty("interfacePrefab").objectReferenceValue = prefab;
-        serialized.FindProperty("player").objectReferenceValue = player != null ? player.GetComponent<PlayerController>() : null;
-        serialized.FindProperty("cameraFollow").objectReferenceValue = cameraGo != null ? cameraGo.GetComponent<CameraFollow>() : null;
-        serialized.FindProperty("interactionDistance").floatValue = 2f;
-        serialized.ApplyModifiedPropertiesWithoutUndo();
-        EditorUtility.SetDirty(computer);
-    }
-
     static void BuildToolStorage(Transform parent)
     {
         Vector3 rack = new Vector3(4.2f, 0f, 9.15f);
@@ -412,7 +370,7 @@ public static class WorkshopWhiteboxBuilder
     static void BuildNavigation(Transform parent)
     {
         CreateMarker(parent, "CenterLane", new Vector3(0f, 0.05f, 0.8f));
-        CreateMarker(parent, "DoorAClearance", new Vector3(-12f, 0.05f, DoorACenter.z));
+        CreateMarker(parent, "DoorAClearance", new Vector3(DoorACenter.x, 0.05f, 8.4f));
         CreateMarker(parent, "DoorBClearance", new Vector3(DoorBCenter.x, 0.05f, -8.4f));
     }
 
@@ -431,7 +389,7 @@ public static class WorkshopWhiteboxBuilder
             player.name = "Player";
         }
 
-        player.transform.SetPositionAndRotation(PlayerSpawn, Quaternion.LookRotation(Vector3.right, Vector3.up));
+        player.transform.SetPositionAndRotation(PlayerSpawn, Quaternion.identity);
         player.transform.localScale = Vector3.one;
         player.tag = "Player";
         DestroyComponentIfPresent<CapsuleCollider>(player);
@@ -549,7 +507,7 @@ public static class WorkshopWhiteboxBuilder
         {
             Physics.SyncTransforms();
             report.AppendLine(CheckSpawn());
-            report.AppendLine(CheckDoor("门A", new Vector3(-16.8f, 1.1f, DoorACenter.z), new Vector3(-11.2f, 1.1f, DoorACenter.z)));
+            report.AppendLine(CheckDoor("门A", new Vector3(DoorACenter.x, 1.1f, 12.2f), new Vector3(DoorACenter.x, 1.1f, 7.2f)));
             report.AppendLine(CheckDoor("门B", new Vector3(DoorBCenter.x, 1.1f, -12.2f), new Vector3(DoorBCenter.x, 1.1f, -7.2f)));
             report.AppendLine(CheckPath("入口到篾竹", PlayerSpawn, new Vector3(0.4f, 1.2f, 5.3f)));
             report.AppendLine(CheckPath("入口到编帘", PlayerSpawn, new Vector3(-8.8f, 1.2f, -3.2f)));
@@ -571,7 +529,7 @@ public static class WorkshopWhiteboxBuilder
         var report = new StringBuilder();
         report.AppendLine("布局（按文字平面关系，未使用草图文件）:");
         report.AppendLine("- 房间: 30 x 20，中心(0,0,0)，地面顶面 Y=0，墙高 " + WallHeight);
-        report.AppendLine("- 门A: 西墙靠北 " + DoorACenter + "，宽 " + DoorWidth + "，高 " + DoorHeight);
+        report.AppendLine("- 门A: 上墙靠左 " + DoorACenter + "，宽 " + DoorWidth + "，高 " + DoorHeight);
         report.AppendLine("- 门B: 下墙靠右 " + DoorBCenter + "，宽 " + DoorWidth);
         report.AppendLine("- 篾竹区: 中心 " + BambooAreaCenter + "，范围 " + BambooAreaSize);
         report.AppendLine("- 编帘区: 中心 " + WeavingAreaCenter + "，范围 " + WeavingAreaSize);

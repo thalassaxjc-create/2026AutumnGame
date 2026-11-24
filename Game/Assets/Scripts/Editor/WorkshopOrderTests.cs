@@ -7,7 +7,7 @@ public sealed class WorkshopOrderTests
     public void ResetInventory() => WorkshopInventory.StartFirstDay();
 
     [Test]
-    public void FirstDayFlowUsesExactTimeDryingAndOnePayment()
+    public void FirstDayFlowUsesExactTimeAndSettlesOnlyWhenDayCloses()
     {
         WorkshopOrderSettings settings = ScriptableObject.CreateInstance<WorkshopOrderSettings>();
         try
@@ -18,7 +18,7 @@ public sealed class WorkshopOrderTests
 
             Assert.That(WorkshopInventory.BambooThreads, Is.EqualTo(100));
             Assert.That(WorkshopInventory.DefectiveThreads, Is.Zero);
-            Assert.That(order.Progress, Is.EqualTo(.4f));
+            Assert.That(order.Progress, Is.EqualTo(2f / 12f));
 
             Assert.That(order.Begin(WorkshopOrder.Stage.Weaving), Is.True);
             order.ConfirmWeaving(new WeavingMinigameController.WeavingResult
@@ -28,7 +28,8 @@ public sealed class WorkshopOrderTests
                 score = 9500
             });
             Assert.That(WorkshopInventory.TotalThreads, Is.Zero);
-            Assert.That(order.Progress, Is.EqualTo(.6f));
+            Assert.That(craft.TotalThreads, Is.Zero, "编帘必须同时从工位的实际库存里消耗竹丝");
+            Assert.That(order.Progress, Is.EqualTo(3f / 12f));
 
             Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.True);
             order.ConfirmLacquer(new LacquerMinigameController.LacquerResult
@@ -37,7 +38,7 @@ public sealed class WorkshopOrderTests
                 gameMinutes = 20,
                 score = 8200
             });
-            Assert.That(order.Progress, Is.EqualTo(.8f));
+            Assert.That(order.Progress, Is.EqualTo(4f / 12f));
             Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Production));
             Assert.That(order.BeginDrying(), Is.True);
             Assert.That(order.RemainingDryingMinutes, Is.EqualTo(120));
@@ -49,23 +50,59 @@ public sealed class WorkshopOrderTests
             order.AdvanceTime(1);
 
             Assert.That(order.IsDrying, Is.False);
-            Assert.That(order.Progress, Is.EqualTo(1f));
+            Assert.That(order.Progress, Is.EqualTo(5f / 12f));
             Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.ReadyToSubmit));
-            Assert.That((order.Days, order.Hour, order.Minute), Is.EqualTo((1, 10, 45)));
+            Assert.That((order.Days, order.Hour, order.Minute), Is.EqualTo((1, 10, 15)));
             Assert.That(order.Submit(), Is.True);
             Assert.That(order.FinalGrade, Is.EqualTo(WorkshopOrder.QualityGrade.A));
             Assert.That(order.Reward, Is.EqualTo(115));
             Assert.That(order.Funds, Is.EqualTo(115));
-            Assert.That(order.XiaoPiFunds, Is.EqualTo(95));
-            Assert.That(order.XiaoBaiFunds, Is.EqualTo(75));
+            Assert.That(order.DeliveredCount, Is.EqualTo(1));
+            Assert.That(order.CurrentSettlement, Is.Null);
+            Assert.That(order.TryStartNextDay(), Is.False);
             Assert.That(order.Submit(), Is.False);
             Assert.That(order.Funds, Is.EqualTo(115));
-            Assert.That(craft.Stage, Is.EqualTo(BambooCraftProgress.Step.CraftFinished));
+            Assert.That(craft.Stage, Is.EqualTo(BambooCraftProgress.Step.PlaceBamboo));
+            Assert.That(order.CanHarvest, Is.True);
+            CompleteBaseCurtain(order);
+            Assert.That(order.Submit(), Is.True);
+            Assert.That(order.Submit(), Is.False);
+            Assert.That(order.Progress, Is.EqualTo(1f));
+            Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.OrderComplete));
+            Assert.That(order.CurrentSettlement, Is.Null);
+            Assert.That(order.CanHarvest, Is.True);
+            Assert.That(order.TryStartNextDay(), Is.False);
+            int beforeClose = order.ElapsedGameMinutes;
+            order.AdvanceTime(10);
+            Assert.That(order.ElapsedGameMinutes, Is.EqualTo(beforeClose + 10));
+            Assert.That(order.CloseDay(), Is.True);
+            Assert.That(order.CloseDay(), Is.False);
+            Assert.That(order.CurrentSettlement.Value.DeliveredCount, Is.EqualTo(2));
+            Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((245, 190, 150)));
         }
         finally
         {
             Object.DestroyImmediate(settings);
         }
+    }
+
+    internal static void CompleteBaseCurtain(WorkshopOrder order)
+    {
+        CompleteBamboo(order, false);
+        Assert.That(order.Begin(WorkshopOrder.Stage.Weaving), Is.True);
+        order.ConfirmWeaving(new WeavingMinigameController.WeavingResult
+        {
+            grade = WeavingMinigameController.WeavingGrade.S, gameMinutes = 60
+        });
+        Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.True);
+        order.ConfirmLacquer(new LacquerMinigameController.LacquerResult
+        {
+            grade = LacquerMinigameController.LacquerGrade.S, gameMinutes = 20
+        });
+        Assert.That(order.BeginDrying(), Is.True);
+        Assert.That(order.CanUsePatternStation, Is.False);
+        Assert.That(order.Submit(), Is.False);
+        order.AdvanceTime(order.RemainingDryingMinutes);
     }
 
     [Test]
@@ -149,12 +186,11 @@ public sealed class WorkshopOrderTests
     {
         var craft = new BambooCraftProgress(() => forceDefects ? 0f : .99f, () => true);
         order.PickUpBamboo();
-        Assert.That(order.Begin(WorkshopOrder.Stage.Preparation), Is.True);
         Assert.That(craft.Place(), Is.True);
         craft.BeginStroke(new Vector2(0f, .5f));
         craft.Drag(new Vector2(1f, .5f), 1f);
         Assert.That(craft.EndStroke(), Is.True);
-        for (int piece = 0; piece < 4; piece++)
+        for (int round = 0; round < BambooCraftProgress.ScrapingRounds; round++)
         {
             Assert.That(craft.StartNextStrip(), Is.True);
             for (int row = 1; row < 12; row += 3)
@@ -173,7 +209,7 @@ public sealed class WorkshopOrderTests
             craft.TickFinishing(.05f, Mathf.Abs(craft.GateHeight - craft.PieceY) <= .025f
                 ? 0f : Mathf.Sign(craft.GateHeight - craft.PieceY), false);
         Assert.That(craft.IsGateStage, Is.False);
-        for (int group = 0; group < 4; group++)
+        for (int group = 0; group < BambooCraftProgress.FinishingGroups; group++)
         {
             Assert.That(craft.BeginDrawingGroup(), Is.True);
             bool pulling = true;
@@ -187,5 +223,36 @@ public sealed class WorkshopOrderTests
         Assert.That(craft.Stage, Is.EqualTo(BambooCraftProgress.Step.CraftFinished));
         order.ObserveBamboo(craft);
         return craft;
+    }
+
+    [Test]
+    public void BlackMarketSubtractsSoldThreadsFromRealInventoryAndAllowsRebuildingStock()
+    {
+        var settings = ScriptableObject.CreateInstance<WorkshopOrderSettings>();
+        try
+        {
+            var order = new WorkshopOrder(settings);
+            StartProduction(order);
+            var craft = CompleteBamboo(order, true);
+            Assert.That(order.TrySellThreads(true), Is.False);
+            order.AdvanceTime(18 * 60 - order.Hour * 60 - order.Minute);
+            Assert.That(order.TrySellThreads(true), Is.True);
+            Assert.That((WorkshopInventory.DefectiveThreads, craft.DefectiveThreadCount, order.TodayIncome),
+                Is.EqualTo((75, 75, 5)));
+            Assert.That(order.CanPlay(WorkshopOrder.Stage.Weaving), Is.False);
+            Assert.That(order.TrySellThreads(false), Is.False);
+            for (int i = 0; i < 3; i++)
+                Assert.That(order.TrySellThreads(true), Is.True);
+            Assert.That(order.TrySellThreads(true), Is.False);
+            Assert.That((craft.TotalThreads, order.TodayIncome), Is.EqualTo((0, 20)));
+            Assert.That(craft.Stage, Is.EqualTo(BambooCraftProgress.Step.PlaceBamboo));
+            Assert.That(craft.Place(), Is.True);
+            Assert.That(order.CloseDay(), Is.True);
+            Assert.That(order.CurrentSettlement.Value.PlayerIncome, Is.EqualTo(20));
+        }
+        finally
+        {
+            Object.DestroyImmediate(settings);
+        }
     }
 }

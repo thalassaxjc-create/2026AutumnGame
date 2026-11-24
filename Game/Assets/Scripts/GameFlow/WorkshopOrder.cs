@@ -1,18 +1,85 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
-public sealed class WorkshopOrder
+public sealed partial class WorkshopOrder
 {
-    public enum Phase { Opening, Village, Home, NewOrder, Production, ReadyToSubmit, Complete }
-    public enum Stage { Preparation, BambooFinishing, Weaving, Lacquer, Drying }
+    public enum Phase { Opening, Village, Home, NewOrder, Production, ReadyToSubmit, OrderComplete, Complete }
+    public enum Stage { Preparation, BambooFinishing, Weaving, Lacquer, Drying, Pattern }
     public enum StageStatus { Locked, Available, InProgress, Complete }
     public enum QualityGrade { S, A, B, C, D }
+    public enum ClockSpeed { Paused = 0, Normal = 1, Double = 2, Quadruple = 4 }
+
+    public readonly struct SheetDelivery
+    {
+        public QualityGrade Weaving { get; }
+        public QualityGrade Lacquer { get; }
+        public CurtainPatternResult? Pattern { get; }
+        public QualityGrade Grade { get; }
+        public decimal QualityMultiplier { get; }
+        public decimal MaterialMultiplier { get; }
+        public bool UsedSpottedBamboo { get; }
+        public bool SoldToCollector { get; }
+        public int Reward { get; }
+
+        internal SheetDelivery(QualityGrade weaving, QualityGrade lacquer, CurtainPatternResult? pattern,
+            QualityGrade grade, decimal qualityMultiplier, decimal materialMultiplier,
+            bool usedSpottedBamboo, bool soldToCollector, int reward)
+        {
+            Weaving = weaving;
+            Lacquer = lacquer;
+            Pattern = pattern;
+            Grade = grade;
+            QualityMultiplier = qualityMultiplier;
+            MaterialMultiplier = materialMultiplier;
+            UsedSpottedBamboo = usedSpottedBamboo;
+            SoldToCollector = soldToCollector;
+            Reward = reward;
+        }
+    }
+
+    public readonly struct DaySettlement
+    {
+        public int Day { get; }
+        public int DeliveredCount { get; }
+        public bool Delivered => DeliveredCount == SheetsPerDay;
+        public bool ReachedMidnight { get; }
+        public bool XiaoPiPenalized { get; }
+        public int PlayerIncome { get; }
+        public int XiaoPiIncome { get; }
+        public int XiaoBaiIncome { get; }
+        public int PlayerTotal { get; }
+        public int XiaoPiTotal { get; }
+        public int XiaoBaiTotal { get; }
+
+        internal DaySettlement(WorkshopOrder order, int piIncome, int baiIncome)
+        {
+            Day = order.Days;
+            DeliveredCount = order.DeliveredCount;
+            ReachedMidnight = order.MinutesUntilClose == 0;
+            XiaoPiPenalized = order.XiaoPiSabotaged;
+            PlayerIncome = order.TodayIncome;
+            XiaoPiIncome = piIncome;
+            XiaoBaiIncome = baiIncome;
+            PlayerTotal = order.Funds;
+            XiaoPiTotal = order.XiaoPiFunds;
+            XiaoBaiTotal = order.XiaoBaiFunds;
+        }
+
+        public int RankOf(int funds) => 1 + (PlayerTotal > funds ? 1 : 0) +
+            (XiaoPiTotal > funds ? 1 : 0) + (XiaoBaiTotal > funds ? 1 : 0);
+    }
 
     public const int FirstDayStartMinute = 6 * 60;
     public const int FirstDayEndMinute = 24 * 60;
+    public const int LastStoryDay = 3;
+    public const int SheetsPerDay = 2;
     public static WorkshopOrder Current { get; internal set; }
 
     readonly WorkshopOrderSettings settings;
+    readonly List<DaySettlement> settlements = new(LastStoryDay);
+    readonly List<SheetDelivery> deliveries = new(SheetsPerDay);
+    internal readonly HashSet<string> HarvestedStalks = new();
     int completedStages;
     int minuteOfDay;
     int elapsedGameMinutes;
@@ -20,9 +87,11 @@ public sealed class WorkshopOrder
     float realSecondAccumulator;
     Stage? running;
     bool orderRead;
+    bool morningPending;
 
     public Phase CurrentPhase { get; private set; } = Phase.Opening;
-    public bool HasBamboo { get; private set; }
+    public bool HasBamboo => WorkshopInventory.GreenBamboo > 0 || SpottedBamboo > 0 ||
+        WorkshopInventory.TrackedCraft?.IsProcessingBamboo == true;
     public bool DayEnded { get; private set; }
     public bool IsDrying => running == Stage.Drying && dryingStartedAt >= 0;
     public bool UsedDefectiveMaterials { get; private set; }
@@ -30,29 +99,90 @@ public sealed class WorkshopOrder
     public int Funds { get; private set; }
     public int XiaoPiFunds { get; private set; }
     public int XiaoBaiFunds { get; private set; }
-    public int Days => 1;
+    public int Days { get; private set; } = 1;
+    public string DayName => Days == 1 ? "第一天" : Days == 2 ? "第二天" : "第三天";
+    public CurtainPatternKind PatternKind => Days switch
+    {
+        2 => CurtainPatternKind.Turtle,
+        3 => CurtainPatternKind.VermilionJade,
+        _ => CurtainPatternKind.None
+    };
+    public bool IsPatternOrder => PatternKind != CurtainPatternKind.None;
+    public string OrderName => PatternKind switch
+    {
+        CurtainPatternKind.Turtle => "龟纹小帘",
+        CurtainPatternKind.VermilionJade => "朱边青示范帘",
+        _ => "普通宣纸帘"
+    };
+    public ClockSpeed Speed { get; private set; } = ClockSpeed.Normal;
+    public int MinutesUntilClose => FirstDayEndMinute - minuteOfDay;
     public int Hour => minuteOfDay / 60;
     public int Minute => minuteOfDay % 60;
     public int ElapsedGameMinutes => elapsedGameMinutes;
-    public float Progress => completedStages / 5f;
+    int SheetSteps => IsPatternOrder ? 7 : 6; // 工序加上最后的交付。
+    public int DeliveredCount => deliveries.Count;
+    public int CurrentSheetNumber => Mathf.Min(DeliveredCount + 1, SheetsPerDay);
+    public int TodayIncome { get; private set; }
+    public float Progress => CurrentPhase is Phase.Complete or Phase.OrderComplete
+        ? DeliveredCount / (float)SheetsPerDay
+        : (DeliveredCount + CompletedSteps / (float)SheetSteps) / SheetsPerDay;
     public bool ComputerNotice => CurrentPhase == Phase.NewOrder || CurrentPhase == Phase.ReadyToSubmit;
     public WeavingMinigameController.WeavingResult? WeavingResult { get; private set; }
     public LacquerMinigameController.LacquerResult? LacquerResult { get; private set; }
-    public QualityGrade? FinalGrade { get; private set; }
-    public int? FundsBeforeSubmission { get; private set; }
-    public int Reward { get; private set; }
-    public int BasePrice => settings.baseReward;
-    public decimal QualityMultiplier { get; private set; } = 1m;
-    public decimal MaterialMultiplier { get; private set; } = 1m;
+    public CurtainPatternDraft PatternDraft { get; private set; }
+    public CurtainPatternResult? PatternResult { get; private set; }
+    public bool HasPatternBlank => PatternDraft != null && !PatternResult.HasValue && CurrentPhase == Phase.Production;
+    public bool CanUsePatternStation => HasPatternBlank && GetStatus(Stage.Pattern) == StageStatus.Available;
+    public int PatternMinutes => PatternKind == CurtainPatternKind.VermilionJade
+        ? Math.Max(1, settings.vermilionJadeMinutes) : Math.Max(1, settings.turtleMinutes);
+    public DaySettlement? CurrentSettlement => CurrentPhase == Phase.Complete && settlements.Count > 0
+        ? settlements[settlements.Count - 1] : null;
+    public DaySettlement? PreviousSettlement => settlements.Count == Days - 1 && settlements.Count > 0
+        ? settlements[settlements.Count - 1] : null;
+    public IReadOnlyList<DaySettlement> Settlements { get; }
+    public IReadOnlyList<SheetDelivery> Deliveries { get; }
+    public SheetDelivery? LastDelivery => DeliveredCount > 0 ? deliveries[DeliveredCount - 1] : null;
+    public bool CanAdvanceDay => CurrentPhase == Phase.Complete && Days < LastStoryDay;
+    public bool FinalSettlementAcknowledged { get; private set; }
+    public QualityGrade? FinalGrade => LastDelivery?.Grade;
+    public int Reward => LastDelivery?.Reward ?? 0;
+    public int BasePrice => PatternKind switch
+    {
+        CurtainPatternKind.Turtle => settings.turtlePrice,
+        CurtainPatternKind.VermilionJade => settings.vermilionJadePrice,
+        _ => settings.baseReward
+    };
+    public decimal QualityMultiplier => LastDelivery?.QualityMultiplier ?? 1m;
+    public decimal MaterialMultiplier => LastDelivery?.MaterialMultiplier ?? 1m;
     public int RemainingDryingMinutes => !IsDrying ? 0 :
         Math.Max(0, settings.dryingMinutes - (elapsedGameMinutes - dryingStartedAt));
-    public bool CanHarvest => !DayEnded && CurrentPhase == Phase.Production && completedStages == 0 && !HasBamboo;
-    public bool CanWorkBamboo => !DayEnded && HasBamboo && CurrentPhase == Phase.Production && completedStages < 2;
-    public bool CanStartDrying => !DayEnded && CurrentPhase == Phase.Production && completedStages == 4 && !running.HasValue;
+    public bool CanExplore => !DayEnded && CurrentPhase is Phase.Home or Phase.NewOrder or Phase.Production
+        or Phase.ReadyToSubmit or Phase.OrderComplete;
+    public bool CanHarvest => CanExplore;
+    public bool CanWorkBamboo => CanExplore && HasBamboo;
+    public bool NeedsBamboo => CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
+    public bool CanStartDrying => !DayEnded && CurrentPhase == Phase.Production &&
+        completedStages == (int)Stage.Drying && !running.HasValue;
+
+    int CompletedSteps
+    {
+        get
+        {
+            if (completedStages >= (int)Stage.Lacquer || CurrentPhase != Phase.Production)
+                return completedStages;
+            if (WorkshopInventory.TotalThreads >= BambooCraftProgress.ThreadsPerBatch)
+                return (int)Stage.Weaving;
+            var craft = WorkshopInventory.TrackedCraft;
+            return craft != null && (craft.Stage == BambooCraftProgress.Step.BatchFinished || craft.IsFinishingStage)
+                ? (int)Stage.BambooFinishing : 0;
+        }
+    }
 
     public WorkshopOrder(WorkshopOrderSettings settings)
     {
         this.settings = settings != null ? settings : throw new ArgumentNullException(nameof(settings));
+        Settlements = settlements.AsReadOnly();
+        Deliveries = deliveries.AsReadOnly();
         Funds = settings.initialFunds;
         XiaoPiFunds = settings.initialXiaoPiFunds;
         XiaoBaiFunds = settings.initialXiaoBaiFunds;
@@ -88,17 +218,30 @@ public sealed class WorkshopOrder
     {
         if (CurrentPhase != Phase.NewOrder || !orderRead)
             return;
-        CurrentPhase = Phase.Production;
+        orderRead = false;
+        StartSheet();
+    }
+
+    public void SetClockSpeed(ClockSpeed speed)
+    {
+        if (speed != ClockSpeed.Paused && speed != ClockSpeed.Normal &&
+            speed != ClockSpeed.Double && speed != ClockSpeed.Quadruple)
+            throw new ArgumentOutOfRangeException(nameof(speed));
+        if (Speed == speed)
+            return;
+        Speed = speed;
         Revision++;
     }
 
     public void Tick(float realSeconds, bool allowClock)
     {
-        if (!allowClock || realSeconds <= 0f || float.IsNaN(realSeconds) || float.IsInfinity(realSeconds) ||
+        if (!allowClock || Speed == ClockSpeed.Paused || realSeconds <= 0f ||
+            float.IsNaN(realSeconds) || float.IsInfinity(realSeconds) ||
             CurrentPhase == Phase.Opening || CurrentPhase == Phase.Complete || DayEnded)
             return;
-        realSecondAccumulator += realSeconds;
         float secondsPerMinute = Mathf.Max(.1f, settings.realSecondsPerGameMinute);
+        realSecondAccumulator = Mathf.Min(realSecondAccumulator + realSeconds * (int)Speed,
+            secondsPerMinute * MinutesUntilClose);
         int minutes = Mathf.FloorToInt(realSecondAccumulator / secondsPerMinute);
         if (minutes <= 0)
             return;
@@ -108,14 +251,15 @@ public sealed class WorkshopOrder
 
     public void AdvanceTime(int gameMinutes)
     {
-        if (gameMinutes <= 0 || DayEnded)
+        if (gameMinutes <= 0 || DayEnded || CurrentPhase == Phase.Complete)
             return;
         int advanced = Math.Min(gameMinutes, FirstDayEndMinute - minuteOfDay);
         minuteOfDay += advanced;
         elapsedGameMinutes += advanced;
         if (minuteOfDay >= FirstDayEndMinute)
-            DayEnded = true;
-        CompleteDryingIfReady();
+            SettleDay();
+        else
+            CompleteDryingIfReady();
         Revision++;
     }
 
@@ -123,30 +267,27 @@ public sealed class WorkshopOrder
     {
         if (!CanHarvest)
             return;
-        HasBamboo = true;
         AdvanceTime(settings.harvestMinutes);
         Revision++;
     }
 
     public StageStatus GetStatus(Stage stage)
     {
-        if ((int)stage < completedStages)
+        if (stage == Stage.Pattern && !IsPatternOrder)
+            return StageStatus.Locked;
+        int steps = CompletedSteps;
+        if ((int)stage < steps)
             return StageStatus.Complete;
-        if (running == stage || (stage == Stage.Preparation && HasBamboo && completedStages == 0))
+        if (running == stage || (CurrentPhase == Phase.Production && stage == Stage.Preparation && HasBamboo && steps == 0))
             return StageStatus.InProgress;
-        return !DayEnded && CurrentPhase == Phase.Production && (int)stage == completedStages
+        return !DayEnded && CurrentPhase == Phase.Production && (int)stage == steps
             ? StageStatus.Available : StageStatus.Locked;
     }
 
     public bool CanPlay(Stage stage)
     {
-        if (DayEnded || CurrentPhase != Phase.Production || running.HasValue || (int)stage != completedStages)
-            return false;
-        if (stage == Stage.Preparation)
-            return HasBamboo;
-        if (stage == Stage.Weaving)
-            return WorkshopInventory.TotalThreads >= 100;
-        return stage != Stage.Drying;
+        return !DayEnded && CurrentPhase == Phase.Production && !running.HasValue &&
+            (int)stage == CompletedSteps && stage is Stage.Weaving or Stage.Lacquer;
     }
 
     public bool Begin(Stage stage)
@@ -168,29 +309,22 @@ public sealed class WorkshopOrder
 
     public void ObserveBamboo(BambooCraftProgress craft)
     {
-        if (running != Stage.Preparation && running != Stage.BambooFinishing)
+        if (!CanExplore)
             return;
+        int inventoryRevision = WorkshopInventory.Revision;
         WorkshopInventory.CaptureCraft(craft);
-        if (running == Stage.Preparation && HasBamboo && craft.Stage == BambooCraftProgress.Step.BatchFinished &&
-            craft.FinishedInBatch == 4)
-        {
-            Accept(Stage.Preparation, settings.preparationMinutes);
-            Begin(Stage.BambooFinishing);
-        }
-        else if (running == Stage.BambooFinishing && craft.Stage == BambooCraftProgress.Step.CraftFinished &&
-            craft.GatesCompleted == BambooCraftProgress.FinishingGroups &&
-            craft.DrawingGroupsCompleted == BambooCraftProgress.FinishingGroups)
-        {
-            WorkshopInventory.CaptureCraft(craft);
-            Accept(Stage.BambooFinishing, settings.bambooFinishingMinutes);
-        }
+        if (WorkshopInventory.Revision != inventoryRevision)
+            Revision++;
+        AdvanceTime(craft.TakeCompletedWorkMinutes(settings.preparationMinutes, settings.bambooFinishingMinutes));
     }
 
     public void ConfirmWeaving(WeavingMinigameController.WeavingResult result)
     {
-        if (running != Stage.Weaving || !WorkshopInventory.ConsumeThreads(100, out bool defective))
+        if (running != Stage.Weaving ||
+            !WorkshopInventory.ConsumeThreads(BambooCraftProgress.ThreadsPerBatch, out bool defective, out bool spotted))
             return;
         UsedDefectiveMaterials |= defective;
+        UsedSpottedBamboo = spotted;
         WeavingResult = result;
         Accept(Stage.Weaving, result.gameMinutes);
     }
@@ -220,44 +354,148 @@ public sealed class WorkshopOrder
         running = null;
         dryingStartedAt = -1;
         completedStages++;
-        CurrentPhase = Phase.ReadyToSubmit;
+        if (IsPatternOrder)
+            PatternDraft = new CurtainPatternDraft(PatternKind);
+        else
+            CurrentPhase = Phase.ReadyToSubmit;
         Revision++;
     }
 
     void Accept(Stage stage, int gameMinutes)
     {
         running = null;
-        if ((int)stage == completedStages)
-        {
-            completedStages++;
-            AdvanceTime(Math.Max(0, gameMinutes));
-        }
+        completedStages = (int)stage + 1;
+        AdvanceTime(Math.Max(0, gameMinutes));
         Revision++;
     }
 
-    public bool Submit()
+    public bool Submit() => Deliver(soldToCollector: false);
+
+    bool Deliver(bool soldToCollector)
     {
-        if (CurrentPhase != Phase.ReadyToSubmit || running.HasValue || !WeavingResult.HasValue ||
-            !LacquerResult.HasValue)
+        if (DayEnded || CurrentPhase != Phase.ReadyToSubmit || running.HasValue ||
+            !WeavingResult.HasValue || !LacquerResult.HasValue || (IsPatternOrder && !PatternResult.HasValue))
             return false;
-        FinalGrade = CombineGrades((int)WeavingResult.Value.grade, (int)LacquerResult.Value.grade);
-        QualityMultiplier = Coefficient(FinalGrade.Value);
-        MaterialMultiplier = UsedDefectiveMaterials ? (decimal)settings.defectiveMaterialMultiplier : 1m;
-        decimal total = settings.baseReward * QualityMultiplier * MaterialMultiplier;
-        Reward = (int)Math.Round(total, MidpointRounding.AwayFromZero);
-        FundsBeforeSubmission = Funds;
-        Funds += Reward;
-        XiaoPiFunds += settings.xiaoPiDayOneIncome;
-        XiaoBaiFunds += settings.xiaoBaiDayOneIncome;
-        CurrentPhase = Phase.Complete;
+        var weaving = (QualityGrade)WeavingResult.Value.grade;
+        var lacquer = (QualityGrade)LacquerResult.Value.grade;
+        QualityGrade grade = CombineGrades(weaving, lacquer, PatternResult?.Grade);
+        decimal quality = Coefficient(grade);
+        decimal material = UsedDefectiveMaterials ? (decimal)settings.defectiveMaterialMultiplier : 1m;
+        if (soldToCollector && (!CollectorAvailable || grade > QualityGrade.A))
+            return false;
+        int price = soldToCollector ? CollectorBasePrice : BasePrice * (UsedSpottedBamboo ? 2 : 1);
+        int reward = (int)Math.Round(price * quality * material, MidpointRounding.AwayFromZero);
+        deliveries.Add(new SheetDelivery(weaving, lacquer, PatternResult, grade, quality, material,
+            UsedSpottedBamboo, soldToCollector, reward));
+        ChangeFunds(reward);
+        if (DeliveredCount == SheetsPerDay)
+            CurrentPhase = Phase.OrderComplete;
+        else
+            StartSheet();
+        return true;
+    }
+
+    public bool TryConfirmPattern()
+    {
+        if (!CanUsePatternStation || !PatternDraft.CanConfirm || MinutesUntilClose <= PatternMinutes)
+            return false;
+        PatternResult = PatternDraft.Evaluate();
+        completedStages++;
+        AdvanceTime(PatternMinutes);
+        CurrentPhase = Phase.ReadyToSubmit;
         Revision++;
         return true;
     }
 
-    static QualityGrade CombineGrades(int weavingIndex, int lacquerIndex)
+    public bool CloseDay()
     {
-        int combined = Mathf.Clamp((weavingIndex + lacquerIndex + 1) / 2, 0, 4);
-        return (QualityGrade)combined;
+        if (!CanExplore)
+            return false;
+        SettleDay();
+        return true;
+    }
+
+    void SettleDay()
+    {
+        if (CurrentPhase == Phase.Complete)
+            return;
+        var (piIncome, baiIncome) = Days switch
+        {
+            2 => (settings.xiaoPiDayTwoIncome, settings.xiaoBaiDayTwoIncome),
+            3 => (settings.xiaoPiDayThreeIncome, settings.xiaoBaiDayThreeIncome),
+            _ => (settings.xiaoPiDayOneIncome, settings.xiaoBaiDayOneIncome)
+        };
+        if (XiaoPiSabotaged)
+            piIncome -= SabotagePenalty;
+        XiaoPiFunds += piIncome;
+        XiaoBaiFunds += baiIncome;
+        settlements.Add(new DaySettlement(this, piIncome, baiIncome));
+        running = null;
+        dryingStartedAt = -1;
+        DayEnded = true;
+        CurrentPhase = Phase.Complete;
+        Revision++;
+    }
+
+    public bool TryStartNextDay()
+    {
+        if (!CanAdvanceDay)
+            return false;
+        Days++;
+        morningPending = true;
+        minuteOfDay = FirstDayStartMinute;
+        realSecondAccumulator = 0f;
+        elapsedGameMinutes = 0;
+        orderRead = false;
+        DayEnded = false;
+        HarvestedStalks.Clear();
+        deliveries.Clear();
+        TodayIncome = 0;
+        ResetSheet();
+        CurrentPhase = Phase.Home;
+        Revision++;
+        return true;
+    }
+
+    void ResetSheet()
+    {
+        completedStages = 0;
+        running = null;
+        dryingStartedAt = -1;
+        UsedDefectiveMaterials = false;
+        UsedSpottedBamboo = false;
+        PatternDraft = null;
+        PatternResult = null;
+        WeavingResult = null;
+        LacquerResult = null;
+    }
+
+    void StartSheet()
+    {
+        ResetSheet();
+        CurrentPhase = Phase.Production;
+        Revision++;
+    }
+
+    internal bool TakeMorningNotice()
+    {
+        if (!morningPending)
+            return false;
+        morningPending = false;
+        return true;
+    }
+
+    internal void AcknowledgeFinalSettlement()
+    {
+        if (Days == LastStoryDay && CurrentPhase == Phase.Complete)
+            FinalSettlementAcknowledged = true;
+    }
+
+    static QualityGrade CombineGrades(QualityGrade weaving, QualityGrade lacquer, QualityGrade? pattern)
+    {
+        int count = pattern.HasValue ? 3 : 2;
+        int sum = (int)weaving + (int)lacquer + (int)(pattern ?? QualityGrade.S);
+        return (QualityGrade)Mathf.Clamp((sum + count - 1) / count, 0, 4);
     }
 
     decimal Coefficient(QualityGrade grade) => (decimal)(grade switch

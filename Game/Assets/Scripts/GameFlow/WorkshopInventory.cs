@@ -1,9 +1,10 @@
 using System;
 using UnityEngine;
 
-/// <summary>第一天工坊材料背包。只保存数量，不持有场景对象或原生资源。</summary>
+/// <summary>工坊材料背包。工位与编帘共用同一批可消耗的材料。</summary>
 public static class WorkshopInventory
 {
+    internal static BambooCraftProgress TrackedCraft { get; private set; }
     public static int RoughPieces { get; private set; }
     public static int FinePieces { get; private set; }
     public static int DefectivePieces { get; private set; }
@@ -14,6 +15,7 @@ public static class WorkshopInventory
     public static int Revision { get; private set; }
     public static int GreenBamboo => GreenBambooBag.Count;
     public static int TotalThreads => BambooThreads + DefectiveThreads;
+    public static int SpottedThreads => TrackedCraft?.SpottedThreads ?? 0;
     public static int TotalDefective => DefectivePieces + DefectiveRods + DefectiveThreads;
 
     public static event Action Changed;
@@ -21,6 +23,7 @@ public static class WorkshopInventory
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetSession()
     {
+        TrackedCraft = null;
         RoughPieces = FinePieces = DefectivePieces = 0;
         BambooRods = DefectiveRods = BambooThreads = DefectiveThreads = 0;
         Revision = 0;
@@ -29,6 +32,7 @@ public static class WorkshopInventory
 
     public static void StartFirstDay()
     {
+        TrackedCraft = null;
         RoughPieces = FinePieces = DefectivePieces = 0;
         BambooRods = DefectiveRods = BambooThreads = DefectiveThreads = 0;
         NotifyChanged();
@@ -40,6 +44,7 @@ public static class WorkshopInventory
     {
         if (craft == null)
             return;
+        TrackedCraft = craft;
         bool changed = RoughPieces != craft.RoughCount || FinePieces != craft.FineCount ||
             DefectivePieces != craft.DefectiveCount || BambooRods != craft.RodCount ||
             DefectiveRods != craft.DefectiveRodCount || BambooThreads != craft.ThreadCount ||
@@ -57,24 +62,28 @@ public static class WorkshopInventory
         NotifyChanged();
     }
 
-    public static bool ConsumeThreads(int count, out bool usedDefective)
+    public static bool ConsumeThreads(int count, out bool usedDefective) =>
+        ConsumeThreads(count, out usedDefective, out _);
+
+    internal static bool ConsumeThreads(int count, out bool usedDefective, out bool usedSpotted)
     {
         usedDefective = false;
-        if (count <= 0 || TotalThreads < count)
+        usedSpotted = false;
+        if (TrackedCraft == null || !TrackedCraft.ConsumeThreads(count, out usedDefective, out usedSpotted))
             return false;
-        int good = Mathf.Min(BambooThreads, count);
-        BambooThreads -= good;
-        int remaining = count - good;
-        if (remaining > 0)
-        {
-            DefectiveThreads -= remaining;
-            usedDefective = true;
-        }
-        NotifyChanged();
+        CaptureCraft(TrackedCraft);
         return true;
     }
 
-    static void NotifyChanged()
+    internal static bool TradeThreads(int count, bool defective)
+    {
+        if (TrackedCraft == null || !TrackedCraft.TradeThreads(count, defective))
+            return false;
+        CaptureCraft(TrackedCraft);
+        return true;
+    }
+
+    internal static void NotifyChanged()
     {
         Revision++;
         Changed?.Invoke();

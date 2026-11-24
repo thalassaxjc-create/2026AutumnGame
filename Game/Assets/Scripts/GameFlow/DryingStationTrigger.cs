@@ -61,13 +61,13 @@ public sealed class DryingStationTrigger : MonoBehaviour
 
         if (!order.IsDrying)
         {
-            countdownLabel.text = "阴干完成";
+            countdownLabel.text = $"第 {order.CurrentSheetNumber} 张阴干完成";
             countdownLabel.color = new Color32(174, 232, 154, 255);
             return;
         }
 
         int remaining = order.RemainingDryingMinutes;
-        countdownLabel.text = $"阴干  {remaining / 60:00}:{remaining % 60:00}";
+        countdownLabel.text = $"第 {order.CurrentSheetNumber} 张阴干  {remaining / 60:00}:{remaining % 60:00}";
         countdownLabel.color = new Color32(255, 238, 190, 255);
     }
 

@@ -14,6 +14,7 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     [SerializeField] string promptText = "Press E to talk";
     [SerializeField, Min(0.25f)] float interactionRadius = 3f;
 
+    PlayerController scenePlayer;
     PlayerController nearbyPlayer;
     PlayerController lockedPlayer;
     bool lockedPlayerWasEnabled;
@@ -27,11 +28,14 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     {
         get
         {
+            if (dialogueEntryPoint is IDialogueAvailability availability && !availability.IsDialogueAvailable)
+                return false;
             if (!storyPhase.HasValue)
                 return true;
             WorkshopOrder order = WorkshopOrder.Current;
             return order != null && (order.CurrentPhase == storyPhase ||
-                (allowDuringProduction && order.CurrentPhase == WorkshopOrder.Phase.Production));
+                (allowDuringProduction && order.CurrentPhase is WorkshopOrder.Phase.Production
+                    or WorkshopOrder.Phase.ReadyToSubmit or WorkshopOrder.Phase.OrderComplete));
         }
     }
 
@@ -58,13 +62,12 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
 
     void RefreshNearbyPlayer()
     {
-        PlayerController player = nearbyPlayer;
-        if (player == null)
-            player = UnityEngine.Object.FindFirstObjectByType<PlayerController>();
+        if (scenePlayer == null)
+            scenePlayer = UnityEngine.Object.FindFirstObjectByType<PlayerController>();
 
         bool wasInRange = nearbyPlayer != null;
-        bool isInRange = player != null && IsWithinInteractionRadius(player.transform.position);
-        nearbyPlayer = isInRange ? player : null;
+        bool isInRange = scenePlayer != null && IsWithinInteractionRadius(scenePlayer.transform.position);
+        nearbyPlayer = isInRange ? scenePlayer : null;
 
         if (wasInRange && !isInRange && !dialogueOpen)
             InteractionPromptUI.Hide();
@@ -134,7 +137,8 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
         dialogueEntryPoint = entryPoint;
         promptText = string.IsNullOrWhiteSpace(prompt) ? "Press E to talk" : prompt;
         interactionRadius = Mathf.Max(0.25f, radius);
-        EnsureMarker();
+        if (Application.isPlaying)
+            EnsureMarker();
     }
 
     public void ConfigureStoryPhase(WorkshopOrder.Phase phase, bool availableDuringProduction = false)

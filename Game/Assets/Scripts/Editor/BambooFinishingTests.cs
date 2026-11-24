@@ -46,7 +46,9 @@ public class BambooFinishingTests
     public void ScrapedDefectsContinueWithoutExtraBambooAndRetainQuality(int defectivePieces)
     {
         int bambooStock = 1;
-        var model = new BambooCraftProgress(() => 0.5f, () => bambooStock > 0 && bambooStock-- > 0);
+        int pieceRoll = 0;
+        var model = new BambooCraftProgress(() => pieceRoll < BambooCraftProgress.PiecesPerBatch
+            ? (pieceRoll++ < defectivePieces ? 0f : .99f) : .5f, () => bambooStock > 0 && bambooStock-- > 0);
         PrepareFine(model, defectivePieces);
         Assert.That(bambooStock, Is.Zero);
         Assert.That(model.Advance(), Is.True, "Space must enter the gates after all four pieces are scraped.");
@@ -55,7 +57,7 @@ public class BambooFinishingTests
         Assert.That(model.ProcessedPieceCount, Is.Zero);
         Assert.That(model.Advance(), Is.False);
         PassGates(model);
-        Assert.That(model.PerfectGates, Is.EqualTo(4));
+        Assert.That(model.PerfectGates, Is.EqualTo(BambooCraftProgress.FinishingGroups));
         Assert.That(model.FinishingFeedbackSerial, Is.Zero, "Existing scars must not trigger a fresh blade collision.");
         Assert.That(model.RodCount, Is.EqualTo((4 - defectivePieces) * 25));
         Assert.That(model.DefectiveRodCount, Is.EqualTo(defectivePieces * 25));
@@ -67,7 +69,7 @@ public class BambooFinishingTests
     }
 
     [Test]
-    public void FourForgivingPassesProduce100RodsAndEveryOpeningChanges()
+    public void TwoForgivingPassesProduce100RodsAndEveryOpeningChanges()
     {
         var model = Ready(); model.BeginGates();
         float previous = model.GateHeight;
@@ -82,8 +84,8 @@ public class BambooFinishingTests
                 previous = model.GateHeight; completed = model.GatesCompleted;
             }
         }
-        Assert.That(model.GatesCompleted, Is.EqualTo(4));
-        Assert.That(model.PerfectGates, Is.EqualTo(4));
+        Assert.That(model.GatesCompleted, Is.EqualTo(2));
+        Assert.That(model.PerfectGates, Is.EqualTo(2));
         Assert.That(model.RodCount, Is.EqualTo(100));
         Assert.That(model.DefectiveRodCount, Is.Zero);
         Assert.That(model.Stage, Is.EqualTo(BambooCraftProgress.Step.DrawingReady));
@@ -96,14 +98,14 @@ public class BambooFinishingTests
     {
         var model = Ready(); model.BeginGates();
         PassGates(model, true);
-        Assert.That(model.GatesCompleted, Is.EqualTo(4));
-        Assert.That(model.PerfectGates, Is.EqualTo(3));
+        Assert.That(model.GatesCompleted, Is.EqualTo(2));
+        Assert.That(model.PerfectGates, Is.EqualTo(1));
         Assert.That(model.FinishingFeedbackSerial, Is.EqualTo(1));
-        Assert.That(model.RodCount, Is.EqualTo(75));
-        Assert.That(model.DefectiveRodCount, Is.EqualTo(25));
+        Assert.That(model.RodCount, Is.EqualTo(50));
+        Assert.That(model.DefectiveRodCount, Is.EqualTo(50));
         FinishDrawing(model);
-        Assert.That(model.ThreadCount, Is.EqualTo(75));
-        Assert.That(model.DefectiveThreadCount, Is.EqualTo(25));
+        Assert.That(model.ThreadCount, Is.EqualTo(50));
+        Assert.That(model.DefectiveThreadCount, Is.EqualTo(50));
         Assert.That(model.RodCount + model.DefectiveRodCount, Is.Zero);
         Assert.That(model.BeginDrawingGroup(), Is.False);
         model.TickFinishing(0.25f, 0, true);
@@ -111,17 +113,17 @@ public class BambooFinishingTests
     }
 
     [Test]
-    public void FourSeparateDrawingChallengesConserve100Rods()
+    public void TwoSeparateDrawingChallengesConserve100Rods()
     {
         var model = Ready(); model.BeginGates(); PassGates(model);
-        for (int group = 1; group <= 4; group++)
+        for (int group = 1; group <= BambooCraftProgress.FinishingGroups; group++)
         {
             Assert.That(model.BeginDrawingGroup(), Is.True);
             Assert.That(model.BeginDrawingGroup(), Is.False);
-            Assert.That(model.RodCount, Is.EqualTo(100 - group * 25));
+            Assert.That(model.RodCount, Is.EqualTo(100 - group * 50));
             PullSafely(model);
             Assert.That(model.DrawingGroupsCompleted, Is.EqualTo(group));
-            Assert.That(model.ThreadCount, Is.EqualTo(group * 25));
+            Assert.That(model.ThreadCount, Is.EqualTo(group * 50));
             Assert.That(model.DrawProgress, Is.EqualTo(1));
             Assert.That(model.DrawErrors, Is.Zero);
         }
@@ -144,7 +146,7 @@ public class BambooFinishingTests
         Assert.That(model.DrawNeedsRelease, Is.False);
         Assert.That(model.DrawProgress, Is.EqualTo(progress));
         PullSafely(model);
-        Assert.That(model.ThreadCount, Is.EqualTo(20));
+        Assert.That(model.ThreadCount, Is.EqualTo(45));
         Assert.That(model.DefectiveThreadCount, Is.EqualTo(5));
     }
 
@@ -167,7 +169,7 @@ public class BambooFinishingTests
     }
 
     [UnityTest]
-    public IEnumerator RealWSAndRightMouseCompleteFourGatesAndFourGroupsWithStableResources()
+    public IEnumerator RealWSAndRightMouseCompleteTwoGatesAndTwoGroupsWithStableResources()
     {
         EditorSceneManager.OpenScene(SceneTransitionState.WorkshopScenePath);
         yield return new EnterPlayMode();
@@ -207,7 +209,7 @@ public class BambooFinishingTests
         {
             Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline));
             var model = station.Progress;
-            float target = model.GatesCompleted == 0 ? (model.GateHeight < 0.5f ? 0.9f : 0.1f) : model.GateHeight;
+            float target = model.GatesCompleted == 1 ? (model.GateHeight < 0.5f ? 0.9f : 0.1f) : model.GateHeight;
             float direction = Steer(model, target);
             yield return SteerKeyboard(keyboard, direction);
             if (!capturedDamage && model.GateDamaged)
@@ -217,9 +219,9 @@ public class BambooFinishingTests
             }
         }
         yield return SteerKeyboard(keyboard, 0);
-        Assert.That(station.Progress.GatesCompleted, Is.EqualTo(4));
-        Assert.That(station.Progress.RodCount, Is.EqualTo(25));
-        Assert.That(station.Progress.DefectiveRodCount, Is.EqualTo(75));
+        Assert.That(station.Progress.GatesCompleted, Is.EqualTo(2));
+        Assert.That(station.Progress.RodCount, Is.EqualTo(50));
+        Assert.That(station.Progress.DefectiveRodCount, Is.EqualTo(50));
         Assert.That(capturedDamage, Is.True);
         yield return Press(keyboard, Key.Space);
         bool pulling = true, testedPause = false, sawWarning = false, sawDanger = false;
@@ -274,9 +276,9 @@ public class BambooFinishingTests
         }
         yield return PullMouse(mouse, false);
         Assert.That(sawWarning && sawDanger && testedPause, Is.True);
-        Assert.That(station.Progress.DrawingGroupsCompleted, Is.EqualTo(4));
-        Assert.That(station.Progress.ThreadCount, Is.EqualTo(25));
-        Assert.That(station.Progress.DefectiveThreadCount, Is.EqualTo(75));
+        Assert.That(station.Progress.DrawingGroupsCompleted, Is.EqualTo(2));
+        Assert.That(station.Progress.ThreadCount, Is.EqualTo(50));
+        Assert.That(station.Progress.DefectiveThreadCount, Is.EqualTo(50));
         Assert.That(station.Progress.RodCount + station.Progress.DefectiveRodCount, Is.Zero);
         ScreenCapture.CaptureScreenshot("Logs/BambooHarvest/finishing-complete.png");
         yield return Frames(4);
@@ -304,10 +306,10 @@ public class BambooFinishingTests
     {
         Assert.That(model.Place(), Is.True);
         model.BeginStroke(new Vector2(0, 0.5f)); model.Drag(new Vector2(1, 0.5f), 1); model.EndStroke();
-        for (int piece = 0; piece < 4; piece++)
+        for (int round = 0; round < BambooCraftProgress.ScrapingRounds; round++)
         {
             Assert.That(model.StartNextStrip(), Is.True);
-            if (piece < defectivePieces)
+            if (round * BambooCraftProgress.PiecesPerRound < defectivePieces)
             {
                 model.BeginStroke(new Vector2(0, 0.5f));
                 model.Drag(new Vector2(1, 0.5f), 0.01f); model.EndStroke();
@@ -362,7 +364,7 @@ public class BambooFinishingTests
     }
     static void FinishDrawing(BambooCraftProgress model)
     {
-        for (int group = 0; group < 4; group++) { Assert.That(model.BeginDrawingGroup(), Is.True); PullSafely(model); }
+        for (int group = 0; group < BambooCraftProgress.FinishingGroups; group++) { Assert.That(model.BeginDrawingGroup(), Is.True); PullSafely(model); }
     }
     static void MoveToStation()
     {

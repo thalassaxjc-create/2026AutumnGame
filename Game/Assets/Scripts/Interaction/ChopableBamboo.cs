@@ -126,9 +126,17 @@ public class ChopableBamboo : MonoBehaviour
         if (stalk != null)
             bambooMaterial = stalk.GetComponent<Renderer>().sharedMaterial;
 
-        EnsureSource();
         if (Application.isPlaying && enabled)
+        {
+            EnsureSource();
             BuildPlayVisuals();
+            if (WorkshopOrder.Current?.HarvestedStalks.Contains(name) == true)
+            {
+                stage = Stage.Collected;
+                visualRoot.gameObject.SetActive(false);
+                mark.SetActive(false);
+            }
+        }
     }
 
     void Update()
@@ -196,6 +204,7 @@ public class ChopableBamboo : MonoBehaviour
         dropLabel = null;
         drop = null;
         stage = Stage.Collected;
+        WorkshopOrder.Current?.HarvestedStalks.Add(name);
         GreenBambooBag.AddOne();
         return true;
     }

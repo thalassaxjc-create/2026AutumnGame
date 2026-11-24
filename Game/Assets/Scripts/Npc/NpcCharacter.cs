@@ -12,6 +12,12 @@ public class NpcCharacter : MonoBehaviour
 
     public string DisplayName => displayName;
 
+    internal void SetNameplateVisible(bool visible)
+    {
+        if (labelPivot != null && labelPivot.gameObject.activeSelf != visible)
+            labelPivot.gameObject.SetActive(visible);
+    }
+
     public void Configure(string npcName)
     {
         displayName = npcName;

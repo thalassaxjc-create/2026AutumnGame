@@ -3,9 +3,13 @@ using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
-/// <summary>第一天主线的场景接线、时间推进、任务指引与统一背包 HUD。</summary>
+/// <summary>主线的场景接线、时间推进、任务指引与统一背包 HUD。</summary>
 public sealed class WorkshopOrderGuide : MonoBehaviour
 {
+    const float NightTraderHighlightSeconds = 6f;
+    static readonly Color32 NightTraderArrivalColor = new(119, 79, 38, 246);
+    static readonly Color32 NightTraderHintColor = new(47, 35, 27, 226);
+
     Transform elder;
     Transform uncle;
     WorkshopComputer computer;
@@ -13,15 +17,21 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     WeavingStationTrigger weaving;
     LacquerStationTrigger lacquer;
     DryingStationTrigger drying;
-    Transform forestTarget;
+    PatternStationTrigger pattern;
+    WorkshopDayOverlay dayOverlay;
+    ChopableBamboo forestTarget;
     Camera sceneCamera;
     Text status;
     Text inventory;
     Text task;
+    Text teaHint;
+    Image nightTraderHint;
     Text marker;
+    float nightTraderHighlightUntil;
     bool inventoryExpanded;
     int displayedOrderRevision = -1;
     int displayedInventoryRevision = -1;
+    bool displayedPatternBlank;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetSession()
@@ -60,7 +70,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         if (mode != LoadSceneMode.Single || WorkshopOrder.Current == null)
             return;
 
-        var root = new GameObject("第一天订单引导", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler));
+        var root = new GameObject("主线订单引导", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler),
+            typeof(GraphicRaycaster));
         SceneManager.MoveGameObjectToScene(root, scene);
         root.AddComponent<WorkshopOrderGuide>().Configure(scene);
     }
@@ -69,7 +80,11 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         sceneCamera = Camera.main;
         ConfigureCanvas();
+        WorkshopStoryUI.EnsureEventSystem(transform);
         BuildHud();
+        WorkshopOrder order = WorkshopOrder.Current;
+        dayOverlay = gameObject.AddComponent<WorkshopDayOverlay>();
+        dayOverlay.Build(order);
 
         if (scene.name == SceneTransitionState.WorldSceneName)
         {
@@ -77,20 +92,17 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 new[] { "村口大爷：哟，大学生回来啦？你舅舅最近可是接到了政府的支持款，非遗传承人有指望咯！" },
                 new[] { "我就是回来休息一下", "我回来看看舅舅需要帮忙不" });
 
-            uncle = ConfigureDialogue("舅舅", WorkshopOrder.Phase.Home,
-                new[]
-                {
-                    "舅舅：咳咳……既然回来了，正好。我这身体，怕是做不了几年了。政府的非遗补助金下来了，还有我这套宅子和手艺，总得留给一个人。",
-                    "舅舅：你们三个——你、小皮和小白——都想要这门手艺和资产。今天我给你们派发同样的订单。今天结束时，谁赚的钱最多，谁就先占上风，懂了吗？",
-                    "【主线任务开启：继承权争夺战】\n第一天订单：普通宣纸帘（小尺寸、无纹样）。请在 24:00 前完成。"
-                }, null, true, "舅舅：别急，阴干最忌心浮气躁。");
+            uncle = ConfigureDialogue("舅舅", WorkshopOrder.Phase.Home, UncleLines(order.Days), null, true,
+                order.Days == 1 ? "舅舅：别急，阴干最忌心浮气躁。" : "舅舅：做完先对一对样稿，再去电脑上交单。");
 
             if (uncle != null)
-                CreateCompanions(uncle);
+                CreateCompanions(uncle, order.Days);
             ConfigureForestTarget();
 
-            if (WorkshopOrder.Current.CurrentPhase == WorkshopOrder.Phase.Opening)
-                gameObject.AddComponent<OpeningSequence>().Begin(WorkshopOrder.Current);
+            if (order.CurrentPhase == WorkshopOrder.Phase.Opening)
+                gameObject.AddComponent<OpeningSequence>().Begin(order);
+            else
+                dayOverlay.ShowMorning();
         }
         else if (scene.name == SceneTransitionState.WorkshopSceneName)
         {
@@ -98,6 +110,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             bamboo = FindFirstObjectByType<BambooWorkbench>();
             weaving = FindFirstObjectByType<WeavingStationTrigger>();
             lacquer = FindFirstObjectByType<LacquerStationTrigger>();
+            pattern = FindFirstObjectByType<PatternStationTrigger>();
             GameObject dryingPoint = GameObject.Find("DryingInteractionPoint");
             if (dryingPoint != null)
             {
@@ -109,6 +122,29 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 Debug.LogWarning("WorkshopScene 未找到 DryingInteractionPoint，无法开始阴干。", this);
         }
     }
+
+    static string[] UncleLines(int day) => day switch
+    {
+        2 => new[]
+        {
+            "舅舅：纸坊要两张龟纹小帘。你看我留的半张样稿，照着左边把右边补齐。回到起针孔，把结收紧。",
+            "小皮：左边两格我记住了！小白把叼来的竹丝搁在样稿旁边，摇了摇尾巴。",
+            "舅舅：去工坊电脑看订单。两张帘都从竹子做起，刷漆阴干后再到纹样台补龟纹。"
+        },
+        3 => new[]
+        {
+            "舅舅：镇上体验馆订了两张朱边青示范帘。两张都要先编帘、刷漆阴干，再用青线织纹、朱线收边。",
+            "舅舅：绕到左右两个接边孔，把青线尾压进朱边里。做完拿样稿对一眼，再去电脑交单。",
+            "小皮：昨天我练熟了龟纹。今天看谁把两个线尾收得齐！"
+        },
+        _ =>
+                new[]
+                {
+                    "舅舅：咳咳……既然回来了，正好。我这身体，怕是做不了几年了。政府的非遗补助金下来了，还有我这套宅子和手艺，总得留给一个人。",
+                    "舅舅：这三天，我每天发给你们同样的订单。交帘和赶集挣的钱都算，最后谁攒得最多，谁就继承这门手艺。",
+                    "【主线任务开启：继承权争夺战】\n第一天订单：普通宣纸帘两张（小尺寸、无纹样）。想收工的时候，点左上角进入下一天。"
+                }
+    };
 
     void ConfigureCanvas()
     {
@@ -124,7 +160,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     void BuildHud()
     {
-        status = CreateLabel("第一天状态", 28, new Vector2(850, 54));
+        status = CreateLabel("主线状态", 28, new Vector2(850, 54));
         AnchorTopLeft(status.rectTransform, new Vector2(32, -24));
         status.alignment = TextAnchor.MiddleLeft;
 
@@ -134,9 +170,21 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
         task = CreateLabel("任务提示", 30, new Vector2(780, 58));
         task.alignment = TextAnchor.MiddleRight;
-        task.rectTransform.anchorMin = task.rectTransform.anchorMax = Vector2.one;
-        task.rectTransform.pivot = Vector2.one;
-        task.rectTransform.anchoredPosition = new Vector2(-32, -48);
+        AnchorTopRight(task.rectTransform, new Vector2(-32, -48));
+
+        teaHint = CreateLabel("茶摊支线提示", 24, new Vector2(720, 44));
+        teaHint.alignment = TextAnchor.MiddleRight;
+        teaHint.color = new Color32(255, 225, 156, 255);
+        teaHint.text = "茶摊支线 · 村口过桥右转，帮王老板写告示";
+        AnchorTopRight(teaHint.rectTransform, new Vector2(-32, -112));
+        teaHint.enabled = false;
+
+        nightTraderHint = WorkshopStoryUI.Panel(transform, "夜间小贩提示", new Rect(1, 1, 0, 0), NightTraderHintColor);
+        nightTraderHint.rectTransform.sizeDelta = new Vector2(650, 53);
+        AnchorTopRight(nightTraderHint.rectTransform, new Vector2(-32, -162));
+        WorkshopStoryUI.Label(nightTraderHint.transform, "提示文字", "18:00 · 黑衣小贩已到村口牌楼旁，按 E 交易",
+            new Rect(.03f, .07f, .94f, .86f), 25, WorkshopStoryUI.Paper, TextAnchor.MiddleRight, bold: true);
+        nightTraderHint.gameObject.SetActive(false);
 
         marker = CreateLabel("当前目标", 54, new Vector2(64, 76));
         marker.rectTransform.anchorMin = marker.rectTransform.anchorMax = Vector2.zero;
@@ -167,7 +215,10 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
         RefreshHud(order);
         bool unobstructed = !GameFlowModalState.IsModalOpen && !SceneTransitionState.IsLoading;
+        dayOverlay.Refresh(unobstructed, inventoryExpanded);
+        unobstructed = !GameFlowModalState.IsModalOpen && !SceneTransitionState.IsLoading;
         task.enabled = status.enabled = inventory.enabled = unobstructed;
+        RefreshVillageHints(order, unobstructed);
 
         Transform target = FindTarget(order);
         marker.enabled = false;
@@ -185,21 +236,43 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         marker.enabled = true;
     }
 
+    void RefreshVillageHints(WorkshopOrder order, bool worldVisible)
+    {
+        teaHint.enabled = worldVisible && order.CanExplore && !order.TeaNoticeCompleted;
+        bool showNightTrader = worldVisible && order.BlackMarketOpen;
+        if (nightTraderHint.gameObject.activeSelf != showNightTrader)
+            nightTraderHint.gameObject.SetActive(showNightTrader);
+        if (!showNightTrader)
+            return;
+
+        if (order.TakeNightTraderArrivalNotice())
+            nightTraderHighlightUntil = Time.unscaledTime + NightTraderHighlightSeconds;
+        nightTraderHint.color = Time.unscaledTime < nightTraderHighlightUntil ? NightTraderArrivalColor : NightTraderHintColor;
+        nightTraderHint.rectTransform.anchoredPosition = new Vector2(-32, teaHint.enabled ? -162 : -112);
+    }
+
     void RefreshHud(WorkshopOrder order)
     {
         if (displayedOrderRevision != order.Revision)
         {
             displayedOrderRevision = order.Revision;
-            status.text = $"第一天  {order.Hour:00}:{order.Minute:00}    主角 ¥{order.Funds}    小皮 ¥{order.XiaoPiFunds}    小白 ¥{order.XiaoBaiFunds}";
-            task.text = TaskText(order);
+            status.text = $"{order.DayName}  {order.Hour:00}:{order.Minute:00}    主角 ¥{order.Funds}    小皮 ¥{order.XiaoPiFunds}    小白 ¥{order.XiaoBaiFunds}";
+            string next = TaskText(order);
+            task.text = order.CurrentPhase == WorkshopOrder.Phase.Production ||
+                order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit
+                ? $"第 {order.CurrentSheetNumber}/{WorkshopOrder.SheetsPerDay} 张 · {next}"
+                : next;
         }
 
-        if (displayedInventoryRevision == WorkshopInventory.Revision)
+        if (displayedInventoryRevision == WorkshopInventory.Revision && displayedPatternBlank == order.HasPatternBlank)
             return;
         displayedInventoryRevision = WorkshopInventory.Revision;
+        displayedPatternBlank = order.HasPatternBlank;
         inventory.text = inventoryExpanded
-            ? $"背包  [B 收起]\n完整青竹 ×{WorkshopInventory.GreenBamboo}\n粗竹片 ×{WorkshopInventory.RoughPieces}    精竹片 ×{WorkshopInventory.FinePieces}    残次竹片 ×{WorkshopInventory.DefectivePieces}\n竹条 ×{WorkshopInventory.BambooRods}    残次竹条 ×{WorkshopInventory.DefectiveRods}\n竹丝 ×{WorkshopInventory.BambooThreads}    残次竹丝 ×{WorkshopInventory.DefectiveThreads}"
-            : $"背包 [B 展开]    青竹 ×{WorkshopInventory.GreenBamboo}    竹丝 ×{WorkshopInventory.TotalThreads}";
+            ? $"背包  [B 收起]\n完整青竹 ×{WorkshopInventory.GreenBamboo}    斑竹 ×{order.SpottedBamboo}    增白剂 ×{order.Brightener}\n粗竹片 ×{WorkshopInventory.RoughPieces}    精竹片 ×{WorkshopInventory.FinePieces}    残次竹片 ×{WorkshopInventory.DefectivePieces}\n竹条 ×{WorkshopInventory.BambooRods}    残次竹条 ×{WorkshopInventory.DefectiveRods}\n竹丝 ×{WorkshopInventory.BambooThreads}    残次竹丝 ×{WorkshopInventory.DefectiveThreads}    其中斑竹丝 ×{WorkshopInventory.SpottedThreads}"
+            : $"背包 [B 展开]    青竹 ×{WorkshopInventory.GreenBamboo}    斑竹 ×{order.SpottedBamboo}    竹丝 ×{WorkshopInventory.TotalThreads}";
+        if (order.HasPatternBlank)
+            inventory.text += inventoryExpanded ? "\n阴干素帘 ×1" : "    素帘 ×1";
     }
 
     Transform FindTarget(WorkshopOrder order)
@@ -211,9 +284,15 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             return computer != null ? computer.transform : null;
         if (order.CurrentPhase != WorkshopOrder.Phase.Production || order.DayEnded)
             return null;
-        if (order.CanHarvest)
-            return forestTarget;
-        if (order.GetStatus(WorkshopOrder.Stage.Preparation) != WorkshopOrder.StageStatus.Complete || order.CanWorkBamboo)
+        if (order.NeedsBamboo)
+        {
+            if (forestTarget != null && !forestTarget.IsInteractable)
+                ConfigureForestTarget();
+            return forestTarget != null ? forestTarget.transform : null;
+        }
+        if (order.CanUsePatternStation)
+            return pattern != null ? pattern.transform : null;
+        if (order.GetStatus(WorkshopOrder.Stage.BambooFinishing) != WorkshopOrder.StageStatus.Complete)
             return bamboo != null ? bamboo.transform : null;
         if (order.GetStatus(WorkshopOrder.Stage.Weaving) != WorkshopOrder.StageStatus.Complete)
             return weaving != null ? weaving.transform : null;
@@ -224,26 +303,32 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     static string TaskText(WorkshopOrder order)
     {
-        if (order.DayEnded && order.CurrentPhase != WorkshopOrder.Phase.Complete)
-            return "第一天已于 24:00 结束";
         return order.CurrentPhase switch
         {
             WorkshopOrder.Phase.Opening => "序章",
             WorkshopOrder.Phase.Village => "去和村口大爷说话",
             WorkshopOrder.Phase.Home => "去院子找舅舅",
-            WorkshopOrder.Phase.NewOrder => "去工坊电脑查看第一天订单",
-            WorkshopOrder.Phase.ReadyToSubmit => "阴干完成，返回工坊电脑提交订单",
-            WorkshopOrder.Phase.Complete => "第一天订单已完成",
+            WorkshopOrder.Phase.NewOrder => $"去工坊电脑查看{order.DayName}订单",
+            WorkshopOrder.Phase.ReadyToSubmit => order.CollectorAvailable && order.PendingCurtainGrade is WorkshopOrder.QualityGrade.S or WorkshopOrder.QualityGrade.A
+                ? "可去电脑交单，或带龟纹帘找集市东头的富商"
+                : order.IsPatternOrder ? "纹样完成，回电脑交单" : "阴干完成，返回工坊电脑提交订单",
+            WorkshopOrder.Phase.OrderComplete => "今日订单已交齐，可继续赶集赚钱",
+            WorkshopOrder.Phase.Complete => order.CanAdvanceDay ? "今日已结算" : "三天比试已结束",
             _ => ProductionTarget(order)
         };
     }
 
     static string ProductionTarget(WorkshopOrder order)
     {
-        if (order.CanHarvest) return "去竹林获得 1 根完整青竹";
+        if (order.NeedsBamboo)
+            return order.HarvestedStalks.Count >= BambooHarvest.HarvestCount
+                ? "今天的青竹已采完，明早竹林会长出新竹"
+                : "去竹林采青竹，或到集市买斑竹";
+        if (order.CanUsePatternStation) return $"阴干完成，到纹样台完成{order.OrderName}";
         if (order.GetStatus(WorkshopOrder.Stage.Preparation) != WorkshopOrder.StageStatus.Complete)
             return "带青竹回篾竹区完成劈竹与剐青";
-        if (order.CanWorkBamboo) return "在篾竹区完成过剑门与抽丝";
+        if (order.GetStatus(WorkshopOrder.Stage.BambooFinishing) != WorkshopOrder.StageStatus.Complete)
+            return "在篾竹区完成过剑门与抽丝";
         if (order.GetStatus(WorkshopOrder.Stage.Weaving) != WorkshopOrder.StageStatus.Complete)
             return "到编帘区完成编帘";
         if (order.GetStatus(WorkshopOrder.Stage.Lacquer) != WorkshopOrder.StageStatus.Complete)
@@ -254,6 +339,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     void ConfigureForestTarget()
     {
+        forestTarget = null;
         BambooHarvest forest = FindFirstObjectByType<BambooHarvest>();
         if (forest == null)
             return;
@@ -266,7 +352,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             if (distance >= nearest)
                 continue;
             nearest = distance;
-            forestTarget = stalk.transform;
+            forestTarget = stalk;
         }
     }
 
@@ -294,7 +380,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         return null;
     }
 
-    static void CreateCompanions(Transform uncleTransform)
+    static void CreateCompanions(Transform uncleTransform, int day)
     {
         if (GameObject.Find("小皮") == null)
         {
@@ -304,7 +390,10 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 new Vector3(.62f, .72f, .62f), new Color32(70, 126, 172, 255));
             CreatePrimitivePart(child.transform, PrimitiveType.Sphere, "Head", new Vector3(0f, .82f, 0f),
                 Vector3.one * .55f, new Color32(226, 184, 148, 255));
-            ConfigureRuntimeNpc(child, "小皮", "小皮：哼，才做了一张吗？", 2.05f);
+            string line = day == 2 ? "小皮：我在找右边两个起针孔。"
+                : day == 3 ? "小皮：朱线绕到接边孔时，我得记得压住青线尾。"
+                : "小皮：哼，才做了一张吗？";
+            ConfigureRuntimeNpc(child, "小皮", line, 2.05f);
         }
 
         if (GameObject.Find("小白") == null)
@@ -333,7 +422,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         dialogue.ConfigureCasual(line);
         NpcDialogueInteraction interaction = root.AddComponent<NpcDialogueInteraction>();
         interaction.Configure(dialogue, "按 E 交谈", 3f);
-        interaction.ConfigureStoryPhase(WorkshopOrder.Phase.Production);
+        interaction.ConfigureStoryPhase(WorkshopOrder.Phase.Production, true);
         interaction.ConfigureMarkerHeight(markerHeight);
         return interaction;
     }
@@ -380,6 +469,13 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         rect.anchorMin = rect.anchorMax = Vector2.up;
         rect.pivot = Vector2.up;
+        rect.anchoredPosition = position;
+    }
+
+    static void AnchorTopRight(RectTransform rect, Vector2 position)
+    {
+        rect.anchorMin = rect.anchorMax = Vector2.one;
+        rect.pivot = Vector2.one;
         rect.anchoredPosition = position;
     }
 }
