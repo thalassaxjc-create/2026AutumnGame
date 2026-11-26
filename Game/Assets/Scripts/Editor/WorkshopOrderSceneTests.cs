@@ -72,6 +72,12 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(task.pivot, Is.EqualTo(Vector2.one));
         Assert.That(task.anchoredPosition, Is.EqualTo(new Vector2(-32f, -48f)),
             "订单任务应独占右上区域，不能与左上角竹子背包重叠");
+        var booklet = GameObject.Find("打开小册子").GetComponent<RectTransform>();
+        Assert.That(booklet.anchorMin, Is.EqualTo(Vector2.zero));
+        Assert.That(booklet.anchorMax, Is.EqualTo(Vector2.zero));
+        Assert.That(booklet.pivot, Is.EqualTo(Vector2.zero));
+        Assert.That(booklet.anchoredPosition, Is.EqualTo(new Vector2(32f, 26f)),
+            "小册子按钮应在左下角，避免与右上角任务提示重叠");
         var elder = GameObject.Find("村口大爷").GetComponent<TemporaryDialogueEntryPoint>();
         var uncle = GameObject.Find("舅舅").GetComponent<TemporaryDialogueEntryPoint>();
         MoveNear(uncle.transform);
@@ -146,11 +152,6 @@ public sealed class WorkshopOrderSceneTests
             Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.OrderComplete));
             Assert.That(order.CanExplore, Is.True);
             Click(GameObject.Find("进入下一天"));
-            if (day == 4)
-            {
-                yield return Frames(2);
-                Click(GameObject.Find("收工"));
-            }
             if (day == WorkshopOrder.LastStoryDay)
             {
                 // Let the newly opened panel join the raycast canvas before clicking it.

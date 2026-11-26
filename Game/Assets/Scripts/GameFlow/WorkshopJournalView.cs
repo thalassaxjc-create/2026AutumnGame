@@ -28,7 +28,11 @@ internal sealed class WorkshopJournalView : MonoBehaviour
     {
         journal = book;
         open = WorkshopStoryUI.Button(transform, "打开小册子", "小册子 [N]",
-            new Rect(.83f, .92f, .15f, .06f), WorkshopStoryUI.Wood, 24, OpenBook);
+            new Rect(0, 0, 0, 0), WorkshopStoryUI.Wood, 24, OpenBook);
+        var openRect = (RectTransform)open.transform;
+        openRect.pivot = new Vector2(0, 0);
+        openRect.anchoredPosition = new Vector2(32, 26);
+        openRect.sizeDelta = new Vector2(176, 44);
         var modalOwner = new GameObject("小册子交互");
         modalOwner.transform.SetParent(transform, false);
         modal = modalOwner.AddComponent<SettlementExitController>();

@@ -83,7 +83,7 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
         if (GameFlowModalState.IsModalOpen || SceneTransitionState.IsLoading ||
             VillageSpottedGrove.IsSneaking || !order.CloseDay())
             return;
-        if (order.Days < 4 && order.CanAdvanceDay && WorkshopStoryUI.AdvanceDay(order))
+        if (order.CanAdvanceDay && WorkshopStoryUI.AdvanceDay(order))
             return;
         ShowReport(order.CurrentSettlement.Value);
     }
@@ -168,10 +168,6 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
         reportTitle.text = order.DayName + " · 收工";
         reportRows.text = WorkshopStoryUI.SettlementText(order, record);
         reportAction.text = order.CanAdvanceDay ? "收工，进入下一天" : "听舅舅说";
-        if (record.Day == 4)
-            reportRows.text += record.Delivered
-                ? "\n舅舅：三张终于都交到了。老周试捞后留了张纸，明天给来访的人看。"
-                : "\n舅舅：今天先交能交的。剩下的等干透再谈，做帘子慌不得。";
         timeoutExit.BeginSettlement(report);
     }
 
