@@ -100,7 +100,60 @@ public sealed class WorkshopPatternOrderTests
         }
         Assert.That(order.CloseDay(), Is.True);
         Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((790, 884, 762)));
+        Assert.That(order.TryStartNextDay(), Is.True);
+        Assert.That(order.RequiredSheets, Is.EqualTo(3));
+        order.CloseIntroduction(WorkshopOrder.Phase.Home, 1);
+        order.OpenComputer();
+        order.ReadOrder();
+        order.CloseComputer();
+        Assert.That(order.BasePrice, Is.EqualTo(130));
+        for (int sheet = 1; sheet <= order.RequiredSheets; sheet++)
+        {
+            WorkshopOrderTests.CompleteBaseCurtain(order);
+            Assert.That(order.Submit(), Is.True);
+            Assert.That(order.BatchBonus, Is.EqualTo(sheet == 3 ? 120 : 0));
+        }
+        Assert.That(order.CloseDay(), Is.True);
+        Assert.That(order.CurrentSettlement.Value.Delivered, Is.True);
+        Assert.That(order.CurrentSettlement.Value.RequiredSheets, Is.EqualTo(3));
+        Assert.That(order.TryStartNextDay(), Is.True);
+        ReadNewOrder();
+        Assert.That(order.RequiredSheets, Is.EqualTo(1));
+        WorkshopOrderTests.CompleteBaseCurtain(order);
+        Loop(order.PatternDraft, 1);
+        Loop(order.PatternDraft, 3);
+        Assert.That(order.TryConfirmPattern(), Is.True);
+        Assert.That(order.Submit(), Is.True);
+        Assert.That(order.Submit(), Is.False);
+        Assert.That(order.Reward, Is.EqualTo(312));
+        Assert.That(order.CloseDay(), Is.True);
+        Assert.That(order.CurrentSettlement.Value.Delivered, Is.True);
         Assert.That(order.TryStartNextDay(), Is.False);
+    }
+
+    [Test]
+    public void PartialBatchKeepsItsPaymentAndStillOpensDayFive()
+    {
+        for (int day = 1; day <= 3; day++)
+        {
+            order.AdvanceTime(order.MinutesUntilClose);
+            Assert.That(order.TryStartNextDay(), Is.True);
+        }
+
+        order.CloseIntroduction(WorkshopOrder.Phase.Home, 1);
+        order.OpenComputer();
+        order.ReadOrder();
+        order.CloseComputer();
+        WorkshopOrderTests.CompleteBaseCurtain(order);
+        Assert.That(order.Submit(), Is.True);
+        Assert.That(order.CloseDay(), Is.True);
+        var report = order.CurrentSettlement.Value;
+        Assert.That(report.Delivered, Is.False);
+        Assert.That(report.DeliveredCount, Is.EqualTo(1));
+        Assert.That(report.BatchBonus, Is.Zero);
+        Assert.That(report.PlayerIncome, Is.EqualTo(169));
+        Assert.That(order.TryStartNextDay(), Is.True);
+        Assert.That(order.Days, Is.EqualTo(5));
     }
 
     [Test]

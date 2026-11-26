@@ -22,6 +22,8 @@ public sealed class ComputerOrderView : MonoBehaviour
     TMP_Text patternDescription;
     TMP_Text patternSteps;
     CurtainPatternGraphic patternSample;
+    TMP_Text sampleNotes;
+    TMP_Text sampleHeading;
 
     public void Configure(ComputerUI computer, RectTransform orderTab, RectTransform page,
         RectTransform artboard, TMP_FontAsset labelFont)
@@ -53,7 +55,7 @@ public sealed class ComputerOrderView : MonoBehaviour
 
     public void Refresh(WorkshopOrder order)
     {
-        screen.SetProgress(order.Progress, order.DeliveredCount);
+        screen.SetProgress(order.Progress, order.DeliveredCount, order.RequiredSheets);
         screen.SetFunds(order.Funds);
         screen.SetTime(order.Hour, order.Minute);
         screen.SetDay(order.Days);
@@ -61,29 +63,35 @@ public sealed class ComputerOrderView : MonoBehaviour
             screen.SetStepCompleted((ComputerUI.ProductionStep)index,
                 order.GetStatus((WorkshopOrder.Stage)index) == WorkshopOrder.StageStatus.Complete);
 
-        bool delivered = order.DeliveredCount == WorkshopOrder.SheetsPerDay;
+        bool delivered = order.DeliveredCount == order.RequiredSheets;
         screen.SetStepCompleted(ComputerUI.ProductionStep.Delivery, delivered);
         notice.SetActive(order.ComputerNotice);
         submit.SetActive(order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit);
-        if (patternCard.activeSelf != order.IsPatternOrder)
+        bool customOrder = order.IsPatternOrder || order.Days == 4;
+        if (patternCard.activeSelf != customOrder)
         {
             foreach (var entry in plainOrderElements)
-                entry.child.SetActive(!order.IsPatternOrder && entry.visible);
-            patternCard.SetActive(order.IsPatternOrder);
+                entry.child.SetActive(!customOrder && entry.visible);
+            patternCard.SetActive(customOrder);
         }
-        if (order.IsPatternOrder)
+        if (customOrder)
         {
-            patternTitle.text = $"{order.OrderName} × {WorkshopOrder.SheetsPerDay}";
-            patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元  ·  纹样工时 {order.PatternMinutes} 分钟";
-            patternSample.Show(order.PatternKind, isSample: true);
+            patternTitle.text = $"{order.OrderName} × {order.RequiredSheets}";
+            patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元 " +
+                (order.IsPatternOrder ? $"  ·  纹样工时 {order.PatternMinutes} 分钟" : "");
+            patternSample.gameObject.SetActive(order.IsPatternOrder);
+            if (order.IsPatternOrder)
+                patternSample.Show(order.PatternKind, isSample: true);
+            sampleNotes.text = order.CustomerNotes;
+            sampleHeading.gameObject.SetActive(order.IsPatternOrder);
             patternSteps.text = delivered ? "今日订单已全部交付。\n\n随时可以去村里做生意，或在左上角收工。"
-                : $"已交 {order.DeliveredCount}/{WorkshopOrder.SheetsPerDay} 张\n\n" +
+                : $"已交 {order.DeliveredCount}/{order.RequiredSheets} 张\n\n" +
                 $"第 {order.CurrentSheetNumber} 张的工序\n" +
                 $"篾竹与抽丝   {StepLabel(order, WorkshopOrder.Stage.BambooFinishing)}\n" +
                 $"编帘   {StepLabel(order, WorkshopOrder.Stage.Weaving)}\n" +
                 $"刷漆   {StepLabel(order, WorkshopOrder.Stage.Lacquer)}\n" +
                 $"阴干   {StepLabel(order, WorkshopOrder.Stage.Drying)}\n" +
-                $"纹样   {StepLabel(order, WorkshopOrder.Stage.Pattern)}";
+                (order.IsPatternOrder ? $"纹样   {StepLabel(order, WorkshopOrder.Stage.Pattern)}" : "");
         }
         settlement.SetActive(false);
     }
@@ -105,7 +113,8 @@ public sealed class ComputerOrderView : MonoBehaviour
         bool allDelivered = order.CurrentPhase == WorkshopOrder.Phase.OrderComplete;
         settlementTitle.text = allDelivered ? "今日订单已全部交付" : $"第 {order.DeliveredCount} 张已交付";
         settlementText.text = WorkshopStoryUI.SheetDetails(order.LastDelivery.Value, order.DeliveredCount) +
-            $"\n\n今日已交 {order.DeliveredCount}/{WorkshopOrder.SheetsPerDay} 张，当日净收入 {order.TodayIncome:+0;-0;0} 元" +
+            $"\n\n今日已交 {order.DeliveredCount}/{order.RequiredSheets} 张，当日净收入 {order.TodayIncome:+0;-0;0} 元" +
+            (order.BatchBonus > 0 ? $"\n整批验收奖励 +{order.BatchBonus} 元" : "") +
             (allDelivered ? "\n还可以去集市交易，收工时点屏幕左上角。" : "");
         settlementAction.text = allDelivered ? "返回工坊" : $"继续做第 {order.CurrentSheetNumber} 张";
         settlement.SetActive(true);
@@ -126,12 +135,15 @@ public sealed class ComputerOrderView : MonoBehaviour
         var ink = WorkshopStoryUI.Ink;
         patternTitle = Label(card, "当日纹样", "", new Rect(120, 74, 2400, 128), 104);
         patternDescription = Label(card, "订单要求", "", new Rect(120, 220, 2500, 96), 61);
-        var sampleTitle = Label(card, "样稿标题", "交付样稿", new Rect(120, 365, 1300, 83), 59);
+        sampleHeading = Label(card, "样稿标题", "交付样稿", new Rect(120, 365, 1300, 83), 59);
+        sampleNotes = Label(card, "客户备注", "", new Rect(120, 1250, 2500, 115), 55);
+        sampleNotes.color = ink;
+        sampleNotes.alignment = TextAlignmentOptions.MidlineLeft;
         patternSample = Place(card, "订单样稿", new Rect(120, 465, 1400, 784))
             .gameObject.AddComponent<CurtainPatternGraphic>();
         patternSample.raycastTarget = false;
         patternSteps = Label(card, "纹样进度", "", new Rect(1680, 430, 946, 660), 58);
-        foreach (TMP_Text line in new[] { patternTitle, patternDescription, sampleTitle, patternSteps })
+        foreach (TMP_Text line in new[] { patternTitle, patternDescription, sampleHeading, patternSteps })
         {
             line.color = ink;
             line.alignment = TextAlignmentOptions.MidlineLeft;

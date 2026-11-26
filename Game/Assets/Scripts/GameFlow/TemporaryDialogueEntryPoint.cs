@@ -174,7 +174,7 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
         closedCallback = null;
         callback?.Invoke();
         if (confirmed && activeCompletesStory && storyPhase.HasValue)
-            WorkshopOrder.Current?.CloseIntroduction(storyPhase.Value);
+            WorkshopOrder.Current?.CloseIntroduction(storyPhase.Value, selectedChoice);
     }
 
     void CacheInteractAction()

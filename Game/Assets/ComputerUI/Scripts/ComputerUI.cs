@@ -70,12 +70,12 @@ public sealed class ComputerUI : MonoBehaviour
     public void SetTime(int hour, int minute) => timeLabel.text = $"{hour:00}:{minute:00}";
     public void SetDay(int day) => dayLabel.text = $"天数 {day:00}";
 
-    public void SetProgress(float fraction, int deliveredCount)
+    public void SetProgress(float fraction, int deliveredCount, int requiredSheets = WorkshopOrder.SheetsPerDay)
     {
         fraction = Mathf.Clamp01(fraction);
         progressFill.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, progressTrack.rect.width * fraction);
         progressFill.gameObject.SetActive(fraction > 0f);
-        progressLabel.text = $"交付 {deliveredCount}/{WorkshopOrder.SheetsPerDay}  ·  {Mathf.RoundToInt(fraction * 100f)}%";
+        progressLabel.text = $"交付 {deliveredCount}/{requiredSheets}  ·  {Mathf.RoundToInt(fraction * 100f)}%";
     }
 
     public void SetStepCompleted(ProductionStep step, bool completed)

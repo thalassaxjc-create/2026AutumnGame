@@ -42,8 +42,10 @@ public sealed partial class WorkshopOrder
     {
         public int Day { get; }
         public int DeliveredCount { get; }
-        public bool Delivered => DeliveredCount == SheetsPerDay;
+        public int RequiredSheets { get; }
+        public bool Delivered => DeliveredCount == RequiredSheets;
         public bool ReachedMidnight { get; }
+        public int BatchBonus { get; }
         public bool XiaoPiPenalized { get; }
         public int PlayerIncome { get; }
         public int XiaoPiIncome { get; }
@@ -55,6 +57,8 @@ public sealed partial class WorkshopOrder
         internal DaySettlement(WorkshopOrder order, int piIncome, int baiIncome)
         {
             Day = order.Days;
+            RequiredSheets = order.RequiredSheets;
+            BatchBonus = order.BatchBonus;
             DeliveredCount = order.DeliveredCount;
             ReachedMidnight = order.MinutesUntilClose == 0;
             XiaoPiPenalized = order.XiaoPiSabotaged;
@@ -72,7 +76,7 @@ public sealed partial class WorkshopOrder
 
     public const int FirstDayStartMinute = 6 * 60;
     public const int FirstDayEndMinute = 24 * 60;
-    public const int LastStoryDay = 3;
+    public const int LastStoryDay = 5;
     public const int SheetsPerDay = 2;
     public static WorkshopOrder Current { get; internal set; }
 
@@ -100,18 +104,34 @@ public sealed partial class WorkshopOrder
     public int XiaoPiFunds { get; private set; }
     public int XiaoBaiFunds { get; private set; }
     public int Days { get; private set; } = 1;
-    public string DayName => Days == 1 ? "第一天" : Days == 2 ? "第二天" : "第三天";
+    public string DayName => Days switch
+    {
+        1 => "第一天", 2 => "第二天", 3 => "第三天", 4 => "第四天", _ => "第五天"
+    };
+    public int RequiredSheets => Days switch { 4 => 3, 5 => 1, _ => SheetsPerDay };
+    public const int SampleBatchBonus = 120;
+    public bool SampleBatch { get; private set; }
+    public int BatchBonus { get; private set; }
+    public string CustomerNotes => Days switch
+    {
+        4 when SampleBatch => $"按样验货：三张均达 B 级或以上，整批奖励 {SampleBatchBonus} 元。未交齐仍按张结算。",
+        4 => "分批验收：每张单独结算，不计整批奖励。",
+        5 => "访客艾琳订一张龟纹小帘，想摸清走线，也想学会拆洗和晾干。",
+        _ => ""
+    };
     public CurtainPatternKind PatternKind => Days switch
     {
-        2 => CurtainPatternKind.Turtle,
+        2 or 5 => CurtainPatternKind.Turtle,
         3 => CurtainPatternKind.VermilionJade,
         _ => CurtainPatternKind.None
     };
     public bool IsPatternOrder => PatternKind != CurtainPatternKind.None;
-    public string OrderName => PatternKind switch
+    public string OrderName => Days switch
     {
-        CurtainPatternKind.Turtle => "龟纹小帘",
-        CurtainPatternKind.VermilionJade => "朱边青示范帘",
+        2 => "龟纹小帘",
+        3 => "朱边青示范帘",
+        4 => "纸坊试捞批次",
+        5 => "艾琳的旅行小帘",
         _ => "普通宣纸帘"
     };
     public ClockSpeed Speed { get; private set; } = ClockSpeed.Normal;
@@ -121,11 +141,11 @@ public sealed partial class WorkshopOrder
     public int ElapsedGameMinutes => elapsedGameMinutes;
     int SheetSteps => IsPatternOrder ? 7 : 6; // 工序加上最后的交付。
     public int DeliveredCount => deliveries.Count;
-    public int CurrentSheetNumber => Mathf.Min(DeliveredCount + 1, SheetsPerDay);
+    public int CurrentSheetNumber => Mathf.Min(DeliveredCount + 1, RequiredSheets);
     public int TodayIncome { get; private set; }
     public float Progress => CurrentPhase is Phase.Complete or Phase.OrderComplete
-        ? DeliveredCount / (float)SheetsPerDay
-        : (DeliveredCount + CompletedSteps / (float)SheetSteps) / SheetsPerDay;
+        ? DeliveredCount / (float)RequiredSheets
+        : (DeliveredCount + CompletedSteps / (float)SheetSteps) / RequiredSheets;
     public bool ComputerNotice => CurrentPhase == Phase.NewOrder || CurrentPhase == Phase.ReadyToSubmit;
     public WeavingMinigameController.WeavingResult? WeavingResult { get; private set; }
     public LacquerMinigameController.LacquerResult? LacquerResult { get; private set; }
@@ -143,13 +163,16 @@ public sealed partial class WorkshopOrder
     public IReadOnlyList<SheetDelivery> Deliveries { get; }
     public SheetDelivery? LastDelivery => DeliveredCount > 0 ? deliveries[DeliveredCount - 1] : null;
     public bool CanAdvanceDay => CurrentPhase == Phase.Complete && Days < LastStoryDay;
+    internal WorkshopJournal Journal { get; } = new();
     public bool FinalSettlementAcknowledged { get; private set; }
     public QualityGrade? FinalGrade => LastDelivery?.Grade;
     public int Reward => LastDelivery?.Reward ?? 0;
-    public int BasePrice => PatternKind switch
+    public int BasePrice => Days switch
     {
-        CurtainPatternKind.Turtle => settings.turtlePrice,
-        CurtainPatternKind.VermilionJade => settings.vermilionJadePrice,
+        2 => settings.turtlePrice,
+        3 => settings.vermilionJadePrice,
+        4 => SampleBatch ? 130 : 150,
+        5 => 240,
         _ => settings.baseReward
     };
     public decimal QualityMultiplier => LastDelivery?.QualityMultiplier ?? 1m;
@@ -198,10 +221,12 @@ public sealed partial class WorkshopOrder
         Revision++;
     }
 
-    public void CloseIntroduction(Phase phase)
+    public void CloseIntroduction(Phase phase, int choice = 0)
     {
         if (CurrentPhase != phase || (phase != Phase.Village && phase != Phase.Home))
             return;
+        if (phase == Phase.Home && Days == 4)
+            SampleBatch = choice == 1;
         CurrentPhase = phase == Phase.Village ? Phase.Home : Phase.NewOrder;
         Revision++;
     }
@@ -388,10 +413,20 @@ public sealed partial class WorkshopOrder
         deliveries.Add(new SheetDelivery(weaving, lacquer, PatternResult, grade, quality, material,
             UsedSpottedBamboo, soldToCollector, reward));
         ChangeFunds(reward);
-        if (DeliveredCount == SheetsPerDay)
+        if (DeliveredCount == RequiredSheets)
+        {
             CurrentPhase = Phase.OrderComplete;
+            if (Days == 4 && SampleBatch && deliveries.TrueForAll(sheet => sheet.Grade <= QualityGrade.B))
+            {
+                BatchBonus = SampleBatchBonus;
+                ChangeFunds(BatchBonus);
+            }
+        }
         else
             StartSheet();
+        Journal.AddEvent($"{DayName} · {OrderName}",
+            WorkshopStoryUI.SheetDetails(deliveries[DeliveredCount - 1], DeliveredCount) +
+            (BatchBonus > 0 ? $"\n整批通过验收，另获 {BatchBonus} 元。" : ""));
         return true;
     }
 
@@ -423,6 +458,8 @@ public sealed partial class WorkshopOrder
         {
             2 => (settings.xiaoPiDayTwoIncome, settings.xiaoBaiDayTwoIncome),
             3 => (settings.xiaoPiDayThreeIncome, settings.xiaoBaiDayThreeIncome),
+            4 => (450, 390),
+            5 => (240, 210),
             _ => (settings.xiaoPiDayOneIncome, settings.xiaoBaiDayOneIncome)
         };
         if (XiaoPiSabotaged)
@@ -451,6 +488,8 @@ public sealed partial class WorkshopOrder
         HarvestedStalks.Clear();
         deliveries.Clear();
         TodayIncome = 0;
+        BatchBonus = 0;
+        SampleBatch = false;
         ResetSheet();
         CurrentPhase = Phase.Home;
         Revision++;

@@ -114,6 +114,8 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
 
         if (!accepted && dialogueOpen)
             NotifyDialogueClosed();
+        if (accepted && WorkshopOrder.Current is { } order)
+            order.Journal.Meet(GetComponent<NpcCharacter>().DisplayName, order.DayName, gameObject.scene.name);
         return accepted;
     }
 

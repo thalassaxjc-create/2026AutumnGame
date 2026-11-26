@@ -25,6 +25,9 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
     Text reportTitle;
     Text reportRows;
     Text reportAction;
+    Button alternateAction;
+    int endingStep;
+    bool shareNotes;
     SettlementExitController timeoutExit;
 
     public void Build(WorkshopOrder story)
@@ -80,7 +83,7 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
         if (GameFlowModalState.IsModalOpen || SceneTransitionState.IsLoading ||
             VillageSpottedGrove.IsSneaking || !order.CloseDay())
             return;
-        if (order.CanAdvanceDay && WorkshopStoryUI.AdvanceDay(order))
+        if (order.Days < 4 && order.CanAdvanceDay && WorkshopStoryUI.AdvanceDay(order))
             return;
         ShowReport(order.CurrentSettlement.Value);
     }
@@ -164,7 +167,11 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
             return;
         reportTitle.text = order.DayName + " · 收工";
         reportRows.text = WorkshopStoryUI.SettlementText(order, record);
-        reportAction.text = order.CanAdvanceDay ? "收工，进入下一天" : "确认收工";
+        reportAction.text = order.CanAdvanceDay ? "收工，进入下一天" : "听舅舅说";
+        if (record.Day == 4)
+            reportRows.text += record.Delivered
+                ? "\n舅舅：三张终于都交到了。老周试捞后留了张纸，明天给来访的人看。"
+                : "\n舅舅：今天先交能交的。剩下的等干透再谈，做帘子慌不得。";
         timeoutExit.BeginSettlement(report);
     }
 
@@ -183,6 +190,9 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
         var action = WorkshopStoryUI.Button(sheet, "收工", "确认收工", new Rect(.26f, .09f, .48f, .115f),
             WorkshopStoryUI.Green, 29, LeaveReport);
         reportAction = action.GetComponentInChildren<Text>();
+        alternateAction = WorkshopStoryUI.Button(sheet, "另一个选择", "", new Rect(.53f, .09f, .41f, .115f),
+            WorkshopStoryUI.Wood, 26, () => ChooseEnding(false));
+        alternateAction.gameObject.SetActive(false);
         report.SetActive(false);
     }
 
@@ -196,9 +206,66 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
                 return;
             }
         }
+        else if (endingStep == 0)
+        {
+            endingStep = 1;
+            reportTitle.text = "写给下一双手";
+            var record = order.CurrentSettlement.Value;
+            string result = record.RankOf(record.PlayerTotal) switch
+            {
+                1 when record.PlayerTotal > record.XiaoPiTotal && record.PlayerTotal > record.XiaoBaiTotal =>
+                    "舅舅：你挣得最多。工坊钥匙在这儿，你想接单时就来拿。",
+                1 => "舅舅：头名打了个平手。钥匙先挂回门口，谁要开工都用得着。",
+                _ => "舅舅：榜首按约定先选工位。你这几天学到的，下回还用得上。"
+            };
+            reportRows.text = result + "\n你这几天留下的记录，愿意给来访的人看吗？";
+            ((RectTransform)reportAction.transform.parent).anchorMin = new Vector2(.06f, .09f);
+            ((RectTransform)reportAction.transform.parent).anchorMax = new Vector2(.47f, .205f);
+            reportAction.text = "把记录留给工坊";
+            alternateAction.GetComponentInChildren<Text>().text = "把记录带在身边";
+            alternateAction.gameObject.SetActive(true);
+            return;
+        }
+        else if (endingStep < 3)
+        {
+            ChooseEnding(true);
+            return;
+        }
         else
             order.AcknowledgeFinalSettlement();
         timeoutExit.CloseAndResume();
+    }
+
+    void ChooseEnding(bool firstOption)
+    {
+        if (endingStep == 1)
+        {
+            shareNotes = firstOption;
+            endingStep = 2;
+            reportTitle.text = "明天去哪儿";
+            reportRows.text = shareNotes
+                ? "你把愿意给人看的几页留在了工坊。舅舅找了个干净的木匣，把它们和旧样帘放在一起。"
+                : "你把手册收进包里。舅舅说，哪天想添一页，回来找他就行。";
+            reportAction.text = "留村，试着接下一单";
+            alternateAction.GetComponentInChildren<Text>().text = "出村，看看还有什么想做";
+            return;
+        }
+
+        if (endingStep != 2)
+            return;
+        endingStep = 3;
+        string title = firstOption ? "结局 · 下一张帘" : "结局 · 路还长";
+        string epilogue = firstOption
+            ? "你在工坊门口挂上接单牌。第二天小皮拿着一根劈歪的竹片来问你，歪的那一边该怎么下刀。"
+            : order.DeliveredCount > 0
+                ? "你拖着来时的行李箱出了村。后来舅舅寄来一张试纸，背面写着艾琳的第一张纸晾干了。"
+                : "你拖着来时的行李箱出了村。后来舅舅寄来一张试纸，背面问你今天走到了哪里。";
+        epilogue += shareNotes ? "\n工坊木匣里多了一页新来访者的批注。" : "\n手册里还夹着一根竹丝，两边都留了空白。";
+        reportTitle.text = title;
+        reportRows.text = epilogue;
+        reportAction.text = "合上五天的账";
+        alternateAction.gameObject.SetActive(false);
+        order.Journal.AddEvent(title, epilogue);
     }
 
     void OnDisable() => CloseMorning();

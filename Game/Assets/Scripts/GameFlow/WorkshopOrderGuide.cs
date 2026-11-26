@@ -85,6 +85,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         WorkshopOrder order = WorkshopOrder.Current;
         dayOverlay = gameObject.AddComponent<WorkshopDayOverlay>();
         dayOverlay.Build(order);
+        gameObject.AddComponent<WorkshopJournalView>().Build(order.Journal);
 
         if (scene.name == SceneTransitionState.WorldSceneName)
         {
@@ -92,11 +93,16 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 new[] { "村口大爷：哟，大学生回来啦？你舅舅最近可是接到了政府的支持款，非遗传承人有指望咯！" },
                 new[] { "我就是回来休息一下", "我回来看看舅舅需要帮忙不" });
 
-            uncle = ConfigureDialogue("舅舅", WorkshopOrder.Phase.Home, UncleLines(order.Days), null, true,
-                order.Days == 1 ? "舅舅：别急，阴干最忌心浮气躁。" : "舅舅：做完先对一对样稿，再去电脑上交单。");
+            uncle = ConfigureDialogue("舅舅", WorkshopOrder.Phase.Home, UncleLines(order.Days),
+                order.Days == 4 ? new[] { "分批验收，每张 150 元起", "当面按样验货，每张 130 元起，合格整批加 120 元" } : null, true,
+                UncleCasualLine(order.Days));
 
             if (uncle != null)
+            {
                 CreateCompanions(uncle, order.Days);
+                if (order.Days >= 4)
+                    CreateCustomer(uncle, order.Days);
+            }
             ConfigureForestTarget();
 
             if (order.CurrentPhase == WorkshopOrder.Phase.Opening)
@@ -137,13 +143,33 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             "舅舅：绕到左右两个接边孔，把青线尾压进朱边里。做完拿样稿对一眼，再去电脑交单。",
             "小皮：昨天我练熟了龟纹。今天看谁把两个线尾收得齐！"
         },
+        4 => new[]
+        {
+            "舅舅：捞纸作坊急着替换旧帘，订三张。老周说验货费事，问我能不能顺路给他捎包烟。",
+            "老周：要不每张到手就收，钱也一张张算。你要是肯把样帘摆出来当面试，三张都过关，我从返工预算里给你补一笔。",
+            "舅舅：你来定。交不齐就把已经做好的交了，别为了赶数把湿帘从架上摘下来。"
+        },
+        5 => new[]
+        {
+            "舅舅：昨天在纸坊看试捞的艾琳想定做一张小帘。她画了一圈龟纹，说想回去自己试着捞一张纸。",
+            "艾琳：我还想学怎么洗。上次我把竹编放在太阳底下，整个都翘起来了。",
+            "舅舅：今天只做这一张。交完记得收工，咱们算一算五天的账，也聊聊你接下来想去哪。"
+        },
         _ =>
                 new[]
                 {
                     "舅舅：咳咳……既然回来了，正好。我这身体，怕是做不了几年了。政府的非遗补助金下来了，还有我这套宅子和手艺，总得留给一个人。",
-                    "舅舅：这三天，我每天发给你们同样的订单。交帘和赶集挣的钱都算，最后谁攒得最多，谁就继承这门手艺。",
+                    "舅舅：这五天，我每天发给你们同样的订单。交帘和赶集挣的钱都算，最后谁攒得最多，谁就继承这门手艺。",
                     "【主线任务开启：继承权争夺战】\n第一天订单：普通宣纸帘两张（小尺寸、无纹样）。想收工的时候，点左上角进入下一天。"
                 }
+    };
+
+    static string UncleCasualLine(int day) => day switch
+    {
+        1 => "舅舅：别急，阴干最忌心浮气躁。",
+        4 => "舅舅：先交做好的。老周下次来，再拿前一张试捞的纸和新帘对一对。",
+        5 => "舅舅：艾琳那张要阴干透。告诉她用完先冲净，悬起来晾，别在太阳下烤。",
+        _ => "舅舅：做完先对一对样稿，再去电脑上交单。"
     };
 
     void ConfigureCanvas()
@@ -260,7 +286,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             string next = TaskText(order);
             task.text = order.CurrentPhase == WorkshopOrder.Phase.Production ||
                 order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit
-                ? $"第 {order.CurrentSheetNumber}/{WorkshopOrder.SheetsPerDay} 张 · {next}"
+                ? $"第 {order.CurrentSheetNumber}/{order.RequiredSheets} 张 · {next}"
                 : next;
         }
 
@@ -313,7 +339,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 ? "可去电脑交单，或带龟纹帘找集市东头的富商"
                 : order.IsPatternOrder ? "纹样完成，回电脑交单" : "阴干完成，返回工坊电脑提交订单",
             WorkshopOrder.Phase.OrderComplete => "今日订单已交齐，可继续赶集赚钱",
-            WorkshopOrder.Phase.Complete => order.CanAdvanceDay ? "今日已结算" : "三天比试已结束",
+            WorkshopOrder.Phase.Complete => order.CanAdvanceDay ? "今日已结算" : "五天比试已结束",
             _ => ProductionTarget(order)
         };
     }
@@ -378,6 +404,20 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         }
         Debug.LogWarning($"未找到剧情 NPC：{npcName}");
         return null;
+    }
+
+    static void CreateCustomer(Transform uncleTransform, int day)
+    {
+        string customerName = day == 4 ? "老周" : "艾琳";
+        var customer = new GameObject(customerName);
+        customer.transform.position = uncleTransform.position + new Vector3(.3f, 0f, 2.5f);
+        CreatePrimitivePart(customer.transform, PrimitiveType.Capsule, "Body", Vector3.zero,
+            new Vector3(.64f, .9f, .64f), day == 4 ? new Color32(92, 113, 78, 255) : new Color32(148, 86, 94, 255));
+        CreatePrimitivePart(customer.transform, PrimitiveType.Sphere, "Head", new Vector3(0f, .94f, 0f),
+            Vector3.one * .55f, new Color32(230, 190, 152, 255));
+        ConfigureRuntimeNpc(customer, customerName,
+            day == 4 ? "老周：我验帘时斜着看光，再用指肚摸一遍。亮得不匀的地方，试捞出来纸也会薄厚不一。"
+                : "艾琳：我会在帘盒上写好洗完要阴干。捞到第一张纸，我寄一张给你看。", 2.15f);
     }
 
     static void CreateCompanions(Transform uncleTransform, int day)
