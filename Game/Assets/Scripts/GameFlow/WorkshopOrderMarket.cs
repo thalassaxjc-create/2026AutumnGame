@@ -98,7 +98,7 @@ public sealed partial class WorkshopOrder
             collectorVisitDay = 2;
         ChangeFunds(TeaNoticeReward);
         AdvanceTime(TeaNoticeMinutes);
-        Journal.AddEvent($"{DayName} · 茶摊告示", "你帮茶摊写好告示，提醒乡亲们留心收古董的人。王老板付了茶水费。");
+        Journal.AddEvent($"{DayName} · 茶摊告示", "你帮茶摊写好告示，提醒乡亲们留心收古董的人。王老板付了茶水费。", announce: false);
         return true;
     }
 

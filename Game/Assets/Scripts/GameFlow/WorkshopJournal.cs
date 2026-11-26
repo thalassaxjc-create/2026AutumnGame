@@ -21,12 +21,13 @@ internal sealed class WorkshopJournal
     internal readonly Queue<Entry> Unread = new();
     readonly HashSet<string> knownPeople = new();
 
-    internal void AddEvent(string title, string notes)
+    internal void AddEvent(string title, string notes, bool announce)
     {
         var entry = new Entry(title, notes);
         Events.Add(entry);
         Unphotographed.Enqueue(entry);
-        Unread.Enqueue(entry);
+        if (announce)
+            Unread.Enqueue(entry);
     }
 
     internal void Meet(string name, string day, string scene)

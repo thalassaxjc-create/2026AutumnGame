@@ -32,6 +32,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     int displayedOrderRevision = -1;
     int displayedInventoryRevision = -1;
     bool displayedPatternBlank;
+    int displayedFinishedCurtains = -1;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetSession()
@@ -290,15 +291,19 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 : next;
         }
 
-        if (displayedInventoryRevision == WorkshopInventory.Revision && displayedPatternBlank == order.HasPatternBlank)
+        if (displayedInventoryRevision == WorkshopInventory.Revision && displayedPatternBlank == order.HasPatternBlank &&
+            displayedFinishedCurtains == order.FinishedCurtainCount)
             return;
         displayedInventoryRevision = WorkshopInventory.Revision;
         displayedPatternBlank = order.HasPatternBlank;
+        displayedFinishedCurtains = order.FinishedCurtainCount;
         inventory.text = inventoryExpanded
             ? $"背包  [B 收起]\n完整青竹 ×{WorkshopInventory.GreenBamboo}    斑竹 ×{order.SpottedBamboo}    增白剂 ×{order.Brightener}\n粗竹片 ×{WorkshopInventory.RoughPieces}    精竹片 ×{WorkshopInventory.FinePieces}    残次竹片 ×{WorkshopInventory.DefectivePieces}\n竹条 ×{WorkshopInventory.BambooRods}    残次竹条 ×{WorkshopInventory.DefectiveRods}\n竹丝 ×{WorkshopInventory.BambooThreads}    残次竹丝 ×{WorkshopInventory.DefectiveThreads}    其中斑竹丝 ×{WorkshopInventory.SpottedThreads}"
             : $"背包 [B 展开]    青竹 ×{WorkshopInventory.GreenBamboo}    斑竹 ×{order.SpottedBamboo}    竹丝 ×{WorkshopInventory.TotalThreads}";
         if (order.HasPatternBlank)
-            inventory.text += inventoryExpanded ? "\n阴干素帘 ×1" : "    素帘 ×1";
+            inventory.text += inventoryExpanded ? "\n待织纹样的素帘 ×1" : "    素帘 ×1";
+        if (order.FinishedCurtainCount > 0)
+            inventory.text += (inventoryExpanded ? "\n" : "    ") + $"成品帘 ×{order.FinishedCurtainCount}";
     }
 
     Transform FindTarget(WorkshopOrder order)
@@ -354,6 +359,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     static string ProductionTarget(WorkshopOrder order)
     {
+        if (order.CanCollectCurtain)
+            return "阴干完成，回晾晒架按 E 收下纸帘";
         if (order.CanPlanBatch && order.HasBatchMaterial)
             return "去找老周按样加工，或到工位全程手做";
         if (order.NeedsBamboo)

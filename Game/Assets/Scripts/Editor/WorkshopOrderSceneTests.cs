@@ -161,7 +161,13 @@ public sealed class WorkshopOrderSceneTests
                 if (sheet == 1 && order.RequiredSheets > 1)
                     Assert.That(Find(reportComputer.Screen, "结算标题").GetComponent<TMP_Text>().text, Is.EqualTo("第 1 张已交付"));
                 Click(reportComputer.Screen, "确认");
-                yield return CloseJournal(checkPeople: day == 1 && sheet == 1);
+                if (day == 1 && sheet == 1)
+                    yield return CloseJournal(checkPeople: true);
+                else
+                {
+                    yield return Frames(2);
+                    Assert.That(GameObject.Find("关闭小册子"), Is.Null, "重复交付静默入册");
+                }
             }
             if (order.IsTeachingDay)
             {
@@ -258,7 +264,8 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(order.HasCollectorTip, Is.True);
         Assert.That((order.Funds, order.ElapsedGameMinutes - initialMinutes), Is.EqualTo((60, 50)));
         yield return Press(keyboard, Key.Escape);
-        yield return CloseJournal();
+        yield return Frames(2);
+        Assert.That(GameObject.Find("关闭小册子"), Is.Null);
         Assert.That(teaHint.enabled, Is.False, "完成茶摊支线后清除指路文字");
 
         var trader = MarketNpc(VillageMarketDialogue.Role.NightTrader);
@@ -371,6 +378,7 @@ public sealed class WorkshopOrderSceneTests
             { grade = LacquerMinigameController.LacquerGrade.S, gameMinutes = 20 });
         Assert.That(order.BeginDrying(), Is.True);
         order.AdvanceTime(order.RemainingDryingMinutes);
+        yield return CollectCurtain(keyboard);
         yield return FinishPattern(order, keyboard, mouse, verifyPreview: false);
         yield return SubmitSheet(keyboard, "+364");
         Assert.That(order.LastDelivery.Value.UsedSpottedBamboo, Is.True);
@@ -506,7 +514,21 @@ public sealed class WorkshopOrderSceneTests
         order.Tick(30f, true);
         order.SetClockSpeed(WorkshopOrder.ClockSpeed.Normal);
         Assert.That(order.IsDrying, Is.False);
+        Assert.That(order.CanCollectCurtain, Is.True);
+        Assert.That(order.CanUsePatternStation, Is.False);
+        Assert.That(order.FinishedCurtainCount, Is.Zero);
+        yield return CollectCurtain(keyboard);
         Assert.That(order.CanUsePatternStation, Is.EqualTo(order.IsPatternOrder));
+        Assert.That(order.FinishedCurtainCount, Is.EqualTo(order.IsPatternOrder ? 0 : 1));
+    }
+
+    static IEnumerator CollectCurtain(Keyboard keyboard)
+    {
+        MoveNear(Object.FindFirstObjectByType<DryingStationTrigger>().transform);
+        yield return Frames(2);
+        Assert.That(InteractionPromptUI.CurrentMessage, Is.EqualTo("按 E 收下纸帘"));
+        yield return Press(keyboard, Key.E);
+        Assert.That(WorkshopOrder.Current.CanCollectCurtain, Is.False);
     }
 
     static IEnumerator FinishPattern(WorkshopOrder order, Keyboard keyboard, Mouse mouse, bool verifyPreview)
@@ -572,6 +594,7 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(order.PatternResult.Value.Grade, Is.EqualTo(WorkshopOrder.QualityGrade.S));
         Assert.That(order.ElapsedGameMinutes - before, Is.EqualTo(order.PatternMinutes));
         Assert.That(order.HasPatternBlank, Is.False);
+        Assert.That(order.FinishedCurtainCount, Is.EqualTo(1));
         Assert.That(station.IsOpen, Is.False);
     }
 

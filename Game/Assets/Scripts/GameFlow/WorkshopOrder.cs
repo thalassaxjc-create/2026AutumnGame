@@ -184,6 +184,9 @@ public sealed partial class WorkshopOrder
     public bool CanHarvest => CanExplore;
     public bool CanWorkBamboo => CanExplore && HasBamboo;
     public bool NeedsBamboo => !IsTeachingDay && CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
+    public int FinishedCurtainCount => CurrentPhase == Phase.ReadyToSubmit ? 1 : 0;
+    public bool CanCollectCurtain => !DayEnded && CurrentPhase == Phase.Production &&
+        completedStages == (int)Stage.Drying + 1 && !running.HasValue && PatternDraft == null;
     public bool CanStartDrying => !DayEnded && CurrentPhase == Phase.Production &&
         completedStages == (int)Stage.Drying && !running.HasValue;
 
@@ -386,11 +389,19 @@ public sealed partial class WorkshopOrder
         running = null;
         dryingStartedAt = -1;
         completedStages++;
+        Revision++;
+    }
+
+    public bool TryCollectCurtain()
+    {
+        if (!CanCollectCurtain)
+            return false;
         if (IsPatternOrder)
             PatternDraft = new CurtainPatternDraft(PatternKind);
         else
             CurrentPhase = Phase.ReadyToSubmit;
         Revision++;
+        return true;
     }
 
     void Accept(Stage stage, int gameMinutes)
@@ -433,7 +444,8 @@ public sealed partial class WorkshopOrder
             StartSheet();
         Journal.AddEvent($"{DayName} · {OrderName}",
             WorkshopStoryUI.SheetDetails(deliveries[DeliveredCount - 1], DeliveredCount) +
-            (BatchBonus > 0 ? $"\n整批通过验收，另获 {BatchBonus} 元。" : ""));
+            (BatchBonus > 0 ? $"\n整批通过验收，另获 {BatchBonus} 元。" : ""),
+            announce: DeliveredCount == 1 && !settlements.Exists(day => day.DeliveredCount > 0));
         return true;
     }
 

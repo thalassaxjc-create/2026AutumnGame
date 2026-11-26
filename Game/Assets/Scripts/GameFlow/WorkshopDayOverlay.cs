@@ -263,7 +263,7 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
         reportRows.text = epilogue;
         reportAction.text = "合上五天的账";
         alternateAction.gameObject.SetActive(false);
-        order.Journal.AddEvent(title, epilogue);
+        order.Journal.AddEvent(title, epilogue, announce: true);
     }
 
     void OnDisable() => CloseMorning();

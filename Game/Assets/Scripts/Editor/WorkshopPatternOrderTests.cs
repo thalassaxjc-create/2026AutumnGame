@@ -129,6 +129,7 @@ public sealed class WorkshopPatternOrderTests
                     { grade = LacquerMinigameController.LacquerGrade.B, gameMinutes = 20 });
                 Assert.That(order.BeginDrying(), Is.True);
                 order.AdvanceTime(order.RemainingDryingMinutes);
+                Assert.That(order.TryCollectCurtain(), Is.True);
             }
             Assert.That(order.Submit(), Is.True);
             Assert.That(order.BatchBonus, Is.EqualTo(sheet == 3 ? 120 : 0));

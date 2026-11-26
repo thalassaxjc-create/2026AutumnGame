@@ -43,7 +43,7 @@ public sealed partial class WorkshopOrder
             TrialResolved = true;
             Journal.AddEvent("第四天 · 两张试纸", repairCurtain
                 ? "薄角跟着帘转。重新拉平松边之后，薄角消失了。"
-                : "薄角留在原处。调平夹架之后，薄角消失了。");
+                : "薄角留在原处。调平夹架之后，薄角消失了。", announce: true);
             Revision++;
         }
         return fixedFault;
@@ -102,7 +102,7 @@ public sealed partial class WorkshopOrder
         LessonSucceeded = correct;
         CurrentPhase = Phase.OrderComplete;
         ChangeFunds(correct ? 240 : 200);
-        Journal.AddEvent("第五天 · 艾琳的第一张纸", LessonDescription + "\n" + LessonResult);
+        Journal.AddEvent("第五天 · 艾琳的第一张纸", LessonDescription + "\n" + LessonResult, announce: true);
         return true;
     }
 

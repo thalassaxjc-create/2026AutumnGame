@@ -51,9 +51,16 @@ public sealed class WorkshopOrderTests
 
             Assert.That(order.IsDrying, Is.False);
             Assert.That(order.Progress, Is.EqualTo(5f / 12f));
+            Assert.That(order.CanCollectCurtain, Is.True);
+            Assert.That(order.FinishedCurtainCount, Is.Zero);
+            Assert.That(order.Submit(), Is.False);
+            Assert.That(order.TryCollectCurtain(), Is.True);
+            Assert.That(order.TryCollectCurtain(), Is.False);
+            Assert.That(order.FinishedCurtainCount, Is.EqualTo(1));
             Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.ReadyToSubmit));
             Assert.That((order.Days, order.Hour, order.Minute), Is.EqualTo((1, 10, 15)));
             Assert.That(order.Submit(), Is.True);
+            Assert.That(order.FinishedCurtainCount, Is.Zero);
             Assert.That(order.FinalGrade, Is.EqualTo(WorkshopOrder.QualityGrade.A));
             Assert.That(order.Reward, Is.EqualTo(115));
             Assert.That(order.Funds, Is.EqualTo(115));
@@ -103,6 +110,7 @@ public sealed class WorkshopOrderTests
         Assert.That(order.CanUsePatternStation, Is.False);
         Assert.That(order.Submit(), Is.False);
         order.AdvanceTime(order.RemainingDryingMinutes);
+        Assert.That(order.TryCollectCurtain(), Is.True);
     }
 
     [Test]
@@ -131,6 +139,7 @@ public sealed class WorkshopOrderTests
             });
             Assert.That(order.BeginDrying(), Is.True);
             order.AdvanceTime(120);
+            Assert.That(order.TryCollectCurtain(), Is.True);
             Assert.That(order.Submit(), Is.True);
 
             Assert.That(order.FinalGrade, Is.EqualTo(WorkshopOrder.QualityGrade.B), "S 与 C 折中为 B");

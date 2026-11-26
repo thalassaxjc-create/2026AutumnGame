@@ -6,12 +6,14 @@ using UnityEngine.UI;
 public sealed class DryingStationTrigger : MonoBehaviour
 {
     const float InteractionDistance = 3f;
-    const string Prompt = "按 E 将漆帘放上晾晒架阴干";
+    const string HangPrompt = "按 E 将漆帘放上晾晒架阴干";
+
+    const string CollectPrompt = "按 E 收下纸帘";
 
     PlayerController player;
     Transform countdownPivot;
     Text countdownLabel;
-    bool wasInRange;
+    string shownPrompt;
 
     void Awake() => EnsureCountdownView();
 
@@ -28,17 +30,23 @@ public sealed class DryingStationTrigger : MonoBehaviour
         bool inRange = player != null && !GameFlowModalState.IsInteractionBlocked &&
             !SceneTransitionState.IsLoading && HorizontalDistanceSquared(player.transform.position, transform.position)
             <= InteractionDistance * InteractionDistance;
-        bool canStart = inRange && order.CanStartDrying;
-        if (canStart)
-            InteractionPromptUI.Show(Prompt);
-        else if (wasInRange && InteractionPromptUI.CurrentMessage == Prompt)
-            InteractionPromptUI.Hide();
-        wasInRange = canStart;
-
-        if (canStart && SceneTransitionManager.TryConsumeInteractPress())
+        string prompt = !inRange ? null : order.CanCollectCurtain ? CollectPrompt :
+            order.CanStartDrying ? HangPrompt : null;
+        if (prompt != null)
         {
-            order.BeginDrying();
+            InteractionPromptUI.Show(prompt);
+            shownPrompt = prompt;
+        }
+        else
+            ClearPrompt();
+
+        if (prompt == null || !SceneTransitionManager.TryConsumeInteractPress())
+            return;
+        bool changed = prompt == CollectPrompt ? order.TryCollectCurtain() : order.BeginDrying();
+        if (changed)
+        {
             InteractionPromptUI.HideImmediate();
+            shownPrompt = null;
             UpdateCountdown(order);
         }
     }
@@ -54,14 +62,14 @@ public sealed class DryingStationTrigger : MonoBehaviour
     void UpdateCountdown(WorkshopOrder order)
     {
         EnsureCountdownView();
-        bool visible = order.IsDrying || order.GetStatus(WorkshopOrder.Stage.Drying) == WorkshopOrder.StageStatus.Complete;
+        bool visible = order.IsDrying || order.CanCollectCurtain;
         countdownPivot.gameObject.SetActive(visible);
         if (!visible)
             return;
 
         if (!order.IsDrying)
         {
-            countdownLabel.text = $"第 {order.CurrentSheetNumber} 张阴干完成";
+            countdownLabel.text = $"第 {order.CurrentSheetNumber} 张已阴干 · 待收取";
             countdownLabel.color = new Color32(174, 232, 154, 255);
             return;
         }
@@ -117,10 +125,12 @@ public sealed class DryingStationTrigger : MonoBehaviour
         return delta.sqrMagnitude;
     }
 
-    void OnDisable()
+    void ClearPrompt()
     {
-        if (InteractionPromptUI.CurrentMessage == Prompt)
+        if (shownPrompt != null && InteractionPromptUI.CurrentMessage == shownPrompt)
             InteractionPromptUI.Hide();
-        wasInRange = false;
+        shownPrompt = null;
     }
+
+    void OnDisable() => ClearPrompt();
 }
