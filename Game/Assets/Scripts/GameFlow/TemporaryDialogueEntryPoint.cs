@@ -26,6 +26,8 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
     int messageIndex;
     int selectedChoice;
     WorkshopOrder.Phase? storyPhase;
+    bool canDebriefLesson;
+    bool activeDebrief;
 
     public bool IsOpen => isOpen;
     public bool IsAwaitingChoice => awaitingChoice;
@@ -44,6 +46,8 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
     }
 
     public void ConfigureCasual(params string[] messages) => casualMessages = messages ?? Array.Empty<string>();
+
+    internal void EnableLessonDebrief() => canDebriefLesson = true;
 
     void Update()
     {
@@ -102,8 +106,11 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
         EnsureView();
         var order = WorkshopOrder.Current;
         bool casual = casualMessages.Length > 0 && order?.CanExplore == true && order.CurrentPhase != storyPhase;
-        activeMessages = casual ? casualMessages : storyMessages.Length > 0 ? storyMessages : new[] { placeholderMessage };
-        activeCompletesStory = !casual;
+        activeDebrief = canDebriefLesson && order?.TaughtLesson.HasValue == true &&
+            order.CurrentPhase == WorkshopOrder.Phase.OrderComplete;
+        activeMessages = activeDebrief ? new[] { "舅舅：艾琳说，那张纸是她自己捞起来的。来，把这五天的账算一算。" } :
+            casual ? casualMessages : storyMessages.Length > 0 ? storyMessages : new[] { placeholderMessage };
+        activeCompletesStory = !casual && !activeDebrief;
         messageIndex = 0;
         selectedChoice = 0;
         awaitingChoice = false;
@@ -173,7 +180,9 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
         Action callback = closedCallback;
         closedCallback = null;
         callback?.Invoke();
-        if (confirmed && activeCompletesStory && storyPhase.HasValue)
+        if (confirmed && activeDebrief)
+            WorkshopOrder.Current?.CloseDay();
+        else if (confirmed && activeCompletesStory && storyPhase.HasValue)
             WorkshopOrder.Current?.CloseIntroduction(storyPhase.Value, selectedChoice);
     }
 

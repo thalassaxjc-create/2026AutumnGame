@@ -134,13 +134,17 @@ public sealed class WorkshopOrderSceneTests
                 Assert.That(order.CurrentSheetNumber, Is.EqualTo(sheet));
                 Assert.That(order.PatternDraft, Is.Null);
                 Assert.That(order.CanHarvest, Is.True);
-                yield return ProduceAndDry(order, keyboard, dailyStalkNames);
+                if (day == 4 && sheet > 1)
+                    yield return RepairReturnedCurtain(sheet, keyboard);
+                else
+                    yield return ProduceAndDry(order, keyboard, dailyStalkNames);
                 if (order.IsPatternOrder)
                     yield return FinishPattern(order, keyboard, mouse, sheet == 1 && day <= 3);
                 if (day == 4 && sheet == 1)
                 {
                     Assert.That(order.Submit(), Is.False, "样帘先试捞再交付");
                     yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
+                    AssertCustomerBlocksWalking("老周");
                     MoveNear(GameObject.Find("老周").transform);
                     yield return Press(keyboard, Key.E);
                     Click(GameObject.Find("转半圈，再试一次"));
@@ -151,9 +155,10 @@ public sealed class WorkshopOrderSceneTests
                     yield return CloseJournal();
                     yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
                 }
-                yield return SubmitSheet(keyboard, "+" + pricesAtTestGrade[day - 1]);
+                int payout = day == 4 && sheet > 1 ? 150 : pricesAtTestGrade[day - 1];
+                yield return SubmitSheet(keyboard, "+" + payout);
                 Assert.That(order.DeliveredCount, Is.EqualTo(sheet));
-                Assert.That(order.TodayIncome, Is.EqualTo(pricesAtTestGrade[day - 1] * sheet));
+                Assert.That(order.TodayIncome, Is.EqualTo(day == 4 ? 120 + 150 * (sheet - 1) : payout * sheet));
                 Assert.That(order.Submit(), Is.False);
                 Assert.That(order.CanAdvanceDay, Is.False);
                 Assert.That(order.Settlements.Count, Is.EqualTo(day - 1));
@@ -171,19 +176,41 @@ public sealed class WorkshopOrderSceneTests
             }
             if (order.IsTeachingDay)
             {
+                AssertCustomerBlocksWalking("艾琳");
                 MoveNear(GameObject.Find("艾琳").transform);
                 yield return Press(keyboard, Key.E);
-                Click(GameObject.Find("用昨天的试纸找薄角"));
-                Click(GameObject.Find("找帘上的松边"));
+                Click(GameObject.Find("用修过的旧帘查薄角"));
+                Click(GameObject.Find("开始练习"));
+                Click(GameObject.Find("起帘"));
+                Click(GameObject.Find("轮到艾琳"));
+                double deadline = EditorApplication.timeSinceStartup + 15d;
+                while (GameObject.Find("试捞状态").GetComponent<Text>().text != "一边抬高了，现在提醒")
+                {
+                    Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待艾琳的提醒时机");
+                    yield return null;
+                }
+                yield return Press(keyboard, Key.E);
+                while (GameObject.Find("揭纸并盖村印") == null)
+                {
+                    Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待揭纸");
+                    yield return null;
+                }
+                Assert.That(order.TaughtLesson, Is.Null, "揭纸并选择去处前不能算教学完毕");
+                Click(GameObject.Find("揭纸并盖村印"));
+                Click(GameObject.Find("给艾琳带走"));
                 Assert.That(order.LessonSucceeded, Is.True);
                 yield return Press(keyboard, Key.Escape);
                 yield return CloseJournal();
             }
             Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.OrderComplete));
             Assert.That(order.CanExplore, Is.True);
-            Click(GameObject.Find("进入下一天"));
-            if (day == WorkshopOrder.LastStoryDay)
+            if (day < WorkshopOrder.LastStoryDay)
+                Click(GameObject.Find("进入下一天"));
+            else
             {
+                MoveNear(GameObject.Find("舅舅").transform);
+                yield return Press(keyboard, Key.E);
+                yield return Press(keyboard, Key.Enter);
                 // Let the newly opened panel join the raycast canvas before clicking it.
                 yield return Frames(2);
                 var results = GameObject.Find("每日结算").GetComponentsInChildren<Text>()
@@ -197,7 +224,7 @@ public sealed class WorkshopOrderSceneTests
                 yield return CloseJournal();
             }
         }
-        Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((1336, 1574, 1362)));
+        Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((1396, 1574, 1362)));
         Assert.That(order.Days, Is.EqualTo(5));
         Assert.That(order.Settlements.Count, Is.EqualTo(5));
         Assert.That(order.Settlements.All(record => record.Delivered), Is.True);
@@ -520,6 +547,39 @@ public sealed class WorkshopOrderSceneTests
         yield return CollectCurtain(keyboard);
         Assert.That(order.CanUsePatternStation, Is.EqualTo(order.IsPatternOrder));
         Assert.That(order.FinishedCurtainCount, Is.EqualTo(order.IsPatternOrder ? 0 : 1));
+    }
+
+    static IEnumerator RepairReturnedCurtain(int sheet, Keyboard keyboard)
+    {
+        yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
+        MoveNear(GameObject.Find("老周").transform);
+        yield return Press(keyboard, Key.E);
+        if (sheet == 2)
+        {
+            foreach (string corner in new[] { "左上孔", "右上孔", "右下孔", "左下孔" })
+                Click(GameObject.Find(corner));
+            Click(GameObject.Find("收线并检查"));
+        }
+        else
+        {
+            Click(GameObject.Find("左上 · 放夹子"));
+            Click(GameObject.Find("左下 · 放夹子"));
+            Click(GameObject.Find("转半圈检查"));
+            Click(GameObject.Find("压平并检查"));
+        }
+        Assert.That(WorkshopOrder.Current.FinishedCurtainCount, Is.EqualTo(1));
+        yield return Press(keyboard, Key.Escape);
+        yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
+    }
+
+    static void AssertCustomerBlocksWalking(string name)
+    {
+        Transform customer = GameObject.Find(name).transform;
+        MoveNear(customer);
+        var controller = Object.FindFirstObjectByType<PlayerController>().GetComponent<CharacterController>();
+        CollisionFlags collision = controller.Move(Vector3.right * 1.3f);
+        Assert.That(collision.HasFlag(CollisionFlags.Sides), Is.True, $"玩家撞到{name}时应被挡住");
+        Assert.That(controller.transform.position.x, Is.LessThan(customer.position.x - .3f));
     }
 
     static IEnumerator CollectCurtain(Keyboard keyboard)

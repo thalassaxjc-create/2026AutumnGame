@@ -65,7 +65,7 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
             clockBar.SetActive(showClock);
         if (showClock)
             DrawSpeed();
-        bool showEndDay = worldVisible && order.CanExplore;
+        bool showEndDay = worldVisible && order.CanCloseDay && !order.TaughtLesson.HasValue;
         if (endDay.gameObject.activeSelf != showEndDay)
             endDay.gameObject.SetActive(showEndDay);
         if (showEndDay)
@@ -258,6 +258,8 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
                 : "你拖着来时的行李箱出了村。后来舅舅寄来一张试纸，背面问你今天走到了哪里。";
         if (order.TaughtLesson.HasValue && !order.LessonSucceeded)
             epilogue += "\n艾琳把缺角的第一张试纸夹进信里，说下次想试得再匀一点。";
+        if (order.TaughtLesson.HasValue)
+            epilogue += "\n" + order.PaperDestinationText;
         epilogue += shareNotes ? "\n工坊木匣里多了一页新来访者的批注。" : "\n手册里还夹着一根竹丝，两边都留了空白。";
         reportTitle.text = title;
         reportRows.text = epilogue;

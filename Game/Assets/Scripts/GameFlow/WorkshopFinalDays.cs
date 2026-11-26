@@ -1,7 +1,7 @@
 public sealed partial class WorkshopOrder
 {
     public enum LessonTopic { LevelFrame, TurtleKnot, ThinCorner }
-    public enum BatchMethod { HandWeave, HandLacquer, Partner }
+    public enum PaperDestination { Visitor, Workshop, Journal }
 
     public const int PartnerFee = 65;
     public const int LessonClosingHour = 18;
@@ -14,12 +14,11 @@ public sealed partial class WorkshopOrder
     public bool LessonSucceeded { get; private set; }
     public bool CanTeachLesson => IsTeachingDay && CurrentPhase == Phase.Production && Hour < LessonClosingHour;
     public bool CanUseTurtleSample => settlements.Exists(day => day.Day == 2 && day.DeliveredCount > 0);
-    public bool CanPlanBatch => Days == 4 && DeliveredCount > 0 && TrialResolved &&
-        CurrentPhase == Phase.Production && completedStages == 0 && !batchMaterialReady && !running.HasValue;
-    public bool HasBatchMaterial => WorkshopInventory.TotalThreads >= BambooCraftProgress.ThreadsPerBatch ||
-        (WorkshopInventory.GreenBamboo > 0 && WorkshopInventory.TrackedCraft?.IsProcessingBamboo != true);
+    public bool AwaitingReturnedCurtain => Days == 4 && DeliveredCount > 0 &&
+        CurrentPhase == Phase.Production;
+    public bool CanCloseDay => CanExplore && (!IsTeachingDay || Hour >= LessonClosingHour || TaughtLesson.HasValue);
+    public PaperDestination? FirstPaperDestination { get; private set; }
 
-    bool batchMaterialReady;
     int partnerIncome;
 
     public bool TryTurnTrial()
@@ -49,41 +48,19 @@ public sealed partial class WorkshopOrder
         return fixedFault;
     }
 
-    public bool TryPrepareBatch(BatchMethod method)
+    public bool TryFinishReturnedCurtain(bool hiredPartner)
     {
-        if (method is not (BatchMethod.HandWeave or BatchMethod.HandLacquer or BatchMethod.Partner) ||
-            !CanPlanBatch || !HasBatchMaterial || (method == BatchMethod.Partner && Funds < PartnerFee))
-            return false;
-        int minutes = method switch
-        {
-            BatchMethod.HandWeave => 45,
-            BatchMethod.HandLacquer => 75,
-            _ => 95
-        };
-        if (MinutesUntilClose <= minutes)
+        int minutes = DeliveredCount == 1 ? 20 : hiredPartner ? 40 : 25;
+        if (!AwaitingReturnedCurtain || !TrialResolved || MinutesUntilClose <= minutes ||
+            (hiredPartner && (DeliveredCount != 2 || Funds < PartnerFee)))
             return false;
 
-        if (WorkshopInventory.TotalThreads >= BambooCraftProgress.ThreadsPerBatch)
+        WeavingResult = new WeavingMinigameController.WeavingResult { grade = WeavingMinigameController.WeavingGrade.B };
+        LacquerResult = new LacquerMinigameController.LacquerResult { grade = LacquerMinigameController.LacquerGrade.B };
+        completedStages = (int)Stage.Drying + 1;
+        CurrentPhase = Phase.ReadyToSubmit;
+        if (hiredPartner)
         {
-            if (!WorkshopInventory.ConsumeThreads(BambooCraftProgress.ThreadsPerBatch, out bool defective, out bool spotted))
-                return false;
-            UsedDefectiveMaterials = defective;
-            UsedSpottedBamboo = spotted;
-        }
-        else if (!GreenBambooBag.TryTakeOne())
-            return false;
-
-        batchMaterialReady = true;
-        if (method != BatchMethod.HandWeave)
-        {
-            WeavingResult = new WeavingMinigameController.WeavingResult { grade = WeavingMinigameController.WeavingGrade.B };
-            completedStages = (int)Stage.Lacquer;
-        }
-        if (method != BatchMethod.HandLacquer)
-            LacquerResult = new LacquerMinigameController.LacquerResult { grade = LacquerMinigameController.LacquerGrade.B };
-        if (method == BatchMethod.Partner)
-        {
-            completedStages = (int)Stage.Drying;
             ChangeFunds(-PartnerFee);
             XiaoPiFunds += PartnerFee;
             partnerIncome += PartnerFee;
@@ -92,24 +69,41 @@ public sealed partial class WorkshopOrder
         return true;
     }
 
-    public bool TryTeachLesson(LessonTopic topic, bool correct)
+    public bool CanUseLessonSample(LessonTopic topic) => CanTeachLesson && (topic switch
     {
-        if (!CanTeachLesson || topic is not (LessonTopic.LevelFrame or LessonTopic.TurtleKnot or LessonTopic.ThinCorner) ||
-            (topic == LessonTopic.TurtleKnot && !CanUseTurtleSample) ||
-            (topic == LessonTopic.ThinCorner && !TrialResolved))
+        LessonTopic.LevelFrame => true,
+        LessonTopic.TurtleKnot => CanUseTurtleSample,
+        LessonTopic.ThinCorner => settlements.Exists(day => day.Day == 4 && day.DeliveredCount >= 2),
+        _ => false
+    });
+
+    public bool TryFinishLesson(LessonTopic topic, bool correct, PaperDestination destination)
+    {
+        if (!CanUseLessonSample(topic) || destination is not
+            (PaperDestination.Visitor or PaperDestination.Workshop or PaperDestination.Journal))
             return false;
         TaughtLesson = topic;
         LessonSucceeded = correct;
+        FirstPaperDestination = destination;
         CurrentPhase = Phase.OrderComplete;
         ChangeFunds(correct ? 240 : 200);
-        Journal.AddEvent("第五天 · 艾琳的第一张纸", LessonDescription + "\n" + LessonResult, announce: true);
+        Journal.AddEvent("第五天 · 艾琳的第一张纸", LessonDescription + "\n" + LessonResult + "\n" + PaperDestinationText,
+            announce: true);
         return true;
     }
 
+    internal string PaperDestinationText => FirstPaperDestination switch
+    {
+        PaperDestination.Visitor => "盖好村印后，艾琳把纸夹进旅行本带走。",
+        PaperDestination.Workshop => "盖好村印后，你们把纸挂在工坊的墙上。",
+        PaperDestination.Journal => "盖好村印后，你把纸夹进小册子。",
+        _ => ""
+    };
+
     internal string LessonDescription => TaughtLesson switch
     {
-        LessonTopic.TurtleKnot => "艾琳在旧龟纹样帘上找到了起针孔，试着自己收了一次线。",
-        LessonTopic.ThinCorner => "艾琳把第四天的两张试纸举到窗前，照着它们检查薄角。",
+        LessonTopic.TurtleKnot => "你和艾琳用旧龟纹样帘练习，顺着花纹看纸浆铺开的样子。",
+        LessonTopic.ThinCorner => "你和艾琳用修过的旧帘试捞，还拿昨天的试纸对照了薄角。",
         LessonTopic.LevelFrame => "艾琳把普通帘浸进纸浆，试着让两边一起离开水面。",
         _ => ""
     };

@@ -130,7 +130,7 @@ public sealed partial class WorkshopOrder
     {
         2 => "龟纹小帘",
         3 => "朱边青示范帘",
-        4 => "纸坊试捞批次",
+        4 => "纸坊返修批次",
         5 => "艾琳的第一张纸",
         _ => "普通宣纸帘"
     };
@@ -182,8 +182,8 @@ public sealed partial class WorkshopOrder
     public bool CanExplore => !DayEnded && CurrentPhase is Phase.Home or Phase.NewOrder or Phase.Production
         or Phase.ReadyToSubmit or Phase.OrderComplete;
     public bool CanHarvest => CanExplore;
-    public bool CanWorkBamboo => CanExplore && HasBamboo;
-    public bool NeedsBamboo => !IsTeachingDay && CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
+    public bool CanWorkBamboo => CanExplore && !AwaitingReturnedCurtain && HasBamboo;
+    public bool NeedsBamboo => !IsTeachingDay && !AwaitingReturnedCurtain && CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
     public int FinishedCurtainCount => CurrentPhase == Phase.ReadyToSubmit ? 1 : 0;
     public bool CanCollectCurtain => !DayEnded && CurrentPhase == Phase.Production &&
         completedStages == (int)Stage.Drying + 1 && !running.HasValue && PatternDraft == null;
@@ -196,7 +196,7 @@ public sealed partial class WorkshopOrder
         {
             if (completedStages >= (int)Stage.Lacquer || CurrentPhase != Phase.Production)
                 return completedStages;
-            if (batchMaterialReady || WorkshopInventory.TotalThreads >= BambooCraftProgress.ThreadsPerBatch)
+            if (WorkshopInventory.TotalThreads >= BambooCraftProgress.ThreadsPerBatch)
                 return (int)Stage.Weaving;
             var craft = WorkshopInventory.TrackedCraft;
             return craft != null && (craft.Stage == BambooCraftProgress.Step.BatchFinished || craft.IsFinishingStage)
@@ -301,7 +301,7 @@ public sealed partial class WorkshopOrder
 
     public StageStatus GetStatus(Stage stage)
     {
-        if (IsTeachingDay || (stage == Stage.Pattern && !IsPatternOrder))
+        if (IsTeachingDay || AwaitingReturnedCurtain || (stage == Stage.Pattern && !IsPatternOrder))
             return StageStatus.Locked;
         int steps = CompletedSteps;
         if ((int)stage < steps)
@@ -314,7 +314,7 @@ public sealed partial class WorkshopOrder
 
     public bool CanPlay(Stage stage)
     {
-        return !IsTeachingDay && !DayEnded && CurrentPhase == Phase.Production && !running.HasValue &&
+        return !IsTeachingDay && !AwaitingReturnedCurtain && !DayEnded && CurrentPhase == Phase.Production && !running.HasValue &&
             (int)stage == CompletedSteps && stage is Stage.Weaving or Stage.Lacquer;
     }
 
@@ -348,20 +348,13 @@ public sealed partial class WorkshopOrder
 
     public void ConfirmWeaving(WeavingMinigameController.WeavingResult result)
     {
-        if (running != Stage.Weaving)
+        if (running != Stage.Weaving ||
+            !WorkshopInventory.ConsumeThreads(BambooCraftProgress.ThreadsPerBatch, out bool defective, out bool spotted))
             return;
-        if (!batchMaterialReady)
-        {
-            if (!WorkshopInventory.ConsumeThreads(BambooCraftProgress.ThreadsPerBatch, out bool defective, out bool spotted))
-                return;
-            UsedDefectiveMaterials |= defective;
-            UsedSpottedBamboo = spotted;
-        }
+        UsedDefectiveMaterials |= defective;
+        UsedSpottedBamboo = spotted;
         WeavingResult = result;
-        if (batchMaterialReady && LacquerResult.HasValue)
-            Accept(Stage.Lacquer, result.gameMinutes);
-        else
-            Accept(Stage.Weaving, result.gameMinutes);
+        Accept(Stage.Weaving, result.gameMinutes);
     }
 
     public void ConfirmLacquer(LacquerMinigameController.LacquerResult result)
@@ -463,7 +456,7 @@ public sealed partial class WorkshopOrder
 
     public bool CloseDay()
     {
-        if (!CanExplore)
+        if (!CanCloseDay)
             return false;
         SettleDay();
         return true;
@@ -519,7 +512,6 @@ public sealed partial class WorkshopOrder
     void ResetSheet()
     {
         completedStages = 0;
-        batchMaterialReady = false;
         running = null;
         dryingStartedAt = -1;
         UsedDefectiveMaterials = false;

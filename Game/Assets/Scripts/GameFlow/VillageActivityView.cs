@@ -12,6 +12,11 @@ internal sealed class VillageActivityView
     readonly Text[] optionLabels = new Text[OptionCount];
     readonly Transform card;
     GameObject proof;
+    RectTransform pullGauges;
+    RectTransform balanceTrack;
+    RectTransform balanceMarker;
+    RectTransform coverageFill;
+    Text pullCue;
     RectTransform secondProof;
     Text[] firstCorners;
     Text[] secondCorners;
@@ -69,6 +74,8 @@ internal sealed class VillageActivityView
         title.text = heading;
         if (proof != null)
             proof.SetActive(false);
+        if (pullGauges != null)
+            pullGauges.gameObject.SetActive(false);
         SetBody(description);
         foreach (Button option in options)
             option.gameObject.SetActive(false);
@@ -86,12 +93,48 @@ internal sealed class VillageActivityView
             PaintProof(secondCorners, followsCurtain ? 3 : 0);
     }
 
-    internal void ShowLessonProof(bool successful)
+    internal void ShowLessonProof(bool successful, string caption = "艾琳的试纸")
     {
         EnsureProof();
-        firstProofCaption.text = "艾琳的试纸";
+        firstProofCaption.text = caption;
         secondProof.gameObject.SetActive(false);
         PaintProof(firstCorners, successful ? -1 : 0);
+    }
+
+    internal void ShowPull(float balance, float coverage, string cue)
+    {
+        if (pullGauges == null)
+        {
+            pullGauges = WorkshopStoryUI.Region(card, "试捞操作", new Rect(.10f, .17f, .80f, .34f));
+            var wood = WorkshopStoryUI.Wood;
+            var ink = WorkshopStoryUI.Ink;
+            WorkshopStoryUI.Label(pullGauges, "平衡", "帘面平衡", new Rect(0f, .71f, .25f, .20f), 24, ink);
+            balanceTrack = WorkshopStoryUI.Panel(pullGauges, "平衡槽", new Rect(.28f, .73f, .70f, .16f), wood).rectTransform;
+            WorkshopStoryUI.Panel(balanceTrack, "平稳区", new Rect(.39f, 0f, .22f, 1f), WorkshopStoryUI.Green);
+            balanceMarker = WorkshopStoryUI.Panel(balanceTrack, "帘面指针", new Rect(0f, .10f, .035f, .80f),
+                WorkshopStoryUI.Paper).rectTransform;
+            WorkshopStoryUI.Label(pullGauges, "纸浆", "纸浆覆盖", new Rect(0f, .44f, .25f, .20f), 24, ink);
+            var coverageTrack = WorkshopStoryUI.Panel(pullGauges, "纸浆槽", new Rect(.28f, .46f, .70f, .16f), wood).transform;
+            coverageFill = WorkshopStoryUI.Panel(coverageTrack, "进度", new Rect(0f, 0f, 0f, 1f),
+                WorkshopStoryUI.Green).rectTransform;
+            pullCue = WorkshopStoryUI.Label(pullGauges, "试捞状态", "", new Rect(0f, .01f, 1f, .31f),
+                28, ink, bold: true);
+        }
+        pullGauges.gameObject.SetActive(true);
+        float marker = (balance + 1f) * .4825f;
+        balanceMarker.anchorMin = new Vector2(marker, .10f);
+        balanceMarker.anchorMax = new Vector2(marker + .035f, .90f);
+        coverageFill.anchorMax = new Vector2(coverage, 1f);
+        pullCue.text = cue;
+    }
+
+    internal float? ReadPullPointer(Vector2 position)
+    {
+        if (balanceTrack == null || !RectTransformUtility.RectangleContainsScreenPoint(balanceTrack, position) ||
+            !RectTransformUtility.ScreenPointToLocalPointInRectangle(balanceTrack, position, null, out var local))
+            return null;
+        Rect rect = balanceTrack.rect;
+        return Mathf.Lerp(-1f, 1f, Mathf.InverseLerp(rect.xMin, rect.xMax, local.x));
     }
 
     void EnsureProof()

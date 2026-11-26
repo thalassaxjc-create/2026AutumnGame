@@ -100,6 +100,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
             if (uncle != null)
             {
+                if (order.IsTeachingDay)
+                    uncle.GetComponent<TemporaryDialogueEntryPoint>().EnableLessonDebrief();
                 CreateCompanions(uncle, order.Days);
                 if (order.Days >= 4)
                     CreateCustomer(uncle, order.Days);
@@ -146,8 +148,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         },
         4 => new[]
         {
-            "舅舅：捞纸作坊急着替换旧帘，订三张。老周想直接收货，还问我能不能顺路给他捎包烟。我说先捞一张纸看看。",
-            "老周：要不每张到手就收，钱也一张张算。你要是肯把样帘摆出来当面试，三张都过关，我从返工预算里给你补一笔。",
+            "舅舅：纸坊送回两张用坏的旧帘，还得补一张新帘。先做新帘，阴干了拿去给老周试捞。",
+            "老周：试捞完，我把断线的和翘边的两张拿给你。你想分开交，还是三张一起按样验？",
             "舅舅：你来定。交不齐就把已经做好的交了，别为了赶数把湿帘从架上摘下来。"
         },
         5 => new[]
@@ -311,7 +313,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         // NPC 自身带有头顶光标，避免再叠一层屏幕光标。
         if (order.CurrentPhase == WorkshopOrder.Phase.Village || order.CurrentPhase == WorkshopOrder.Phase.Home)
             return null;
-        if (order.IsTeachingDay || order.PendingTrial)
+        if (order.IsTeachingDay || order.PendingTrial || order.AwaitingReturnedCurtain)
             return null;
         if (order.CurrentPhase == WorkshopOrder.Phase.NewOrder || order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit)
             return computer != null ? computer.transform : null;
@@ -339,9 +341,9 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         if (order.PendingTrial)
             return "第一张已阴干，带到院子找老周试捞";
         if (order.IsTeachingDay && order.CurrentPhase == WorkshopOrder.Phase.Production)
-            return order.CanTeachLesson ? "18:00 前回院子找艾琳，教她试捞" : "艾琳已经启程，可以收工结算";
+            return order.CanTeachLesson ? "18:00 前回院子找艾琳，一起试捞并揭纸" : "艾琳已经启程，可以收工结算";
         if (order.IsTeachingDay && order.CurrentPhase == WorkshopOrder.Phase.OrderComplete)
-            return "艾琳已试捞，收工查看五天结局";
+            return "艾琳已试捞，去找舅舅结算五天的账";
         return order.CurrentPhase switch
         {
             WorkshopOrder.Phase.Opening => "序章",
@@ -361,8 +363,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         if (order.CanCollectCurtain)
             return "阴干完成，回晾晒架按 E 收下纸帘";
-        if (order.CanPlanBatch && order.HasBatchMaterial)
-            return "去找老周按样加工，或到工位全程手做";
+        if (order.AwaitingReturnedCurtain)
+            return order.DeliveredCount == 1 ? "去院子找老周，补第二张帘的断线" : "去院子找老周，压平第三张帘的翘边";
         if (order.NeedsBamboo)
             return order.HarvestedStalks.Count >= BambooHarvest.HarvestCount
                 ? "今天的青竹已采完，明早竹林会长出新竹"
@@ -432,6 +434,10 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             new Vector3(.64f, .9f, .64f), day == 4 ? new Color32(92, 113, 78, 255) : new Color32(148, 86, 94, 255));
         CreatePrimitivePart(customer.transform, PrimitiveType.Sphere, "Head", new Vector3(0f, .94f, 0f),
             Vector3.one * .55f, new Color32(230, 190, 152, 255));
+        var collider = customer.AddComponent<CapsuleCollider>();
+        collider.center = Vector3.up * .15f;
+        collider.height = 2.1f;
+        collider.radius = .34f;
         customer.AddComponent<NpcCharacter>().Configure(customerName);
         var dialogue = customer.AddComponent<WorkshopCustomerDialogue>();
         customer.AddComponent<NpcDialogueInteraction>().Configure(dialogue, "按 E 交谈", 2f);

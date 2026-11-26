@@ -120,16 +120,11 @@ public sealed class WorkshopPatternOrderTests
             }
             else
             {
-                GreenBambooBag.AddOne();
-                Assert.That(order.TryPrepareBatch(WorkshopOrder.BatchMethod.HandLacquer), Is.True);
-                Assert.That(order.TryPrepareBatch(WorkshopOrder.BatchMethod.Partner), Is.False);
-                Assert.That(GreenBambooBag.Count, Is.Zero);
-                Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.True);
-                order.ConfirmLacquer(new LacquerMinigameController.LacquerResult
-                    { grade = LacquerMinigameController.LacquerGrade.B, gameMinutes = 20 });
-                Assert.That(order.BeginDrying(), Is.True);
-                order.AdvanceTime(order.RemainingDryingMinutes);
-                Assert.That(order.TryCollectCurtain(), Is.True);
+                Assert.That(order.AwaitingReturnedCurtain, Is.True);
+                Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.False);
+                Assert.That(order.TryFinishReturnedCurtain(false), Is.True);
+                Assert.That(order.TryFinishReturnedCurtain(false), Is.False);
+                Assert.That(order.FinishedCurtainCount, Is.EqualTo(1));
             }
             Assert.That(order.Submit(), Is.True);
             Assert.That(order.BatchBonus, Is.EqualTo(sheet == 3 ? 120 : 0));
@@ -141,8 +136,12 @@ public sealed class WorkshopPatternOrderTests
         order.CloseIntroduction(WorkshopOrder.Phase.Home);
         Assert.That(order.Begin(WorkshopOrder.Stage.Weaving), Is.False);
         Assert.That(order.CanUseTurtleSample, Is.True);
-        Assert.That(order.TryTeachLesson(WorkshopOrder.LessonTopic.ThinCorner, true), Is.True);
-        Assert.That(order.TryTeachLesson(WorkshopOrder.LessonTopic.LevelFrame, true), Is.False);
+        Assert.That(order.CloseDay(), Is.False);
+        Assert.That(order.TryFinishLesson(WorkshopOrder.LessonTopic.ThinCorner, true,
+            WorkshopOrder.PaperDestination.Visitor), Is.True);
+        Assert.That(order.TryFinishLesson(WorkshopOrder.LessonTopic.LevelFrame, true,
+            WorkshopOrder.PaperDestination.Visitor), Is.False);
+        Assert.That(order.FirstPaperDestination, Is.EqualTo(WorkshopOrder.PaperDestination.Visitor));
         Assert.That(order.DeliveredCount, Is.EqualTo(1));
         Assert.That(order.LastDelivery, Is.Null);
         Assert.That(order.TodayIncome, Is.EqualTo(240));
