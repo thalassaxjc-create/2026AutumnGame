@@ -89,7 +89,10 @@ internal static class WorkshopStoryUI
         var text = new StringBuilder();
         if (record.ReachedMidnight)
             text.Append("24:00 截止  ·  ");
-        text.AppendLine($"已交付 {record.DeliveredCount}/{record.RequiredSheets} 张");
+        if (order.IsTeachingDay)
+            text.AppendLine(order.TaughtLesson.HasValue ? order.LessonResult : "艾琳启程了，这次没能一起试捞。");
+        else
+            text.AppendLine($"已交付 {record.DeliveredCount}/{record.RequiredSheets} 张");
         for (int i = 0; i < order.Deliveries.Count; i++)
             text.AppendLine(SheetDetails(order.Deliveries[i], i + 1));
         if (record.BatchBonus > 0)

@@ -119,7 +119,7 @@ public sealed class WorkshopOrderSceneTests
         yield return Press(keyboard, Key.Escape);
         Assert.That(order.CanHarvest, Is.True);
 
-        int[] pricesAtTestGrade = { 80, 126, 162, 120, 216 };
+        int[] pricesAtTestGrade = { 80, 126, 162, 120 };
         for (int day = 1; day <= WorkshopOrder.LastStoryDay; day++)
         {
             if (day > 1)
@@ -129,7 +129,7 @@ public sealed class WorkshopOrderSceneTests
                 Assert.That(dailyStalkNames.All(seenStalkNames.Add), Is.True, "每天从不同位置的竹竿中采集");
                 yield return ReceivePatternOrder(order, keyboard);
             }
-            for (int sheet = 1; sheet <= order.RequiredSheets; sheet++)
+            for (int sheet = 1; !order.IsTeachingDay && sheet <= order.RequiredSheets; sheet++)
             {
                 Assert.That(order.CurrentSheetNumber, Is.EqualTo(sheet));
                 Assert.That(order.PatternDraft, Is.Null);
@@ -137,6 +137,20 @@ public sealed class WorkshopOrderSceneTests
                 yield return ProduceAndDry(order, keyboard, dailyStalkNames);
                 if (order.IsPatternOrder)
                     yield return FinishPattern(order, keyboard, mouse, sheet == 1 && day <= 3);
+                if (day == 4 && sheet == 1)
+                {
+                    Assert.That(order.Submit(), Is.False, "样帘先试捞再交付");
+                    yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
+                    MoveNear(GameObject.Find("老周").transform);
+                    yield return Press(keyboard, Key.E);
+                    Click(GameObject.Find("转半圈，再试一次"));
+                    Assert.That(GameObject.Find("转帘后").activeInHierarchy, Is.True);
+                    Click(GameObject.Find("把帘的松边拉平"));
+                    Assert.That(order.TrialResolved, Is.True);
+                    yield return Press(keyboard, Key.Escape);
+                    yield return CloseJournal();
+                    yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
+                }
                 yield return SubmitSheet(keyboard, "+" + pricesAtTestGrade[day - 1]);
                 Assert.That(order.DeliveredCount, Is.EqualTo(sheet));
                 Assert.That(order.TodayIncome, Is.EqualTo(pricesAtTestGrade[day - 1] * sheet));
@@ -148,6 +162,16 @@ public sealed class WorkshopOrderSceneTests
                     Assert.That(Find(reportComputer.Screen, "结算标题").GetComponent<TMP_Text>().text, Is.EqualTo("第 1 张已交付"));
                 Click(reportComputer.Screen, "确认");
                 yield return CloseJournal(checkPeople: day == 1 && sheet == 1);
+            }
+            if (order.IsTeachingDay)
+            {
+                MoveNear(GameObject.Find("艾琳").transform);
+                yield return Press(keyboard, Key.E);
+                Click(GameObject.Find("用昨天的试纸找薄角"));
+                Click(GameObject.Find("找帘上的松边"));
+                Assert.That(order.LessonSucceeded, Is.True);
+                yield return Press(keyboard, Key.Escape);
+                yield return CloseJournal();
             }
             Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.OrderComplete));
             Assert.That(order.CanExplore, Is.True);
@@ -167,7 +191,7 @@ public sealed class WorkshopOrderSceneTests
                 yield return CloseJournal();
             }
         }
-        Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((1312, 1574, 1362)));
+        Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((1336, 1574, 1362)));
         Assert.That(order.Days, Is.EqualTo(5));
         Assert.That(order.Settlements.Count, Is.EqualTo(5));
         Assert.That(order.Settlements.All(record => record.Delivered), Is.True);
@@ -574,6 +598,11 @@ public sealed class WorkshopOrderSceneTests
             yield return Press(keyboard, Key.Enter);
         if (order.Days == 4)
             yield return Press(keyboard, Key.Digit1);
+        if (order.IsTeachingDay)
+        {
+            Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Production));
+            yield break;
+        }
         Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.NewOrder));
         yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
         var computer = Object.FindFirstObjectByType<WorkshopComputer>();

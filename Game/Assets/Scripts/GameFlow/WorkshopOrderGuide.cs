@@ -145,15 +145,15 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         },
         4 => new[]
         {
-            "舅舅：捞纸作坊急着替换旧帘，订三张。老周说验货费事，问我能不能顺路给他捎包烟。",
+            "舅舅：捞纸作坊急着替换旧帘，订三张。老周想直接收货，还问我能不能顺路给他捎包烟。我说先捞一张纸看看。",
             "老周：要不每张到手就收，钱也一张张算。你要是肯把样帘摆出来当面试，三张都过关，我从返工预算里给你补一笔。",
             "舅舅：你来定。交不齐就把已经做好的交了，别为了赶数把湿帘从架上摘下来。"
         },
         5 => new[]
         {
-            "舅舅：昨天在纸坊看试捞的艾琳想定做一张小帘。她画了一圈龟纹，说想回去自己试着捞一张纸。",
-            "艾琳：我还想学怎么洗。上次我把竹编放在太阳底下，整个都翘起来了。",
-            "舅舅：今天只做这一张。交完记得收工，咱们算一算五天的账，也聊聊你接下来想去哪。"
+            "舅舅：艾琳傍晚就走，想在走之前自己捞一张纸。院子里有旧帘，你挑个好懂的办法教她。",
+            "舅舅：你头一天也是摸着做的。想想哪一句提醒，能让她一下就明白。",
+            "舅舅：等她试完，咱们把五天的账算清楚，再聊聊你想去哪。"
         },
         _ =>
                 new[]
@@ -168,7 +168,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         1 => "舅舅：别急，阴干最忌心浮气躁。",
         4 => "舅舅：先交做好的。老周下次来，再拿前一张试捞的纸和新帘对一对。",
-        5 => "舅舅：艾琳那张要阴干透。告诉她用完先冲净，悬起来晾，别在太阳下烤。",
+        5 => "舅舅：艾琳就在院里。给她找张样帘，或者拿昨天的试纸去。",
         _ => "舅舅：做完先对一对样稿，再去电脑上交单。"
     };
 
@@ -284,8 +284,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             displayedOrderRevision = order.Revision;
             status.text = $"{order.DayName}  {order.Hour:00}:{order.Minute:00}    主角 ¥{order.Funds}    小皮 ¥{order.XiaoPiFunds}    小白 ¥{order.XiaoBaiFunds}";
             string next = TaskText(order);
-            task.text = order.CurrentPhase == WorkshopOrder.Phase.Production ||
-                order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit
+            task.text = !order.IsTeachingDay && (order.CurrentPhase == WorkshopOrder.Phase.Production ||
+                order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit)
                 ? $"第 {order.CurrentSheetNumber}/{order.RequiredSheets} 张 · {next}"
                 : next;
         }
@@ -305,6 +305,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         // NPC 自身带有头顶光标，避免再叠一层屏幕光标。
         if (order.CurrentPhase == WorkshopOrder.Phase.Village || order.CurrentPhase == WorkshopOrder.Phase.Home)
+            return null;
+        if (order.IsTeachingDay || order.PendingTrial)
             return null;
         if (order.CurrentPhase == WorkshopOrder.Phase.NewOrder || order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit)
             return computer != null ? computer.transform : null;
@@ -329,6 +331,12 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     static string TaskText(WorkshopOrder order)
     {
+        if (order.PendingTrial)
+            return "第一张已阴干，带到院子找老周试捞";
+        if (order.IsTeachingDay && order.CurrentPhase == WorkshopOrder.Phase.Production)
+            return order.CanTeachLesson ? "18:00 前回院子找艾琳，教她试捞" : "艾琳已经启程，可以收工结算";
+        if (order.IsTeachingDay && order.CurrentPhase == WorkshopOrder.Phase.OrderComplete)
+            return "艾琳已试捞，收工查看五天结局";
         return order.CurrentPhase switch
         {
             WorkshopOrder.Phase.Opening => "序章",
@@ -346,6 +354,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     static string ProductionTarget(WorkshopOrder order)
     {
+        if (order.CanPlanBatch && order.HasBatchMaterial)
+            return "去找老周按样加工，或到工位全程手做";
         if (order.NeedsBamboo)
             return order.HarvestedStalks.Count >= BambooHarvest.HarvestCount
                 ? "今天的青竹已采完，明早竹林会长出新竹"
@@ -410,14 +420,14 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         string customerName = day == 4 ? "老周" : "艾琳";
         var customer = new GameObject(customerName);
-        customer.transform.position = uncleTransform.position + new Vector3(.3f, 0f, 2.5f);
+        customer.transform.position = uncleTransform.position + new Vector3(.3f, 0f, 5.5f);
         CreatePrimitivePart(customer.transform, PrimitiveType.Capsule, "Body", Vector3.zero,
             new Vector3(.64f, .9f, .64f), day == 4 ? new Color32(92, 113, 78, 255) : new Color32(148, 86, 94, 255));
         CreatePrimitivePart(customer.transform, PrimitiveType.Sphere, "Head", new Vector3(0f, .94f, 0f),
             Vector3.one * .55f, new Color32(230, 190, 152, 255));
-        ConfigureRuntimeNpc(customer, customerName,
-            day == 4 ? "老周：我验帘时斜着看光，再用指肚摸一遍。亮得不匀的地方，试捞出来纸也会薄厚不一。"
-                : "艾琳：我会在帘盒上写好洗完要阴干。捞到第一张纸，我寄一张给你看。", 2.15f);
+        customer.AddComponent<NpcCharacter>().Configure(customerName);
+        var dialogue = customer.AddComponent<WorkshopCustomerDialogue>();
+        customer.AddComponent<NpcDialogueInteraction>().Configure(dialogue, "按 E 交谈", 2f);
     }
 
     static void CreateCompanions(Transform uncleTransform, int day)

@@ -66,8 +66,8 @@ public sealed class ComputerOrderView : MonoBehaviour
         bool delivered = order.DeliveredCount == order.RequiredSheets;
         screen.SetStepCompleted(ComputerUI.ProductionStep.Delivery, delivered);
         notice.SetActive(order.ComputerNotice);
-        submit.SetActive(order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit);
-        bool customOrder = order.IsPatternOrder || order.Days == 4;
+        submit.SetActive(order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit && !order.PendingTrial);
+        bool customOrder = order.IsPatternOrder || order.Days >= 4;
         if (patternCard.activeSelf != customOrder)
         {
             foreach (var entry in plainOrderElements)
@@ -76,15 +76,15 @@ public sealed class ComputerOrderView : MonoBehaviour
         }
         if (customOrder)
         {
-            patternTitle.text = $"{order.OrderName} × {order.RequiredSheets}";
-            patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元 " +
+            patternTitle.text = order.IsTeachingDay ? order.OrderName : $"{order.OrderName} × {order.RequiredSheets}";
+            patternDescription.text = order.IsTeachingDay ? order.DayName : $"{order.DayName}  ·  单张底价 {order.BasePrice} 元 " +
                 (order.IsPatternOrder ? $"  ·  纹样工时 {order.PatternMinutes} 分钟" : "");
             patternSample.gameObject.SetActive(order.IsPatternOrder);
             if (order.IsPatternOrder)
                 patternSample.Show(order.PatternKind, isSample: true);
-            sampleNotes.text = order.CustomerNotes;
+            sampleNotes.text = order.PendingTrial ? "第一张已阴干，先回院子找老周试捞。" : order.CustomerNotes;
             sampleHeading.gameObject.SetActive(order.IsPatternOrder);
-            patternSteps.text = delivered ? "今日订单已全部交付。\n\n随时可以去村里做生意，或在左上角收工。"
+            patternSteps.text = order.IsTeachingDay ? "" : delivered ? "今日订单已全部交付。\n\n随时可以去村里做生意，或在左上角收工。"
                 : $"已交 {order.DeliveredCount}/{order.RequiredSheets} 张\n\n" +
                 $"第 {order.CurrentSheetNumber} 张的工序\n" +
                 $"篾竹与抽丝   {StepLabel(order, WorkshopOrder.Stage.BambooFinishing)}\n" +

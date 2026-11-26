@@ -116,12 +116,12 @@ public sealed partial class WorkshopOrder
     {
         4 when SampleBatch => $"按样验货：三张均达 B 级或以上，整批奖励 {SampleBatchBonus} 元。未交齐仍按张结算。",
         4 => "分批验收：每张单独结算，不计整批奖励。",
-        5 => "访客艾琳订一张龟纹小帘，想摸清走线，也想学会拆洗和晾干。",
+        5 => "18:00 前到院子找艾琳，选一张旧样帘或试纸教她试捞。",
         _ => ""
     };
     public CurtainPatternKind PatternKind => Days switch
     {
-        2 or 5 => CurtainPatternKind.Turtle,
+        2 => CurtainPatternKind.Turtle,
         3 => CurtainPatternKind.VermilionJade,
         _ => CurtainPatternKind.None
     };
@@ -131,7 +131,7 @@ public sealed partial class WorkshopOrder
         2 => "龟纹小帘",
         3 => "朱边青示范帘",
         4 => "纸坊试捞批次",
-        5 => "艾琳的旅行小帘",
+        5 => "艾琳的第一张纸",
         _ => "普通宣纸帘"
     };
     public ClockSpeed Speed { get; private set; } = ClockSpeed.Normal;
@@ -140,13 +140,13 @@ public sealed partial class WorkshopOrder
     public int Minute => minuteOfDay % 60;
     public int ElapsedGameMinutes => elapsedGameMinutes;
     int SheetSteps => IsPatternOrder ? 7 : 6; // 工序加上最后的交付。
-    public int DeliveredCount => deliveries.Count;
+    public int DeliveredCount => IsTeachingDay && TaughtLesson.HasValue ? 1 : deliveries.Count;
     public int CurrentSheetNumber => Mathf.Min(DeliveredCount + 1, RequiredSheets);
     public int TodayIncome { get; private set; }
     public float Progress => CurrentPhase is Phase.Complete or Phase.OrderComplete
         ? DeliveredCount / (float)RequiredSheets
         : (DeliveredCount + CompletedSteps / (float)SheetSteps) / RequiredSheets;
-    public bool ComputerNotice => CurrentPhase == Phase.NewOrder || CurrentPhase == Phase.ReadyToSubmit;
+    public bool ComputerNotice => !IsTeachingDay && (CurrentPhase == Phase.NewOrder || CurrentPhase == Phase.ReadyToSubmit);
     public WeavingMinigameController.WeavingResult? WeavingResult { get; private set; }
     public LacquerMinigameController.LacquerResult? LacquerResult { get; private set; }
     public CurtainPatternDraft PatternDraft { get; private set; }
@@ -161,7 +161,7 @@ public sealed partial class WorkshopOrder
         ? settlements[settlements.Count - 1] : null;
     public IReadOnlyList<DaySettlement> Settlements { get; }
     public IReadOnlyList<SheetDelivery> Deliveries { get; }
-    public SheetDelivery? LastDelivery => DeliveredCount > 0 ? deliveries[DeliveredCount - 1] : null;
+    public SheetDelivery? LastDelivery => deliveries.Count > 0 ? deliveries[deliveries.Count - 1] : null;
     public bool CanAdvanceDay => CurrentPhase == Phase.Complete && Days < LastStoryDay;
     internal WorkshopJournal Journal { get; } = new();
     public bool FinalSettlementAcknowledged { get; private set; }
@@ -183,7 +183,7 @@ public sealed partial class WorkshopOrder
         or Phase.ReadyToSubmit or Phase.OrderComplete;
     public bool CanHarvest => CanExplore;
     public bool CanWorkBamboo => CanExplore && HasBamboo;
-    public bool NeedsBamboo => CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
+    public bool NeedsBamboo => !IsTeachingDay && CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
     public bool CanStartDrying => !DayEnded && CurrentPhase == Phase.Production &&
         completedStages == (int)Stage.Drying && !running.HasValue;
 
@@ -193,7 +193,7 @@ public sealed partial class WorkshopOrder
         {
             if (completedStages >= (int)Stage.Lacquer || CurrentPhase != Phase.Production)
                 return completedStages;
-            if (WorkshopInventory.TotalThreads >= BambooCraftProgress.ThreadsPerBatch)
+            if (batchMaterialReady || WorkshopInventory.TotalThreads >= BambooCraftProgress.ThreadsPerBatch)
                 return (int)Stage.Weaving;
             var craft = WorkshopInventory.TrackedCraft;
             return craft != null && (craft.Stage == BambooCraftProgress.Step.BatchFinished || craft.IsFinishingStage)
@@ -227,7 +227,7 @@ public sealed partial class WorkshopOrder
             return;
         if (phase == Phase.Home && Days == 4)
             SampleBatch = choice == 1;
-        CurrentPhase = phase == Phase.Village ? Phase.Home : Phase.NewOrder;
+        CurrentPhase = phase == Phase.Village ? Phase.Home : IsTeachingDay ? Phase.Production : Phase.NewOrder;
         Revision++;
     }
 
@@ -298,7 +298,7 @@ public sealed partial class WorkshopOrder
 
     public StageStatus GetStatus(Stage stage)
     {
-        if (stage == Stage.Pattern && !IsPatternOrder)
+        if (IsTeachingDay || (stage == Stage.Pattern && !IsPatternOrder))
             return StageStatus.Locked;
         int steps = CompletedSteps;
         if ((int)stage < steps)
@@ -311,7 +311,7 @@ public sealed partial class WorkshopOrder
 
     public bool CanPlay(Stage stage)
     {
-        return !DayEnded && CurrentPhase == Phase.Production && !running.HasValue &&
+        return !IsTeachingDay && !DayEnded && CurrentPhase == Phase.Production && !running.HasValue &&
             (int)stage == CompletedSteps && stage is Stage.Weaving or Stage.Lacquer;
     }
 
@@ -345,13 +345,20 @@ public sealed partial class WorkshopOrder
 
     public void ConfirmWeaving(WeavingMinigameController.WeavingResult result)
     {
-        if (running != Stage.Weaving ||
-            !WorkshopInventory.ConsumeThreads(BambooCraftProgress.ThreadsPerBatch, out bool defective, out bool spotted))
+        if (running != Stage.Weaving)
             return;
-        UsedDefectiveMaterials |= defective;
-        UsedSpottedBamboo = spotted;
+        if (!batchMaterialReady)
+        {
+            if (!WorkshopInventory.ConsumeThreads(BambooCraftProgress.ThreadsPerBatch, out bool defective, out bool spotted))
+                return;
+            UsedDefectiveMaterials |= defective;
+            UsedSpottedBamboo = spotted;
+        }
         WeavingResult = result;
-        Accept(Stage.Weaving, result.gameMinutes);
+        if (batchMaterialReady && LacquerResult.HasValue)
+            Accept(Stage.Lacquer, result.gameMinutes);
+        else
+            Accept(Stage.Weaving, result.gameMinutes);
     }
 
     public void ConfirmLacquer(LacquerMinigameController.LacquerResult result)
@@ -398,7 +405,7 @@ public sealed partial class WorkshopOrder
 
     bool Deliver(bool soldToCollector)
     {
-        if (DayEnded || CurrentPhase != Phase.ReadyToSubmit || running.HasValue ||
+        if (DayEnded || PendingTrial || CurrentPhase != Phase.ReadyToSubmit || running.HasValue ||
             !WeavingResult.HasValue || !LacquerResult.HasValue || (IsPatternOrder && !PatternResult.HasValue))
             return false;
         var weaving = (QualityGrade)WeavingResult.Value.grade;
@@ -466,7 +473,7 @@ public sealed partial class WorkshopOrder
             piIncome -= SabotagePenalty;
         XiaoPiFunds += piIncome;
         XiaoBaiFunds += baiIncome;
-        settlements.Add(new DaySettlement(this, piIncome, baiIncome));
+        settlements.Add(new DaySettlement(this, piIncome + partnerIncome, baiIncome));
         running = null;
         dryingStartedAt = -1;
         DayEnded = true;
@@ -489,6 +496,7 @@ public sealed partial class WorkshopOrder
         deliveries.Clear();
         TodayIncome = 0;
         BatchBonus = 0;
+        partnerIncome = 0;
         SampleBatch = false;
         ResetSheet();
         CurrentPhase = Phase.Home;
@@ -499,6 +507,7 @@ public sealed partial class WorkshopOrder
     void ResetSheet()
     {
         completedStages = 0;
+        batchMaterialReady = false;
         running = null;
         dryingStartedAt = -1;
         UsedDefectiveMaterials = false;

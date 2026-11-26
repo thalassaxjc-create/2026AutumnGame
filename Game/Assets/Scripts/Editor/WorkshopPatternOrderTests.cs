@@ -109,7 +109,27 @@ public sealed class WorkshopPatternOrderTests
         Assert.That(order.BasePrice, Is.EqualTo(130));
         for (int sheet = 1; sheet <= order.RequiredSheets; sheet++)
         {
-            WorkshopOrderTests.CompleteBaseCurtain(order);
+            if (sheet == 1)
+            {
+                WorkshopOrderTests.CompleteBaseCurtain(order);
+                Assert.That(order.Submit(), Is.False);
+                Assert.That(order.TryTurnTrial(), Is.True);
+                Assert.That(order.TryTurnTrial(), Is.False);
+                Assert.That(order.TryRepairTrial(true), Is.False);
+                Assert.That(order.TryRepairTrial(false), Is.True);
+            }
+            else
+            {
+                GreenBambooBag.AddOne();
+                Assert.That(order.TryPrepareBatch(WorkshopOrder.BatchMethod.HandLacquer), Is.True);
+                Assert.That(order.TryPrepareBatch(WorkshopOrder.BatchMethod.Partner), Is.False);
+                Assert.That(GreenBambooBag.Count, Is.Zero);
+                Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.True);
+                order.ConfirmLacquer(new LacquerMinigameController.LacquerResult
+                    { grade = LacquerMinigameController.LacquerGrade.B, gameMinutes = 20 });
+                Assert.That(order.BeginDrying(), Is.True);
+                order.AdvanceTime(order.RemainingDryingMinutes);
+            }
             Assert.That(order.Submit(), Is.True);
             Assert.That(order.BatchBonus, Is.EqualTo(sheet == 3 ? 120 : 0));
         }
@@ -117,15 +137,14 @@ public sealed class WorkshopPatternOrderTests
         Assert.That(order.CurrentSettlement.Value.Delivered, Is.True);
         Assert.That(order.CurrentSettlement.Value.RequiredSheets, Is.EqualTo(3));
         Assert.That(order.TryStartNextDay(), Is.True);
-        ReadNewOrder();
-        Assert.That(order.RequiredSheets, Is.EqualTo(1));
-        WorkshopOrderTests.CompleteBaseCurtain(order);
-        Loop(order.PatternDraft, 1);
-        Loop(order.PatternDraft, 3);
-        Assert.That(order.TryConfirmPattern(), Is.True);
-        Assert.That(order.Submit(), Is.True);
-        Assert.That(order.Submit(), Is.False);
-        Assert.That(order.Reward, Is.EqualTo(312));
+        order.CloseIntroduction(WorkshopOrder.Phase.Home);
+        Assert.That(order.Begin(WorkshopOrder.Stage.Weaving), Is.False);
+        Assert.That(order.CanUseTurtleSample, Is.True);
+        Assert.That(order.TryTeachLesson(WorkshopOrder.LessonTopic.ThinCorner, true), Is.True);
+        Assert.That(order.TryTeachLesson(WorkshopOrder.LessonTopic.LevelFrame, true), Is.False);
+        Assert.That(order.DeliveredCount, Is.EqualTo(1));
+        Assert.That(order.LastDelivery, Is.Null);
+        Assert.That(order.TodayIncome, Is.EqualTo(240));
         Assert.That(order.CloseDay(), Is.True);
         Assert.That(order.CurrentSettlement.Value.Delivered, Is.True);
         Assert.That(order.TryStartNextDay(), Is.False);
@@ -145,6 +164,8 @@ public sealed class WorkshopPatternOrderTests
         order.ReadOrder();
         order.CloseComputer();
         WorkshopOrderTests.CompleteBaseCurtain(order);
+        Assert.That(order.TryTurnTrial(), Is.True);
+        Assert.That(order.TryRepairTrial(false), Is.True);
         Assert.That(order.Submit(), Is.True);
         Assert.That(order.CloseDay(), Is.True);
         var report = order.CurrentSettlement.Value;
