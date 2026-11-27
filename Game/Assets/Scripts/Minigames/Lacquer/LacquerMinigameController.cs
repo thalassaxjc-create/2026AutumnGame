@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Serialization;
 using UnityEngine.UI;
 
 /// <summary>
@@ -9,7 +10,7 @@ using UnityEngine.UI;
 /// UI 和抽象帘面全部由 UGUI 在运行时生成，不依赖外部图片。
 /// </summary>
 [DisallowMultipleComponent]
-public sealed class LacquerMinigameController : MonoBehaviour
+public sealed partial class LacquerMinigameController : MonoBehaviour
 {
     const int CurrentDifficultyPresetVersion = 1;
     const float BalancedScanPassDuration = 5.6f;
@@ -72,6 +73,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
         public MarkType type;
         public PaintColor color;
         public float targetTime;
+        public float endTime;
         public int index;
         public Vector2 start;
         public Vector2 end;
@@ -85,11 +87,12 @@ public sealed class LacquerMinigameController : MonoBehaviour
         public RectTransform rect;
         public LacquerNoteGraphic graphic;
         public CanvasGroup canvasGroup;
+        public Mouse strokeMouse;
         public bool dragging;
-        public float dragProgress;
         public Judgement startJudgement;
-        public int dragSamples;
-        public int outsideSamples;
+        public float lastStrokeSample;
+        public float strokeSeconds;
+        public float outsideSeconds;
     }
 
     [Header("场景引用")]
@@ -108,14 +111,19 @@ public sealed class LacquerMinigameController : MonoBehaviour
     [SerializeField, Min(0.05f)] float greatWindow = 0.20f;
     [SerializeField, Min(0.08f)] float goodWindow = 0.32f;
     [SerializeField, Min(0.12f)] float missWindow = 0.48f;
-    [SerializeField, Min(0.5f)] float dragDeadline = 1.7f;
+    [FormerlySerializedAs("dragDeadline")]
+    [SerializeField, Min(0.5f)] float fallbackStrokeSeconds = 1.7f;
     [SerializeField, Min(20f)] float dragCorridor = 66f;
 
     const int MarksPerPass = 6;
+    const float StrokeSpeed = 128f;
+    const float StrokeEndRadius = 48f;
+    const float EarlyStrokeRelease = .14f;
     const float LeftBound = -535f;
     const float RightBound = 535f;
     const float BottomBound = -255f;
     const float TopBound = 255f;
+    const float StrokeEndY = 270f;
 
     static readonly Color RedLacquer = new Color32(184, 55, 43, 255);
     static readonly Color GreenLacquer = new Color32(50, 132, 86, 255);
@@ -168,8 +176,8 @@ public sealed class LacquerMinigameController : MonoBehaviour
     bool cursorStateStored;
 
     public bool IsOpen => phase != Phase.Closed;
-    public int TotalMarks => totalMarks;
-    public float ScanPassDuration => scanPassDuration;
+    public int TotalMarks => musicChart?.cues.Length ?? totalMarks;
+    public float ScanPassDuration => musicChart?.sweepSeconds ?? scanPassDuration;
     public float PreShowTime => preShowTime;
     public static int MarksPerScanPass => MarksPerPass;
     public event Action<LacquerResult> Completed;
@@ -233,12 +241,13 @@ public sealed class LacquerMinigameController : MonoBehaviour
         canvasRoot = root;
     }
 
-    public void Open(Action onExitRequested)
+    public void Open(Action onExitRequested, int day = 1)
     {
         EnsureInitialized();
         if (!initialized || canvasRoot == null)
             return;
 
+        SelectMusic(day);
         exitRequested = onExitRequested;
         StoreAndReleaseCursor();
         canvasRoot.SetActive(true);
@@ -248,11 +257,12 @@ public sealed class LacquerMinigameController : MonoBehaviour
     /// <summary>供编辑器运行时预览菜单使用，不要求玩家先进入触发器。</summary>
     public void OpenPreview()
     {
-        Open(Close);
+        Open(Close, WorkshopOrder.Current?.Days ?? 1);
     }
 
     public void Close()
     {
+        StopMusic();
         if (phase == Phase.Closed && (canvasRoot == null || !canvasRoot.activeSelf))
             return;
 
@@ -263,6 +273,20 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
         if (canvasRoot != null)
             canvasRoot.SetActive(false);
+    }
+
+    void OnDisable()
+    {
+        if (IsOpen)
+            RequestExit();
+    }
+
+    void OnDestroy()
+    {
+        Destroy(redClip);
+        Destroy(greenClip);
+        Destroy(strokeClip);
+        Destroy(missClip);
     }
 
     void RequestExit()
@@ -288,6 +312,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
         BuildUi();
         PrepareAudio();
+        PrepareMusic();
         initialized = true;
     }
 
@@ -309,6 +334,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
     void ResetToReady()
     {
+        StopMusic();
         ClearActiveMarks();
         ResetScore();
         phase = Phase.Ready;
@@ -324,6 +350,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
     void BeginCountdown()
     {
+        StopMusic();
         ClearActiveMarks();
         ResetScore();
         introPanel.SetActive(false);
@@ -357,110 +384,111 @@ public sealed class LacquerMinigameController : MonoBehaviour
         GenerateSchedule();
         nextSpawnIndex = 0;
         songTime = 0f;
+        StartMusic();
         phase = Phase.Playing;
         UpdateScanLine(songTime);
-        ShowFeedback("跟住游标，认准漆色", new Color32(255, 228, 180, 255));
+        ShowFeedback("跟住节拍，认准漆色", new Color32(255, 228, 180, 255));
     }
 
     void GenerateSchedule()
     {
         schedule.Clear();
+        if (musicChart != null)
+        {
+            var layout = new System.Random(20261113 + trackIndex * 47);
+            foreach (MusicCue cue in musicChart.cues)
+                AddMark(layout, cue.start, cue.end);
+            return;
+        }
+
         roundNumber++;
         var random = new System.Random(20261113 + roundNumber * 47);
         int passCount = Mathf.CeilToInt(totalMarks / (float)MarksPerPass);
         int globalIndex = 0;
+        float strokeTime = 0f;
 
         for (int pass = 0; pass < passCount; pass++)
         {
             int count = Mathf.Min(MarksPerPass, totalMarks - globalIndex);
-            bool movingUp = pass % 2 == 0;
-
             for (int slot = 0; slot < count; slot++, globalIndex++)
             {
                 float pathProgress = (slot + 1f) / (count + 1f);
                 pathProgress += Mathf.Lerp(-0.027f, 0.027f, (float)random.NextDouble());
                 pathProgress = Mathf.Clamp(pathProgress, 0.075f, 0.925f);
-                float y = movingUp
-                    ? Mathf.Lerp(BottomBound, TopBound, pathProgress)
-                    : Mathf.Lerp(TopBound, BottomBound, pathProgress);
-
-                MarkType type = (globalIndex + 1) % Mathf.Max(2, strokeEvery) == 0
-                    ? MarkType.Stroke
-                    : MarkType.Tap;
-                PaintColor paint = random.NextDouble() < 0.5 ? PaintColor.Red : PaintColor.Green;
-                Vector2 start;
-                Vector2 end;
-
-                if (type == MarkType.Tap)
-                {
-                    float x = Mathf.Lerp(LeftBound + 70f, RightBound - 70f, (float)random.NextDouble());
-                    start = end = new Vector2(x, y);
-                }
-                else
-                {
-                    int directionIndex = random.Next(0, 4);
-                    Vector2 direction = directionIndex == 0
-                        ? Vector2.right
-                        : directionIndex == 1
-                            ? Vector2.left
-                            : directionIndex == 2
-                                ? Vector2.up
-                                : Vector2.down;
-                    float length = Mathf.Lerp(175f, 245f, (float)random.NextDouble());
-
-                    // 扫描线在 targetTime 必须正好经过拖拽起点，而不是漆条中心。
-                    // 若随机到的竖直方向空间不足，就反向延伸。
-                    if (direction == Vector2.up && y + length > TopBound - 25f)
-                        direction = Vector2.down;
-                    else if (direction == Vector2.down && y - length < BottomBound + 25f)
-                        direction = Vector2.up;
-
-                    float xMin = LeftBound + 75f;
-                    float xMax = RightBound - 75f;
-                    if (direction == Vector2.right)
-                        xMax -= length;
-                    else if (direction == Vector2.left)
-                        xMin += length;
-
-                    float x = Mathf.Lerp(xMin, xMax, (float)random.NextDouble());
-                    start = new Vector2(x, y);
-                    end = start + direction * length;
-                }
-
-                schedule.Add(new MarkSpec
-                {
-                    type = type,
-                    color = paint,
-                    index = globalIndex,
-                    targetTime = pass * scanPassDuration + pathProgress * scanPassDuration,
-                    start = start,
-                    end = end
-                });
+                bool stroke = (globalIndex + 1) % Mathf.Max(2, strokeEvery) == 0;
+                float start = (pass + pathProgress) * scanPassDuration + strokeTime;
+                AddMark(random, start, stroke ? start + fallbackStrokeSeconds : 0f);
+                if (stroke)
+                    strokeTime += fallbackStrokeSeconds;
             }
         }
     }
 
+    void AddMark(System.Random layout, float startTime, float endTime)
+    {
+        float y = ScanYAt(startTime, out _);
+        PaintColor paint = layout.NextDouble() < 0.5 ? PaintColor.Red : PaintColor.Green;
+        float xMin = LeftBound + 75f;
+        float xMax = RightBound - 75f;
+        Vector2 travel = Vector2.zero;
+        bool stroke = endTime > startTime;
+        if (stroke)
+        {
+            Vector2 direction = layout.Next(0, 4) switch
+            {
+                0 => Vector2.right,
+                1 => Vector2.left,
+                2 => Vector2.up,
+                _ => Vector2.down
+            };
+            // The music fixes the interval. Preserve speed by changing direction when it won't fit.
+            float length = (endTime - startTime) * StrokeSpeed;
+            if (Mathf.Abs(y + direction.y * length) > StrokeEndY)
+                direction = Mathf.Abs(y - direction.y * length) <= StrokeEndY ? -direction : Vector2.right;
+            if (direction.x > 0f)
+                xMax -= length;
+            else
+                xMin += length;
+            travel = direction * length;
+        }
+
+        Vector2 start = new(Mathf.Lerp(xMin, xMax, (float)layout.NextDouble()), y);
+        schedule.Add(new MarkSpec
+        {
+            type = stroke ? MarkType.Stroke : MarkType.Tap,
+            color = paint,
+            index = schedule.Count,
+            targetTime = startTime,
+            endTime = endTime,
+            start = start,
+            end = start + travel
+        });
+    }
+
     void UpdatePlaying(Mouse mouse)
     {
-        songTime += Time.unscaledDeltaTime;
+        songTime = musicClockActive ? (float)(AudioSettings.dspTime - musicDspStart)
+            : songTime + Time.unscaledDeltaTime;
         UpdateScanLine(songTime);
         SpawnDueMarks();
         UpdateMarkVisuals();
 
-        if (mouse != null && TryGetPointer(mouse, out Vector2 pointer))
+        Mouse pointerMouse = activeDrag?.strokeMouse ?? mouse;
+        if (pointerMouse != null && TryGetPointer(pointerMouse, out Vector2 pointer))
         {
-            bool leftPressed = mouse.leftButton.wasPressedThisFrame;
-            bool rightPressed = mouse.rightButton.wasPressedThisFrame;
+            bool leftPressed = pointerMouse.leftButton.wasPressedThisFrame;
+            bool rightPressed = pointerMouse.rightButton.wasPressedThisFrame;
             if (activeDrag == null && (leftPressed || rightPressed))
-                HandlePointerPress(pointer, leftPressed, rightPressed);
+                HandlePointerPress(pointerMouse, pointer, leftPressed, rightPressed);
 
             if (activeDrag != null)
-                UpdateActiveDrag(mouse, pointer);
+                UpdateActiveDrag(pointerMouse, pointer);
         }
 
         ResolveMissedMarks();
 
-        if (judgedCount >= totalMarks && activeMarks.Count == 0)
+        if (judgedCount >= schedule.Count && activeMarks.Count == 0 &&
+            (!musicClockActive || songTime >= musicClip.length))
             FinishRound();
     }
 
@@ -486,7 +514,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
         {
             Vector2 segment = spec.end - spec.start;
             rect = CreateRect(noteLayer, "LacquerStroke_" + (spec.index + 1), new Vector2(0.5f, 0.5f),
-                spec.Center, new Vector2(segment.magnitude + 105f, 125f));
+                spec.Center, new Vector2(segment.magnitude + LacquerNoteGraphic.StrokePadding, 125f));
             rect.localEulerAngles = new Vector3(0f, 0f, Mathf.Atan2(segment.y, segment.x) * Mathf.Rad2Deg);
         }
 
@@ -516,11 +544,14 @@ public sealed class LacquerMinigameController : MonoBehaviour
             float beforeTarget = mark.spec.targetTime - songTime;
             float approach = 1f - Mathf.Clamp01(beforeTarget / Mathf.Max(0.01f, preShowTime));
             mark.graphic.SetApproach(approach);
-            mark.canvasGroup.alpha = Mathf.Lerp(0.18f, 1f, Mathf.Clamp01(approach * 1.7f));
+            float alpha = Mathf.Lerp(0.18f, 1f, Mathf.Clamp01(approach * 1.7f));
+            if (mark.spec.type == MarkType.Tap)
+                alpha = Mathf.Abs(beforeTarget) <= goodWindow ? 1f : Mathf.Min(alpha, .65f);
+            mark.canvasGroup.alpha = alpha;
         }
     }
 
-    void HandlePointerPress(Vector2 pointer, bool leftPressed, bool rightPressed)
+    void HandlePointerPress(Mouse mouse, Vector2 pointer, bool leftPressed, bool rightPressed)
     {
         ActiveMark candidate = FindPointerCandidate(pointer);
         if (candidate == null)
@@ -531,16 +562,27 @@ public sealed class LacquerMinigameController : MonoBehaviour
             return;
         }
 
-        bool correctColor = candidate.spec.color == PaintColor.Red ? leftPressed : rightPressed;
-        if (!correctColor)
+        bool tap = candidate.spec.type == MarkType.Tap;
+        float timingOffset = songTime - candidate.spec.targetTime;
+        Judgement timing = GetJudgement(Mathf.Abs(timingOffset));
+        if (timing == Judgement.Miss && timingOffset < 0f)
         {
-            Judge(candidate, Judgement.Miss, "漆色错了");
+            ShowFeedback(tap ? "等游标扫到漆点" : "游标到起刷圈时按住", new Color32(255, 232, 180, 255));
             return;
         }
 
-        float timingOffset = Mathf.Abs(songTime - candidate.spec.targetTime);
-        Judgement timing = GetJudgement(timingOffset);
-        if (candidate.spec.type == MarkType.Tap)
+        bool correctColor = candidate.spec.color == PaintColor.Red ? leftPressed : rightPressed;
+        if (!correctColor)
+        {
+            if (!tap)
+                ShowFeedback(candidate.spec.color == PaintColor.Red ? "这条用左键" : "这条用右键",
+                    new Color32(234, 171, 120, 255));
+            else
+                Judge(candidate, Judgement.Miss, "漆色错了");
+            return;
+        }
+
+        if (tap)
         {
             Judge(candidate, timing);
             return;
@@ -548,16 +590,16 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
         if (timing == Judgement.Miss)
         {
-            Judge(candidate, Judgement.Miss, "起刷太早或太晚");
+            ShowFeedback("游标到起刷圈时按住", new Color32(255, 232, 180, 255));
             return;
         }
 
         candidate.dragging = true;
+        candidate.strokeMouse = mouse;
         candidate.startJudgement = timing;
-        candidate.dragProgress = 0f;
+        candidate.lastStrokeSample = Mathf.Max(songTime, candidate.spec.targetTime);
         activeDrag = candidate;
-        candidate.graphic.SetDragProgress(0f, true);
-        ShowFeedback("按住，沿箭头拖到底", new Color32(255, 232, 180, 255));
+        ShowFeedback("按住，跟着亮点拖", new Color32(255, 232, 180, 255));
     }
 
     ActiveMark FindPointerCandidate(Vector2 pointer)
@@ -577,7 +619,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
             float pointerDistance = Vector2.Distance(pointer,
                 mark.spec.type == MarkType.Tap ? mark.spec.Center : mark.spec.start);
-            float captureRadius = mark.spec.type == MarkType.Tap ? 76f : 82f;
+            float captureRadius = mark.spec.type == MarkType.Tap ? 76f : 92f;
             if (pointerDistance > captureRadius)
                 continue;
 
@@ -605,45 +647,49 @@ public sealed class LacquerMinigameController : MonoBehaviour
             ? mouse.leftButton.wasReleasedThisFrame
             : mouse.rightButton.wasReleasedThisFrame;
 
-        if (!held)
+        if (!held && !released)
         {
-            if (released || songTime > mark.spec.targetTime + 0.05f)
-                Judge(mark, Judgement.Miss, "漆条中途断了");
+            Judge(mark, Judgement.Miss, "漆条中途断了");
             return;
         }
 
-        Vector2 segment = mark.spec.end - mark.spec.start;
-        float lengthSquared = Mathf.Max(1f, segment.sqrMagnitude);
-        float rawProgress = Vector2.Dot(pointer - mark.spec.start, segment) / lengthSquared;
-        float clampedProgress = Mathf.Clamp01(rawProgress);
-        Vector2 closest = mark.spec.start + segment * clampedProgress;
-        float corridorDistance = Vector2.Distance(pointer, closest);
-        bool inCorridor = corridorDistance <= dragCorridor && rawProgress >= -0.18f && rawProgress <= 1.18f;
-        bool movingForward = rawProgress + 0.075f >= mark.dragProgress;
+        MarkSpec spec = mark.spec;
+        float progress = Mathf.InverseLerp(spec.targetTime, spec.endTime, songTime);
+        Vector2 head = Vector2.Lerp(spec.start, spec.end, progress);
+        bool following = (pointer - head).sqrMagnitude <= dragCorridor * dragCorridor;
+        mark.graphic.SetStrokeProgress(progress, following);
 
-        mark.dragSamples++;
-        if (!inCorridor || !movingForward)
-            mark.outsideSamples++;
-        else
-            mark.dragProgress = Mathf.Max(mark.dragProgress, clampedProgress);
+        float sampleTime = Mathf.Clamp(songTime, spec.targetTime, spec.endTime);
+        float elapsed = Mathf.Max(0f, sampleTime - mark.lastStrokeSample);
+        mark.lastStrokeSample = sampleTime;
+        mark.strokeSeconds += elapsed;
+        if (!following)
+            mark.outsideSeconds += elapsed;
 
-        mark.graphic.SetDragProgress(mark.dragProgress, inCorridor && movingForward);
-
-        if (mark.dragProgress >= 0.94f && Vector2.Distance(pointer, mark.spec.end) <= 88f)
+        bool reachedEnd = (pointer - spec.end).sqrMagnitude <= StrokeEndRadius * StrokeEndRadius;
+        bool atEndBeat = songTime >= spec.endTime || (released && spec.endTime - songTime <= EarlyStrokeRelease);
+        if (reachedEnd && atEndBeat)
         {
-            float outsideRatio = mark.outsideSamples / Mathf.Max(1f, mark.dragSamples);
-            Judgement finalJudgement = mark.startJudgement;
-            if (outsideRatio > 0.30f)
+            float outsideRatio = mark.outsideSeconds / Mathf.Max(.001f, mark.strokeSeconds);
+            if (outsideRatio > .55f)
+            {
+                Judge(mark, Judgement.Miss, "漆条没跟上");
+                return;
+            }
+
+            Judgement finish = GetJudgement(Mathf.Max(0f, songTime - spec.endTime));
+            Judgement finalJudgement = finish > mark.startJudgement ? finish : mark.startJudgement;
+            if (outsideRatio > .34f)
                 finalJudgement = Degrade(finalJudgement, 2);
-            else if (outsideRatio > 0.12f)
+            else if (outsideRatio > .18f)
                 finalJudgement = Degrade(finalJudgement, 1);
 
             Judge(mark, finalJudgement);
             return;
         }
 
-        if (songTime > mark.spec.targetTime + dragDeadline)
-            Judge(mark, Judgement.Miss, "漆条超时");
+        if (released)
+            Judge(mark, Judgement.Miss, "漆条中途断了");
     }
 
     void ResolveMissedMarks()
@@ -652,7 +698,11 @@ public sealed class LacquerMinigameController : MonoBehaviour
         {
             ActiveMark mark = activeMarks[i];
             if (mark == activeDrag)
+            {
+                if (songTime > mark.spec.endTime + goodWindow)
+                    Judge(mark, Judgement.Miss, "漆条超时");
                 continue;
+            }
 
             if (songTime - mark.spec.targetTime > missWindow)
                 Judge(mark, Judgement.Miss);
@@ -715,7 +765,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
         score += points;
         maxCombo = Mathf.Max(maxCombo, combo);
-        curtainGraphic.SetProgress(judgedCount / (float)totalMarks);
+        curtainGraphic.SetProgress(judgedCount / (float)TotalMarks);
 
         if (judgement != Judgement.Miss)
         {
@@ -737,9 +787,10 @@ public sealed class LacquerMinigameController : MonoBehaviour
 
     void FinishRound()
     {
+        StopMusic();
         phase = Phase.Result;
         resultPanel.SetActive(true);
-        float accuracy = score / Mathf.Max(1f, totalMarks * 100f);
+        float accuracy = score / Mathf.Max(1f, TotalMarks * 100f);
         LacquerGrade grade = CalculateGrade(accuracy, missCount);
 
         resultText.text =
@@ -816,17 +867,22 @@ public sealed class LacquerMinigameController : MonoBehaviour
         if (scanLine == null || scanGlow == null)
             return;
 
-        int pass = Mathf.FloorToInt(time / Mathf.Max(0.01f, scanPassDuration));
-        float passProgress = Mathf.Repeat(time, Mathf.Max(0.01f, scanPassDuration)) /
-                             Mathf.Max(0.01f, scanPassDuration);
-        bool movingUp = pass % 2 == 0;
-        float y = movingUp
-            ? Mathf.Lerp(BottomBound, TopBound, passProgress)
-            : Mathf.Lerp(TopBound, BottomBound, passProgress);
+        float y = ScanYAt(time, out bool movingUp);
         scanLine.anchoredPosition = new Vector2(0f, y);
         scanGlow.anchoredPosition = new Vector2(0f, y);
         if (scanDirectionText != null)
             scanDirectionText.text = movingUp ? "游标方向  ↑" : "游标方向  ↓";
+    }
+
+    float ScanYAt(float time, out bool movingUp)
+    {
+        float passDuration = Mathf.Max(0.01f, ScanPassDuration);
+        float passPosition = Mathf.Max(0f, time) / passDuration;
+        int pass = Mathf.FloorToInt(passPosition);
+        float progress = passPosition - pass;
+        movingUp = pass % 2 == 0;
+        float inset = musicChart == null ? 0f : 36f;
+        return Mathf.Lerp(BottomBound + inset, TopBound - inset, movingUp ? progress : 1f - progress);
     }
 
     void UpdateHud()
@@ -835,11 +891,11 @@ public sealed class LacquerMinigameController : MonoBehaviour
             return;
 
         float accuracy = score / Mathf.Max(1f, judgedCount * 100f);
-        progressText.text = "漆面  " + judgedCount + " / " + totalMarks;
+        progressText.text = "漆面  " + judgedCount + " / " + TotalMarks;
         scoreText.text = "分数 " + score.ToString("D6") + "    连击 " + combo +
                          "    准确率 " + Mathf.RoundToInt(accuracy * 100f) + "%";
 
-        float normalized = judgedCount / (float)Mathf.Max(1, totalMarks);
+        float normalized = judgedCount / (float)Mathf.Max(1, TotalMarks);
         progressFill.anchorMax = new Vector2(normalized, 1f);
         progressFill.offsetMin = Vector2.zero;
         progressFill.offsetMax = Vector2.zero;
@@ -986,7 +1042,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
         CreateLegendSwatch(guideRect, "Green", new Vector2(0f, 104f), GreenLacquer, "青漆  ·  鼠标右键");
         CreateText(guideRect, "TapGuide", "●  漆点\n游标经过时点按", 23, TextAnchor.MiddleCenter,
             new Vector2(0f, -15f), new Vector2(285f, 90f), new Color32(226, 212, 188, 255));
-        CreateText(guideRect, "StrokeGuide", "━━▷  漆条\n从亮圈按住，沿箭头拖到底", 22, TextAnchor.MiddleCenter,
+        CreateText(guideRect, "StrokeGuide", "━━▷  漆条\n按住跟随亮点，尾拍自动收刷", 22, TextAnchor.MiddleCenter,
             new Vector2(0f, -130f), new Vector2(290f, 110f), new Color32(226, 212, 188, 255));
         scanDirectionText = CreateText(guideRect, "Direction", "游标方向  ↑", 27, TextAnchor.MiddleCenter,
             new Vector2(0f, -255f), new Vector2(285f, 60f), new Color32(255, 225, 167, 255));
@@ -1027,8 +1083,9 @@ public sealed class LacquerMinigameController : MonoBehaviour
         Text introTitle = CreateText(introRect, "Title", "给宣纸竹帘刷大漆", 44, TextAnchor.MiddleCenter,
             new Vector2(0f, 220f), new Vector2(720f, 75f), new Color32(248, 219, 169, 255));
         AddOutline(introTitle.gameObject, new Color(0f, 0f, 0f, 0.9f), new Vector2(2f, -2f));
-        CreateText(introRect, "Body",
-            "水平游标会像 Cytus 一样上下往返\n游标经过漆点或漆条起点时操作\n\n朱红：鼠标左键    青绿：鼠标右键\n圆漆点：对准点按\n长漆条：从亮圈按住，沿箭头方向拖到末端\n\n偏离漆条或反向拖动会降低漆面评级",
+        trackLabel = CreateText(introRect, "当前曲目", "", 25, TextAnchor.MiddleCenter,
+            new Vector2(0f, 153f), new Vector2(720f, 48f), new Color32(231, 186, 127, 255));
+        introInstructions = CreateText(introRect, "Body", "",
             26, TextAnchor.MiddleCenter, new Vector2(0f, 15f), new Vector2(720f, 355f),
             new Color32(230, 218, 195, 255));
         Text startText = CreateText(introRect, "Start", "按 SPACE 或单击开始", 32, TextAnchor.MiddleCenter,
@@ -1154,7 +1211,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
     void PlayClip(AudioClip clip, float volume)
     {
         if (audioSource != null && clip != null)
-            audioSource.PlayOneShot(clip, volume);
+            audioSource.PlayOneShot(clip, musicClockActive ? volume * 0.7f : volume);
     }
 
     void ApplyDifficultyPreset()
@@ -1178,7 +1235,7 @@ public sealed class LacquerMinigameController : MonoBehaviour
         greatWindow = Mathf.Max(perfectWindow, greatWindow);
         goodWindow = Mathf.Max(greatWindow, goodWindow);
         missWindow = Mathf.Max(goodWindow, missWindow);
-        dragDeadline = Mathf.Max(0.5f, dragDeadline);
+        fallbackStrokeSeconds = Mathf.Max(0.5f, fallbackStrokeSeconds);
         dragCorridor = Mathf.Max(20f, dragCorridor);
     }
 }

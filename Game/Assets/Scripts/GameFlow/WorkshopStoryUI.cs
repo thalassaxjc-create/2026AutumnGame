@@ -12,6 +12,18 @@ internal static class WorkshopStoryUI
     internal static readonly Color32 Green = new(77, 115, 97, 255);
     internal static readonly Color32 Wood = new(103, 76, 55, 255);
 
+    internal static void ConfigureOverlay(GameObject root, int sortingOrder)
+    {
+        var canvas = root.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        canvas.sortingOrder = sortingOrder;
+        var scaler = root.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight = .5f;
+        root.AddComponent<GraphicRaycaster>();
+    }
+
     internal static void EnsureEventSystem(Transform owner)
     {
         if (Object.FindFirstObjectByType<EventSystem>() != null)
@@ -78,8 +90,8 @@ internal static class WorkshopStoryUI
 
     internal static string SheetDetails(WorkshopOrder.SheetDelivery delivery, int number)
     {
-        string pattern = delivery.Pattern is { } result ? $"    纹样 {result.Grade}（{result.Correct}/{result.Total}）" : "";
-        string bonus = delivery.SoldToCollector ? "    富商收购" : delivery.UsedSpottedBamboo ? "    斑竹订单 ×2" : "";
+        string bonus = delivery.UsedSpottedBamboo ? "    斑竹订单 ×2" : "";
+        string pattern = delivery.PatternGrade is { } grade ? $"    纹样 {grade}" : "";
         return $"第 {number} 张    综合 {delivery.Grade}    +{delivery.Reward} 元{bonus}\n" +
             $"编帘 {delivery.Weaving}    刷漆 {delivery.Lacquer}{pattern}    材料 ×{delivery.MaterialMultiplier:0.00}";
     }

@@ -11,6 +11,7 @@ public class BambooWorkbench : MonoBehaviour
     Camera cameraView;
     CameraFollow follow;
     BambooWorkbenchView view;
+    BambooCraftProgress practiceProgress;
     bool playerEnabled, followEnabled, wasInArea, held;
     bool wasOrthographic;
     float oldFov, oldOrthographicSize;
@@ -20,7 +21,7 @@ public class BambooWorkbench : MonoBehaviour
     bool oldCursorVisible;
     float lastSampleTime;
     public bool IsOpen { get; private set; }
-    public BambooCraftProgress Progress => BambooCraftSession.Current;
+    public BambooCraftProgress Progress => practiceProgress ?? BambooCraftSession.Current;
     public BambooWorkbenchView View => view;
 
     public void Configure(Transform table, GameObject[] canes)
@@ -77,7 +78,7 @@ public class BambooWorkbench : MonoBehaviour
         {
             var order = WorkshopOrder.Current;
             bool inArea = player != null && Contains(player.transform.position) &&
-                (order == null || order.CanWorkBamboo && !GameFlowModalState.IsInteractionBlocked);
+                (order == null || order.CanWorkBamboo) && !GameFlowModalState.IsInteractionBlocked;
             if (inArea) InteractionPromptUI.Show(order != null && order.SpottedBamboo > 0
                 ? "按 E 篾竹，进台后按 V 放置斑竹" : "按 E 进入篾竹工作台");
             else if (wasInArea) InteractionPromptUI.Hide();
@@ -92,7 +93,7 @@ public class BambooWorkbench : MonoBehaviour
             return;
         }
         var activeOrder = WorkshopOrder.Current;
-        if (activeOrder != null && !activeOrder.CanExplore)
+        if (activeOrder?.DayEnded == true)
         {
             Close();
             return;
@@ -156,20 +157,37 @@ public class BambooWorkbench : MonoBehaviour
         WorkshopOrder.Current?.ObserveBamboo(Progress);
     }
 
-    public bool Open()
+    public bool Open() => Open(false, BambooCraftProgress.Step.PlaceBamboo);
+
+    public void OpenForPractice(BambooCraftProgress.Step step)
     {
-        if (IsOpen || player == null || !Contains(player.transform.position) || SceneTransitionState.IsLoading) return false;
+        if (WorkshopPracticeMode.Enabled)
+            Open(true, step);
+    }
+
+    bool Open(bool directPractice, BambooCraftProgress.Step step)
+    {
+        if (player == null)
+            player = FindFirstObjectByType<PlayerController>();
+        if (IsOpen || player == null || (!directPractice && !Contains(player.transform.position)) ||
+            SceneTransitionState.IsLoading || GameFlowModalState.IsInteractionBlocked)
+            return false;
         cameraView = player.GameplayCamera != null ? player.GameplayCamera : Camera.main;
         if (cameraView == null) return false;
         var order = WorkshopOrder.Current;
-        if (order != null)
-        {
-            if (!order.CanWorkBamboo || GameFlowModalState.IsInteractionBlocked)
-                return false;
-            GameFlowModalState.Acquire(this);
-        }
+        if (order != null && !order.CanWorkBamboo)
+            return false;
+#if UNITY_EDITOR
+        if (WorkshopPracticeMode.Enabled)
+            practiceProgress = BambooCraftProgress.CreatePractice(step);
+#endif
+        GameFlowModalState.Acquire(this);
         if (view == null) view = BambooWorkbenchView.Create(Progress);
-        else view.gameObject.SetActive(true);
+        else
+        {
+            view.Bind(Progress);
+            view.gameObject.SetActive(true);
+        }
         playerEnabled = player.enabled;
         player.enabled = false;
         follow = cameraView.GetComponent<CameraFollow>();
@@ -210,6 +228,7 @@ public class BambooWorkbench : MonoBehaviour
         if (follow != null) follow.enabled = followEnabled;
         Cursor.lockState = oldCursorLock; Cursor.visible = oldCursorVisible;
         IsOpen = false;
+        practiceProgress = null;
         GameFlowModalState.Release(this, waitForInteractRelease);
     }
 

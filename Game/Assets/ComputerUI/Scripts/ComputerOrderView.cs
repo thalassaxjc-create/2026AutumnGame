@@ -65,25 +65,30 @@ public sealed class ComputerOrderView : MonoBehaviour
         screen.SetStepCompleted(ComputerUI.ProductionStep.Delivery, delivered);
         notice.SetActive(order.ComputerNotice);
         submit.SetActive(order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit);
-        if (patternCard.activeSelf != order.IsPatternOrder)
+        bool customOrder = order.IsPatternOrder || order.RequiresVermilionTrim;
+        if (patternCard.activeSelf != customOrder)
         {
             foreach (var entry in plainOrderElements)
-                entry.child.SetActive(!order.IsPatternOrder && entry.visible);
-            patternCard.SetActive(order.IsPatternOrder);
+                entry.child.SetActive(!customOrder && entry.visible);
+            patternCard.SetActive(customOrder);
         }
-        if (order.IsPatternOrder)
+        if (customOrder)
         {
             patternTitle.text = $"{order.OrderName} × {WorkshopOrder.SheetsPerDay}";
-            patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元  ·  纹样工时 {order.PatternMinutes} 分钟";
-            patternSample.Show(order.PatternKind, isSample: true);
+            bool trim = order.RequiresVermilionTrim;
+            string finishing = trim ? $"上朱边 {order.TrimMinutes} 分钟" : $"龟纹 {order.PatternMinutes} 分钟";
+            patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元  ·  {finishing}";
+            patternSample.Show(order.PatternKind, isSample: true, showGuide: false, withVermilionEdge: trim, withJadeBamboo: trim);
+            string finishingStep = trim ? $"上朱边   {StepLabel(order, WorkshopOrder.Stage.VermilionTrim)}"
+                : $"龟纹   {StepLabel(order, WorkshopOrder.Stage.Pattern)}";
             patternSteps.text = delivered ? "今日订单已全部交付。\n\n随时可以去村里做生意，或在左上角收工。"
                 : $"已交 {order.DeliveredCount}/{WorkshopOrder.SheetsPerDay} 张\n\n" +
-                $"第 {order.CurrentSheetNumber} 张的工序\n" +
+                $"待交成品 ×{order.AvailableOrderCurtains}\n" +
+                "推荐工序\n" +
                 $"篾竹与抽丝   {StepLabel(order, WorkshopOrder.Stage.BambooFinishing)}\n" +
                 $"编帘   {StepLabel(order, WorkshopOrder.Stage.Weaving)}\n" +
                 $"刷漆   {StepLabel(order, WorkshopOrder.Stage.Lacquer)}\n" +
-                $"阴干   {StepLabel(order, WorkshopOrder.Stage.Drying)}\n" +
-                $"纹样   {StepLabel(order, WorkshopOrder.Stage.Pattern)}";
+                $"阴干   {StepLabel(order, WorkshopOrder.Stage.Drying)}\n" + finishingStep;
         }
         settlement.SetActive(false);
     }
@@ -107,7 +112,7 @@ public sealed class ComputerOrderView : MonoBehaviour
         settlementText.text = WorkshopStoryUI.SheetDetails(order.LastDelivery.Value, order.DeliveredCount) +
             $"\n\n今日已交 {order.DeliveredCount}/{WorkshopOrder.SheetsPerDay} 张，当日净收入 {order.TodayIncome:+0;-0;0} 元" +
             (allDelivered ? "\n还可以去集市交易，收工时点屏幕左上角。" : "");
-        settlementAction.text = allDelivered ? "返回工坊" : $"继续做第 {order.CurrentSheetNumber} 张";
+        settlementAction.text = "返回工坊";
         settlement.SetActive(true);
     }
 

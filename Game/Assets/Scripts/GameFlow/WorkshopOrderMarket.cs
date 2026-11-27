@@ -32,11 +32,7 @@ public sealed partial class WorkshopOrder
     public bool SpottedGroveHarvested => spottedGroveHarvested;
     public bool XiaoPiSabotaged => lastSabotageDay == Days;
     public bool BlackMarketOpen => CanExplore && Hour >= 18;
-    public bool UsedSpottedBamboo { get; private set; }
-    public QualityGrade? PendingCurtainGrade => CurrentPhase == Phase.ReadyToSubmit &&
-        WeavingResult.HasValue && LacquerResult.HasValue
-        ? CombineGrades((QualityGrade)WeavingResult.Value.grade, (QualityGrade)LacquerResult.Value.grade, PatternResult?.Grade)
-        : null;
+    public QualityGrade? CollectorCurtainGrade => BestRibbedCurtain()?.Grade;
 
     internal bool TakeNightTraderArrivalNotice()
     {
@@ -103,10 +99,27 @@ public sealed partial class WorkshopOrder
 
     public bool TrySellToCollector()
     {
-        if (!Deliver(soldToCollector: true))
+        if (!CollectorAvailable || running.HasValue)
             return false;
+        Curtain curtain = BestRibbedCurtain();
+        if (curtain == null || curtain.Grade > QualityGrade.A)
+            return false;
+        int reward = ValueCurtain(CollectorBasePrice, Coefficient(curtain.Grade), MaterialCoefficient(curtain));
+        curtainStock.Remove(curtain);
         collectorSaleDay = Days;
+        ChangeFunds(reward);
+        StockChanged();
         return true;
+    }
+
+    Curtain BestRibbedCurtain()
+    {
+        Curtain best = null;
+        foreach (Curtain curtain in curtainStock)
+            if (curtain.State == CurtainState.Dried && curtain.Pattern == CurtainPatternKind.Ribbed &&
+                !curtain.HasTrim && (best == null || curtain.Grade < best.Grade))
+                best = curtain;
+        return best;
     }
 
     public bool TryResolveSpottedBambooTheft(bool caught)

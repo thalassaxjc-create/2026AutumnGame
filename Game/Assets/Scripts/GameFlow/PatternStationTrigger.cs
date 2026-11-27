@@ -3,7 +3,7 @@ using UnityEngine;
 [DisallowMultipleComponent]
 public sealed class PatternStationTrigger : MonoBehaviour
 {
-    const string Prompt = "按 E 使用纹样台";
+    const string Prompt = "按 E 在纹样台选样";
     [SerializeField, Min(.2f)] float interactionDistance = 1.8f;
     PlayerController player;
     CurtainPatternView view;
@@ -16,15 +16,16 @@ public sealed class PatternStationTrigger : MonoBehaviour
     void Update()
     {
         WorkshopOrder order = WorkshopOrder.Current;
+        bool available = WorkshopPracticeMode.Enabled || order?.CanUsePatternStation == true;
         if (IsOpen)
         {
-            if (SceneTransitionState.IsLoading || order?.CanUsePatternStation != true)
+            if (SceneTransitionState.IsLoading || !available)
                 Close(false);
             return;
         }
         if (player == null)
             player = FindFirstObjectByType<PlayerController>();
-        bool inRange = order?.CanUsePatternStation == true && player != null && player.isActiveAndEnabled &&
+        bool inRange = available && player != null && player.isActiveAndEnabled &&
             !SceneTransitionState.IsLocked && !GameFlowModalState.IsInteractionBlocked && InRange();
         if (!inRange)
         {
@@ -33,7 +34,18 @@ public sealed class PatternStationTrigger : MonoBehaviour
         }
         InteractionPromptUI.Show(Prompt);
         if (SceneTransitionManager.TryConsumeInteractPress())
-            Open(order);
+            Open(WorkshopPracticeMode.Enabled ? null : order);
+    }
+
+    public void OpenForPractice()
+    {
+        if (WorkshopPracticeMode.Enabled && !SceneTransitionState.IsLocked && !GameFlowModalState.IsInteractionBlocked)
+        {
+            if (player == null)
+                player = FindFirstObjectByType<PlayerController>();
+            if (player != null)
+                Open(null);
+        }
     }
 
     bool InRange()

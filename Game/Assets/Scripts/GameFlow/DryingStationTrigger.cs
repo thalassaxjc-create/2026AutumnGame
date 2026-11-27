@@ -11,6 +11,7 @@ public sealed class DryingStationTrigger : MonoBehaviour
     PlayerController player;
     Transform countdownPivot;
     Text countdownLabel;
+    int displayedRevision = -1;
     bool wasInRange;
 
     void Awake() => EnsureCountdownView();
@@ -53,21 +54,23 @@ public sealed class DryingStationTrigger : MonoBehaviour
 
     void UpdateCountdown(WorkshopOrder order)
     {
-        EnsureCountdownView();
-        bool visible = order.IsDrying || order.GetStatus(WorkshopOrder.Stage.Drying) == WorkshopOrder.StageStatus.Complete;
+        if (displayedRevision == order.Revision)
+            return;
+        displayedRevision = order.Revision;
+        bool visible = order.IsDrying || order.PlainCurtains > 0;
         countdownPivot.gameObject.SetActive(visible);
         if (!visible)
             return;
 
         if (!order.IsDrying)
         {
-            countdownLabel.text = $"第 {order.CurrentSheetNumber} 张阴干完成";
+            countdownLabel.text = $"阴干素帘 ×{order.PlainCurtains}";
             countdownLabel.color = new Color32(174, 232, 154, 255);
             return;
         }
 
         int remaining = order.RemainingDryingMinutes;
-        countdownLabel.text = $"第 {order.CurrentSheetNumber} 张阴干  {remaining / 60:00}:{remaining % 60:00}";
+        countdownLabel.text = $"阴干中 ×{order.DryingCurtains}    最快 {remaining / 60:00}:{remaining % 60:00}";
         countdownLabel.color = new Color32(255, 238, 190, 255);
     }
 

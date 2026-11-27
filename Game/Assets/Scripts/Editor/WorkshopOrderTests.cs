@@ -86,23 +86,86 @@ public sealed class WorkshopOrderTests
         }
     }
 
-    internal static void CompleteBaseCurtain(WorkshopOrder order)
+    internal static void CompleteBaseCurtain(WorkshopOrder order,
+        WeavingMinigameController.WeavingGrade weaving = WeavingMinigameController.WeavingGrade.S,
+        LacquerMinigameController.LacquerGrade lacquer = LacquerMinigameController.LacquerGrade.S)
+    {
+        WeaveCurtain(order, weaving);
+        LacquerCurtain(order, lacquer);
+        Assert.That(order.BeginDrying(), Is.True);
+        Assert.That(order.CanUsePatternStation, Is.False);
+        Assert.That(order.Submit(), Is.False);
+        order.AdvanceTime(order.RemainingDryingMinutes);
+    }
+
+    static void WeaveCurtain(WorkshopOrder order, WeavingMinigameController.WeavingGrade grade)
     {
         CompleteBamboo(order, false);
         Assert.That(order.Begin(WorkshopOrder.Stage.Weaving), Is.True);
         order.ConfirmWeaving(new WeavingMinigameController.WeavingResult
         {
-            grade = WeavingMinigameController.WeavingGrade.S, gameMinutes = 60
+            grade = grade, gameMinutes = 60
         });
+    }
+
+    static void LacquerCurtain(WorkshopOrder order, LacquerMinigameController.LacquerGrade grade)
+    {
         Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.True);
         order.ConfirmLacquer(new LacquerMinigameController.LacquerResult
         {
-            grade = LacquerMinigameController.LacquerGrade.S, gameMinutes = 20
+            grade = grade, gameMinutes = 20
         });
-        Assert.That(order.BeginDrying(), Is.True);
-        Assert.That(order.CanUsePatternStation, Is.False);
-        Assert.That(order.Submit(), Is.False);
-        order.AdvanceTime(order.RemainingDryingMinutes);
+    }
+
+    [Test]
+    public void WorkstationsUseInventoryBeforeOrdersAndKeepMultipleCurtainsOvernight()
+    {
+        var settings = ScriptableObject.CreateInstance<WorkshopOrderSettings>();
+        try
+        {
+            var order = new WorkshopOrder(settings);
+            order.CompleteOpening();
+            order.CloseIntroduction(WorkshopOrder.Phase.Village);
+            Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Home));
+            Assert.That(order.CanPlay(WorkshopOrder.Stage.Weaving), Is.False);
+            Assert.That(order.CanPlay(WorkshopOrder.Stage.Lacquer), Is.False);
+
+            WeaveCurtain(order, WeavingMinigameController.WeavingGrade.S);
+            WeaveCurtain(order, WeavingMinigameController.WeavingGrade.D);
+            Assert.That(order.WovenCurtains, Is.EqualTo(2));
+            LacquerCurtain(order, LacquerMinigameController.LacquerGrade.S);
+            Assert.That(order.BeginDrying(), Is.True);
+            LacquerCurtain(order, LacquerMinigameController.LacquerGrade.D);
+            Assert.That(order.BeginDrying(), Is.True);
+            Assert.That(order.DryingCurtains, Is.EqualTo(2));
+            Assert.That(order.CanStartDrying, Is.False);
+            Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Home));
+            Assert.That(order.Submit(), Is.False);
+
+            Assert.That(order.CloseDay() && order.TryStartNextDay(), Is.True);
+            Assert.That(order.PlainCurtains, Is.EqualTo(2));
+            Assert.That(order.DryingCurtains, Is.Zero);
+            Assert.That(order.CanUseTrimStation, Is.True);
+            Assert.That(order.TrySelectPattern(CurtainPatternKind.Turtle), Is.True);
+            WorkshopPatternOrderTests.WeavePattern(order.PatternDraft);
+            Assert.That(order.TryConfirmPattern(), Is.True);
+            Assert.That(order.PlainCurtains, Is.EqualTo(1));
+            Assert.That(order.FinishedCurtains, Is.EqualTo(1));
+            Assert.That(order.Submit(), Is.False);
+
+            order.CloseIntroduction(WorkshopOrder.Phase.Home);
+            order.ReadOrder();
+            order.CloseComputer();
+            Assert.That(order.Submit(), Is.True);
+            Assert.That(order.Reward, Is.EqualTo(182));
+            Assert.That(order.PlainCurtains, Is.EqualTo(1));
+            Assert.That(order.Submit(), Is.False);
+            Assert.That(order.CanUsePatternStation && order.CanUseTrimStation, Is.True);
+        }
+        finally
+        {
+            Object.DestroyImmediate(settings);
+        }
     }
 
     [Test]
@@ -122,7 +185,7 @@ public sealed class WorkshopOrderTests
                 grade = WeavingMinigameController.WeavingGrade.S,
                 gameMinutes = 60
             });
-            Assert.That(order.UsedDefectiveMaterials, Is.True);
+            Assert.That(order.WovenCurtains, Is.EqualTo(1));
             Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.True);
             order.ConfirmLacquer(new LacquerMinigameController.LacquerResult
             {
