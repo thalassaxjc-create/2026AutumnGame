@@ -200,13 +200,6 @@ public class BambooHarvest : MonoBehaviour
     void Update()
     {
         var order = WorkshopOrder.Current;
-        if (order != null && !order.CanHarvest)
-        {
-            locked = null;
-            SetTarget(null);
-            ClearPrompt();
-            return;
-        }
         if (SceneTransitionState.IsLoading || Time.timeScale <= 0f || GameFlowModalState.IsModalOpen ||
             VillageSpottedGrove.IsSneaking)
         {
@@ -227,6 +220,20 @@ public class BambooHarvest : MonoBehaviour
         }
 
         Vector3 pos = player.transform.position;
+        if (order != null && !order.CanHarvest)
+        {
+            locked = null;
+            SetTarget(null);
+            // A side quest can finish before the introductions. Explain the gate near a real stalk.
+            string hint = order.IntroductionHint;
+            if (!order.DayEnded && hint != null && FindNearest(pos) != null)
+            {
+                shownPrompt = hint;
+                InteractionPromptUI.Show(hint);
+            }
+            else ClearPrompt();
+            return;
+        }
         if (locked != null && (!locked.CanChop || !locked.IsInRange(pos)))
             locked = null;
 

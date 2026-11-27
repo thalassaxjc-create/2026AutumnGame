@@ -72,7 +72,11 @@ public static class BambooWorkbenchSetup
                 case "configure": Configure(); break;
                 case "configure-pattern": PatternStationSetup.Configure(); break;
                 case "configure-market": VillageMarketSetup.Configure(); break;
+                case "configure-player": PlayerVisualSetup.Configure(); break;
+                case "configure-grove": VillageMarketSetup.ConfigureSpottedGrove(); break;
+                case "configure-black-market": VillageMarketSetup.ConfigureBlackMarket(); break;
                 case "test": RunAllTests(); break;
+                case "cancel-tests": TestRunnerApi.CancelTestRun(SessionState.GetString("BambooWorkbench.TestRunId", "")); break;
                 case "test-story": RunTests(new Filter
                 {
                     testMode = TestMode.EditMode,
@@ -259,7 +263,7 @@ public static class BambooWorkbenchSetup
         EditorSceneManager.SaveOpenScenes();
         Directory.CreateDirectory(DirectoryPath);
         File.WriteAllText(DirectoryPath + "/workbench-tests-summary.txt", message);
-        testApi.Execute(new ExecutionSettings(filter));
+        SessionState.SetString("BambooWorkbench.TestRunId", testApi.Execute(new ExecutionSettings(filter)));
     }
 
     class Results : ICallbacks

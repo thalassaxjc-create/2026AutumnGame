@@ -24,14 +24,18 @@ public sealed partial class WorkshopOrder
     public int SpottedBamboo { get; private set; }
     public int Brightener { get; private set; }
     public bool TeaNoticeCompleted { get; private set; }
+    public bool CanDoSideQuests => !DayEnded && (CurrentPhase == Phase.Village || CanExplore);
+    public bool CanVisitTeaStall => CanDoSideQuests;
+    public bool CanVisitSpottedGrove => CanDoSideQuests;
     public bool HasCollectorTip => collectorVisitDay == 2;
     public bool CollectorVisiting => CanExplore && Days == collectorVisitDay;
     public bool CollectorAvailable => CollectorVisiting && !CollectorBoughtToday;
     public bool CollectorBoughtToday => collectorSaleDay == Days;
-    public bool CanStealSpottedBamboo => CanExplore && !spottedGroveHarvested && lastTheftDay != Days;
+    public bool CanStealSpottedBamboo => CanVisitSpottedGrove && !spottedGroveHarvested && lastTheftDay != Days;
     public bool SpottedGroveHarvested => spottedGroveHarvested;
     public bool XiaoPiSabotaged => lastSabotageDay == Days;
-    public bool BlackMarketOpen => CanExplore && Hour >= 18;
+    public bool BlackMarketOpen => CanDoSideQuests && Hour >= 18;
+    public bool CanSabotageXiaoPi => CanDoSideQuests && Brightener > 0 && !XiaoPiSabotaged;
     public bool UsedSpottedBamboo { get; private set; }
     public QualityGrade? PendingCurtainGrade => CurrentPhase == Phase.ReadyToSubmit &&
         WeavingResult.HasValue && LacquerResult.HasValue
@@ -91,7 +95,7 @@ public sealed partial class WorkshopOrder
 
     public bool TryFinishTeaNotice()
     {
-        if (!CanExplore || TeaNoticeCompleted || MinutesUntilClose < TeaNoticeMinutes)
+        if (!CanVisitTeaStall || TeaNoticeCompleted || MinutesUntilClose < TeaNoticeMinutes)
             return false;
         TeaNoticeCompleted = true;
         if (Days == 1)
@@ -147,7 +151,7 @@ public sealed partial class WorkshopOrder
 
     public bool TrySabotageXiaoPi()
     {
-        if (!CanExplore || Brightener <= 0 || XiaoPiSabotaged)
+        if (!CanSabotageXiaoPi)
             return false;
         Brightener--;
         lastSabotageDay = Days;

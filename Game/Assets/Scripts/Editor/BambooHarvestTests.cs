@@ -46,6 +46,14 @@ public class BambooHarvestTests
         yield return null;
         yield return null;
 
+        // Indoor entry now starts the same story as launching WorldScene directly.
+        // Finish its introduction before exercising the normal harvesting controls.
+        Assert.That(WorkshopOrder.Current, Is.Not.Null);
+        Object.FindFirstObjectByType<OpeningSequence>().CompleteImmediately();
+        WorkshopOrder.Current.CloseIntroduction(WorkshopOrder.Phase.Village);
+        WorkshopOrder.Current.SetClockSpeed(WorkshopOrder.ClockSpeed.Paused);
+        yield return null;
+
         var keyboard = InputSystem.AddDevice<Keyboard>("BambooTestKeyboard");
         keyboard.MakeCurrent();
         var harvest = Object.FindFirstObjectByType<BambooHarvest>();
@@ -163,7 +171,7 @@ public class BambooHarvestTests
         yield return SceneManager.LoadSceneAsync(SceneTransitionState.WorkshopSceneName);
         yield return null;
         Assert.That(GreenBambooBag.Count, Is.EqualTo(6));
-        Assert.That(GameObject.Find("GreenBambooBagHud"), Is.Not.Null);
+        Assert.That(GameObject.Find("背包"), Is.Not.Null, "正常剧情使用统一背包 HUD。");
         yield return SceneManager.LoadSceneAsync(SceneTransitionState.WorldSceneName);
         yield return null;
         harvest = Object.FindFirstObjectByType<BambooHarvest>();
@@ -172,8 +180,16 @@ public class BambooHarvestTests
         Assert.That(GreenBambooBag.Count, Is.EqualTo(6));
         player = Object.FindFirstObjectByType<PlayerController>();
         MovePlayer(player, harvest.GetComponentsInChildren<ChopableBamboo>()[0].transform.position - Vector3.forward * 1.5f);
-        yield return null;
-        Assert.That(InteractionPromptUI.CurrentMessage, Is.EqualTo("按空格键砍伐"));
+        // EditMode runner ticks are not necessarily rendered game frames. Let the
+        // loaded scene finish Start/Update before checking its shared prompt.
+        yield return WaitGameSeconds(0.1f);
+        Assert.That(WorkshopOrder.Current.CanHarvest, Is.True);
+        Assert.That(GameFlowModalState.IsModalOpen, Is.False);
+        Assert.That(harvest.GetComponentsInChildren<ChopableBamboo>()
+            .All(b => b.CurrentStage == ChopableBamboo.Stage.Collected), Is.True,
+            "正常剧情保留当日采集记录，出入工坊不能刷出重复材料。");
+        Assert.That(harvest.CurrentTarget, Is.Null);
+        Assert.That(InteractionPromptUI.IsVisible, Is.False);
 
         InputSystem.RemoveDevice(keyboard);
         InputSystem.settings.backgroundBehavior = previousBackgroundBehavior;

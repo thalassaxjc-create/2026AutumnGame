@@ -13,6 +13,8 @@ internal sealed class VillageActivityView
     readonly Button primary;
     readonly Text primaryLabel;
     readonly Button secondary;
+    readonly Button undo;
+    readonly Text draft;
 
     internal GameObject Root { get; }
 
@@ -38,6 +40,9 @@ internal sealed class VillageActivityView
             48, WorkshopStoryUI.Ink, TextAnchor.MiddleLeft, true);
         body = WorkshopStoryUI.Label(card, "说明", "", new Rect(.06f, .54f, .88f, .28f),
             31, WorkshopStoryUI.Ink, TextAnchor.UpperLeft);
+        draft = WorkshopStoryUI.Label(card, "告示草稿", "", new Rect(.06f, .54f, .88f, .10f),
+            29, WorkshopStoryUI.Green, TextAnchor.MiddleLeft, true);
+        draft.gameObject.SetActive(false);
 
         for (int i = 0; i < options.Length; i++)
         {
@@ -50,6 +55,9 @@ internal sealed class VillageActivityView
             WorkshopStoryUI.Wood, 26, close);
         secondary = WorkshopStoryUI.Button(card, "清空词组", "清空", new Rect(.37f, .035f, .22f, .078f),
             WorkshopStoryUI.Wood, 26, NoAction);
+        undo = WorkshopStoryUI.Button(card, "撤回词组", "撤回", new Rect(.34f, .035f, .13f, .078f),
+            WorkshopStoryUI.Wood, 26, NoAction);
+        undo.gameObject.SetActive(false);
         primary = WorkshopStoryUI.Button(card, "确认动作", "", new Rect(.64f, .035f, .30f, .078f),
             WorkshopStoryUI.Green, 27, NoAction);
         primaryLabel = primary.GetComponentInChildren<Text>();
@@ -64,9 +72,15 @@ internal sealed class VillageActivityView
             option.gameObject.SetActive(false);
         primary.gameObject.SetActive(false);
         secondary.gameObject.SetActive(false);
+        undo.gameObject.SetActive(false);
+        draft.gameObject.SetActive(false);
+        Layout(body.rectTransform, new Rect(.06f, .54f, .88f, .28f));
+        Layout((RectTransform)secondary.transform, new Rect(.37f, .035f, .22f, .078f));
     }
 
     internal void SetBody(string description) => body.text = description;
+
+    internal void SetExpandedBody() => Layout(body.rectTransform, new Rect(.06f, .17f, .88f, .65f));
 
     internal void SetOption(int index, string caption, UnityAction action, bool enabled = true) =>
         Bind(options[index], optionLabels[index], caption, action, enabled);
@@ -75,6 +89,23 @@ internal sealed class VillageActivityView
         Bind(primary, primaryLabel, caption, action, enabled);
 
     internal void SetClear(UnityAction action, bool enabled) => Bind(secondary, null, "清空", action, enabled);
+
+    internal void SetTeaDraft(string sentence, UnityAction withdraw, bool canWithdraw)
+    {
+        Layout(body.rectTransform, new Rect(.06f, .66f, .88f, .17f));
+        Layout((RectTransform)secondary.transform, new Rect(.49f, .035f, .13f, .078f));
+        draft.text = sentence;
+        draft.gameObject.SetActive(true);
+        if (withdraw != null) Bind(undo, null, "撤回", withdraw, canWithdraw);
+        else undo.gameObject.SetActive(false);
+    }
+
+    static void Layout(RectTransform rect, Rect anchors)
+    {
+        rect.anchorMin = anchors.min;
+        rect.anchorMax = anchors.max;
+        rect.offsetMin = rect.offsetMax = Vector2.zero;
+    }
 
     static void Bind(Button button, Text label, string caption, UnityAction action, bool enabled)
     {
