@@ -7,11 +7,28 @@ public sealed partial class WorkshopOrder
     public enum Phase { Opening, Village, Home, NewOrder, Production, ReadyToSubmit, OrderComplete, Complete }
     public enum Stage { Preparation, BambooFinishing, Weaving, Lacquer, Drying, Pattern, VermilionTrim }
     public enum StageStatus { Locked, Available, InProgress, Complete }
-    public enum QualityGrade { S, A, B, C, D }
+    public enum QualityGrade { SPlus = -1, S, A, B, C, D }
     public enum ClockSpeed { Paused = 0, Normal = 1, Double = 2, Quadruple = 4 }
+
+    public readonly struct SheetStyle
+    {
+        public CurtainPatternKind Pattern { get; }
+        public CurtainEdgeStyle Edge { get; }
+        public string Name => Edge != CurtainEdgeStyle.None ? CurtainEdgePalette.Get(Edge).Name
+            : Pattern == CurtainPatternKind.None ? "普通宣纸帘" : CurtainPatternDesign.Get(Pattern).Name + "帘";
+
+        internal SheetStyle(CurtainPatternKind pattern, CurtainEdgeStyle edge = CurtainEdgeStyle.None)
+        {
+            Pattern = pattern;
+            Edge = edge;
+        }
+
+        internal bool Matches(SheetStyle other) => Pattern == other.Pattern && Edge == other.Edge;
+    }
 
     public readonly struct SheetDelivery
     {
+        public SheetStyle Style { get; }
         public QualityGrade Weaving { get; }
         public QualityGrade Lacquer { get; }
         public QualityGrade? PatternGrade { get; }
@@ -21,9 +38,10 @@ public sealed partial class WorkshopOrder
         public bool UsedSpottedBamboo { get; }
         public int Reward { get; }
 
-        internal SheetDelivery(QualityGrade weaving, QualityGrade lacquer, QualityGrade? patternGrade,
+        internal SheetDelivery(SheetStyle style, QualityGrade weaving, QualityGrade lacquer, QualityGrade? patternGrade,
             QualityGrade grade, decimal qualityMultiplier, decimal materialMultiplier, bool usedSpottedBamboo, int reward)
         {
+            Style = style;
             Weaving = weaving;
             Lacquer = lacquer;
             PatternGrade = patternGrade;
@@ -113,15 +131,61 @@ public sealed partial class WorkshopOrder
     };
     public bool IsPatternOrder => Days == 2;
     public bool RequiresVermilionTrim => Days == 3;
-    public CurtainPatternKind PatternKind => IsPatternOrder ? CurtainPatternKind.Turtle : CurtainPatternKind.None;
+    public SheetStyle NextSheetStyle
+    {
+        get
+        {
+            if (CurrentPhase == Phase.ReadyToSubmit && FindDeliverable() is { } ready)
+                return ready.Style;
+            for (int index = 0; index < SheetsPerDay; index++)
+                if (!IsSheetDelivered(index))
+                    return RequestedSheet(index);
+            return RequestedSheet(SheetsPerDay - 1);
+        }
+    }
+    public CurtainPatternKind PatternKind => NextSheetStyle.Pattern;
     public string OrderName => Days switch
     {
-        2 => "龟纹小帘",
-        3 => "朱边青示范帘",
+        2 => "龟纹帘与单丝路帘",
+        3 => "朱边青与深褐",
         4 => "纸坊返修批次",
         5 => "艾琳的第一张纸",
         _ => "普通宣纸帘"
     };
+
+    public SheetStyle RequestedSheet(int index) => Days switch
+    {
+        2 => new SheetStyle(index == 0 ? CurtainPatternKind.Turtle : CurtainPatternKind.SingleThread),
+        3 => new SheetStyle(CurtainPatternKind.None,
+            index == 0 ? CurtainEdgeStyle.VermilionJade : CurtainEdgeStyle.DarkBrown),
+        _ => default
+    };
+
+    int DeliveredFor(SheetStyle style)
+    {
+        int count = 0;
+        foreach (SheetDelivery delivery in deliveries)
+            if (delivery.Style.Matches(style))
+                count++;
+        return count;
+    }
+
+    int RequiredThrough(int index, SheetStyle style)
+    {
+        int count = 0;
+        for (int i = 0; i <= index; i++)
+            if (RequestedSheet(i).Matches(style))
+                count++;
+        return count;
+    }
+
+    public bool IsSheetDelivered(int index)
+    {
+        SheetStyle style = RequestedSheet(index);
+        return DeliveredFor(style) >= RequiredThrough(index, style);
+    }
+
+    internal bool NeedsStyle(SheetStyle style) => DeliveredFor(style) < RequiredThrough(SheetsPerDay - 1, style);
     public ClockSpeed Speed { get; private set; } = ClockSpeed.Normal;
     public int MinutesUntilClose => FirstDayEndMinute - minuteOfDay;
     public int Hour => minuteOfDay / 60;
@@ -149,6 +213,7 @@ public sealed partial class WorkshopOrder
     public bool FinalSettlementAcknowledged { get; private set; }
     public QualityGrade? FinalGrade => LastDelivery?.Grade;
     public int Reward => LastDelivery?.Reward ?? 0;
+    internal int SPlusPremiumPercent => Mathf.RoundToInt((settings.rewardSPlus - 1f) * 100);
     public int BasePrice => Days switch
     {
         2 => settings.turtlePrice,
@@ -163,6 +228,12 @@ public sealed partial class WorkshopOrder
         or Phase.ReadyToSubmit or Phase.OrderComplete;
     public bool CanHarvest => CanExplore;
     public bool CanWorkBamboo => !DayEnded && !IsTeachingDay && !AwaitingReturnedCurtain && HasBamboo;
+    public string IntroductionHint => CurrentPhase switch
+    {
+        Phase.Village => "先与村口大爷交谈，再去院子找舅舅开启订单",
+        Phase.Home => "先到院子与舅舅交谈，再回工坊电脑查看订单",
+        _ => null
+    };
     public bool NeedsBamboo => !IsTeachingDay && !AwaitingReturnedCurtain &&
         CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
 
@@ -319,7 +390,7 @@ public sealed partial class WorkshopOrder
         int reward = ValueCurtain(price, quality, material);
         curtainStock.Remove(curtain);
         CurtainRevision++;
-        deliveries.Add(new SheetDelivery(curtain.Weaving, curtain.Lacquer, curtain.PatternGrade, grade,
+        deliveries.Add(new SheetDelivery(curtain.Style, curtain.Weaving, curtain.Lacquer, curtain.PatternGrade, grade,
             quality, material, curtain.UsedSpotted, reward));
         ChangeFunds(reward);
         if (DeliveredCount == RequiredSheets)
@@ -390,6 +461,7 @@ public sealed partial class WorkshopOrder
         SampleBatch = false;
         running = null;
         PatternDraft = null;
+        TrimDraft = null;
         CurrentPhase = Phase.Home;
         CompleteDryingIfReady();
         Revision++;
@@ -412,10 +484,18 @@ public sealed partial class WorkshopOrder
 
     static QualityGrade CombineGrades(QualityGrade weaving, QualityGrade lacquer, QualityGrade? pattern)
     {
+        if (weaving == QualityGrade.SPlus)
+        {
+            if (lacquer == QualityGrade.S && (!pattern.HasValue || pattern.Value == QualityGrade.S))
+                return QualityGrade.SPlus;
+            weaving = QualityGrade.S;
+        }
         int count = pattern.HasValue ? 3 : 2;
         int sum = (int)weaving + (int)lacquer + (int)pattern.GetValueOrDefault();
         return (QualityGrade)Mathf.Clamp((sum + count - 1) / count, 0, 4);
     }
+
+    internal static string GradeText(QualityGrade grade) => grade == QualityGrade.SPlus ? "S+" : grade.ToString();
 
     decimal MaterialCoefficient(Curtain curtain) => curtain.UsedDefective ? (decimal)settings.defectiveMaterialMultiplier : 1m;
 
@@ -424,6 +504,7 @@ public sealed partial class WorkshopOrder
 
     decimal Coefficient(QualityGrade grade) => (decimal)(grade switch
     {
+        QualityGrade.SPlus => settings.rewardSPlus,
         QualityGrade.S => settings.rewardS,
         QualityGrade.A => settings.rewardA,
         QualityGrade.B => settings.rewardB,

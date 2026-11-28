@@ -34,6 +34,7 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
                 return true;
             WorkshopOrder order = WorkshopOrder.Current;
             return order != null && (order.CurrentPhase == storyPhase ||
+                (dialogueEntryPoint is TemporaryDialogueEntryPoint dialogue && dialogue.HasReminderFor(order.CurrentPhase)) ||
                 (allowDuringProduction && order.CurrentPhase is WorkshopOrder.Phase.Production
                     or WorkshopOrder.Phase.ReadyToSubmit or WorkshopOrder.Phase.OrderComplete));
         }
@@ -44,6 +45,8 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     public string PromptText => promptText;
     public float InteractionRadius => interactionRadius;
     public MonoBehaviour DialogueEntryPointComponent => dialogueEntryPoint;
+    internal bool CanInteractFrom(PlayerController player) => isActiveAndEnabled && player != null &&
+        !dialogueOpen && StoryAvailable && IsWithinInteractionRadius(player.transform.position);
 
     void Awake() => EnsureMarker();
 
@@ -69,7 +72,7 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
         bool isInRange = scenePlayer != null && IsWithinInteractionRadius(scenePlayer.transform.position);
         nearbyPlayer = isInRange ? scenePlayer : null;
 
-        if (wasInRange && !isInRange && !dialogueOpen)
+        if (wasInRange && !isInRange && !dialogueOpen && InteractionPromptUI.CurrentMessage == promptText)
             InteractionPromptUI.Hide();
     }
 
@@ -160,7 +163,9 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     {
         EnsureMarker();
         bool visible = StoryAvailable && !dialogueOpen && !GameFlowModalState.IsModalOpen &&
-            !SceneTransitionState.IsLoading;
+            !SceneTransitionState.IsLoading &&
+            !(WorkshopOrder.Current != null && dialogueEntryPoint is TemporaryDialogueEntryPoint dialogue &&
+                dialogue.HasReminderFor(WorkshopOrder.Current.CurrentPhase));
         if (markerPivot.gameObject.activeSelf != visible)
             markerPivot.gameObject.SetActive(visible);
         if (!visible)

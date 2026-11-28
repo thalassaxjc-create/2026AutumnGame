@@ -21,7 +21,8 @@ public sealed class ComputerOrderView : MonoBehaviour
     TMP_Text patternTitle;
     TMP_Text patternDescription;
     TMP_Text patternSteps;
-    CurtainPatternGraphic patternSample;
+    readonly CurtainPatternGraphic[] patternSamples = new CurtainPatternGraphic[WorkshopOrder.SheetsPerDay];
+    readonly TMP_Text[] sampleLabels = new TMP_Text[WorkshopOrder.SheetsPerDay];
     TMP_Text sampleNotes;
     TMP_Text sampleHeading;
 
@@ -76,32 +77,43 @@ public sealed class ComputerOrderView : MonoBehaviour
         }
         if (customOrder)
         {
+            bool storyDay = order.Days >= 4;
             bool trim = order.RequiresVermilionTrim;
-            bool showSample = order.IsPatternOrder || trim;
-            patternTitle.text = order.IsTeachingDay ? order.OrderName : $"{order.OrderName} × {order.RequiredSheets}";
+            patternTitle.text = order.OrderName;
             if (order.IsTeachingDay)
                 patternDescription.text = order.DayName;
-            else if (trim || order.IsPatternOrder)
+            else if (storyDay)
+                patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元";
+            else
             {
-                string finishing = trim ? $"上朱边 {order.TrimMinutes} 分钟" : $"龟纹 {order.PatternMinutes} 分钟";
+                string finishing = trim ? $"上漆边 {order.TrimMinutes} 分钟 / 张" : $"纹样 {order.PatternMinutes} 分钟 / 张";
                 patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元  ·  {finishing}";
             }
-            else
-                patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元";
-            patternSample.gameObject.SetActive(showSample);
-            sampleHeading.gameObject.SetActive(showSample);
-            if (showSample)
-                patternSample.Show(order.PatternKind, isSample: true, showGuide: false, withVermilionEdge: trim, withJadeBamboo: trim);
+            sampleHeading.gameObject.SetActive(!storyDay && !order.IsTeachingDay);
+            sampleNotes.gameObject.SetActive(storyDay || order.IsTeachingDay);
             sampleNotes.text = order.PendingTrial ? "第一张已阴干，先回院子找老周试捞。" : order.CustomerNotes;
+            for (int i = 0; i < patternSamples.Length; i++)
+            {
+                bool showSample = !storyDay && !order.IsTeachingDay;
+                patternSamples[i].gameObject.SetActive(showSample);
+                sampleLabels[i].gameObject.SetActive(showSample);
+                if (!showSample)
+                    continue;
+                WorkshopOrder.SheetStyle style = order.RequestedSheet(i);
+                patternSamples[i].Show(style.Pattern, isSample: true, showGuide: false, finish: style.Edge);
+                string status = order.IsSheetDelivered(i) ? "已交付" : order.IsSheetReady(i) ? "可交付" : "待制作";
+                sampleLabels[i].text = $"{style.Name} ×1\n{status}";
+                sampleLabels[i].color = status == "待制作" ? WorkshopStoryUI.Ink : WorkshopStoryUI.Green;
+            }
             if (order.IsTeachingDay)
                 patternSteps.text = "";
-            else if (!showSample)
+            else if (storyDay)
                 patternSteps.text = delivered ? "今日订单已全部交付。\n\n随时可以去村里做生意，或在左上角收工。"
                     : $"已交 {order.DeliveredCount}/{order.RequiredSheets} 张\n\n待交成品 ×{order.AvailableOrderCurtains}";
             else
             {
-                string finishingStep = trim ? $"上朱边   {StepLabel(order, WorkshopOrder.Stage.VermilionTrim)}"
-                    : $"龟纹   {StepLabel(order, WorkshopOrder.Stage.Pattern)}";
+                string finishingStep = trim ? $"上漆边   {StepLabel(order, WorkshopOrder.Stage.VermilionTrim)}"
+                    : $"纹样   {StepLabel(order, WorkshopOrder.Stage.Pattern)}";
                 patternSteps.text = delivered ? "今日订单已全部交付。\n\n随时可以去村里做生意，或在左上角收工。"
                     : $"已交 {order.DeliveredCount}/{order.RequiredSheets} 张\n\n" +
                     $"待交成品 ×{order.AvailableOrderCurtains}\n" +
@@ -158,9 +170,15 @@ public sealed class ComputerOrderView : MonoBehaviour
         sampleNotes = Label(card, "客户备注", "", new Rect(120, 1250, 2500, 115), 55);
         sampleNotes.color = ink;
         sampleNotes.alignment = TextAlignmentOptions.MidlineLeft;
-        patternSample = Place(card, "订单样稿", new Rect(120, 465, 1400, 784))
-            .gameObject.AddComponent<CurtainPatternGraphic>();
-        patternSample.raycastTarget = false;
+        for (int i = 0; i < patternSamples.Length; i++)
+        {
+            float x = 120 + i * 740;
+            patternSamples[i] = Place(card, i == 0 ? "订单样稿" : "第二张样稿", new Rect(x, 465, 688, 466))
+                .gameObject.AddComponent<CurtainPatternGraphic>();
+            patternSamples[i].raycastTarget = false;
+            sampleLabels[i] = Label(card, $"样稿 {i + 1} 进度", "", new Rect(x, 948, 688, 138), 53);
+            sampleLabels[i].color = ink;
+        }
         patternSteps = Label(card, "纹样进度", "", new Rect(1680, 430, 946, 660), 58);
         foreach (TMP_Text line in new[] { patternTitle, patternDescription, sampleHeading, patternSteps })
         {

@@ -13,6 +13,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
 {
     public enum WeavingGrade
     {
+        SPlus = -1,
         S,
         A,
         B,
@@ -86,6 +87,8 @@ public sealed class WeavingMinigameController : MonoBehaviour
     [Header("节奏")]
     [SerializeField, Min(0.2f)] float spawnInterval = 0.46f;
     [SerializeField, Min(0.5f)] float noteTravelTime = 2.2f;
+    bool automaticShuttle;
+    internal const float SPlusAccuracy = .98f;
     [SerializeField, Min(0.01f)] float perfectWindow = 0.075f;
     [SerializeField, Min(0.02f)] float greatWindow = 0.145f;
     [SerializeField, Min(0.03f)] float goodWindow = 0.24f;
@@ -150,6 +153,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
     Text feedbackText;
     Text countdownText;
     Text resultText;
+    Text introBodyText;
     Text musicTitleText;
     GameObject introPanel;
     GameObject resultPanel;
@@ -240,12 +244,16 @@ public sealed class WeavingMinigameController : MonoBehaviour
         canvasRoot = root;
     }
 
-    public void Open(Action onExitRequested, int day = 1)
+    public void Open(Action onExitRequested, int day = 1, bool useAutomaticShuttle = false)
     {
         EnsureInitialized();
         if (!initialized || canvasRoot == null)
             return;
 
+        automaticShuttle = useAutomaticShuttle;
+        loomGraphic.ShowAutomaticShuttles(automaticShuttle);
+        introBodyText.text = $"竹丝  {requiredThreads} 根\n\n竹丝落到横线时，按对应的 F 或 J\n每第 {knotEvery} 根同时按 F + J 打结" +
+            (automaticShuttle ? $"\n\n自动木梭已装备 · 准确率 {SPlusAccuracy:P0} 且零漏织可得 S+" : "");
         SelectMusic(day);
         exitRequested = onExitRequested;
         canvasRoot.SetActive(true);
@@ -255,7 +263,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
     /// <summary>供编辑器运行时预览菜单使用，不需要玩家进入触发器。</summary>
     public void OpenPreview()
     {
-        Open(Close, WorkshopOrder.Current?.Days ?? 1);
+        Open(Close, WorkshopOrder.Current?.Days ?? 1, WorkshopOrder.Current?.HasAutomaticShuttle == true);
     }
 
     public void Close()
@@ -742,11 +750,12 @@ public sealed class WeavingMinigameController : MonoBehaviour
         phase = Phase.Result;
         resultPanel.SetActive(true);
         float accuracy = score / Mathf.Max(1f, requiredThreads * 100f);
-        WeavingGrade grade = CalculateGrade(accuracy, missCount);
+        WeavingGrade grade = CalculateGrade(accuracy, missCount, automaticShuttle);
+        string gradeLabel = WorkshopOrder.GradeText((WorkshopOrder.QualityGrade)grade);
 
         resultText.text =
             "完成一张抄纸竹帘\n\n" +
-            "评级  " + grade + "\n" +
+            "评级  " + gradeLabel + "\n" +
             "准确率  " + (accuracy * 100f).ToString("0.0") + "%\n" +
             "最高连击  " + maxCombo + "\n\n" +
             "精准 " + perfectCount + "   稳 " + greatCount + "   擦边 " + goodCount + "   漏织 " + missCount + "\n" +
@@ -769,12 +778,14 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
         pendingResult = result;
         Completed?.Invoke(result);
-        Debug.Log("编帘完成：评级 " + grade + "，准确率 " + (accuracy * 100f).ToString("0.0") +
+        Debug.Log("编帘完成：评级 " + gradeLabel + "，准确率 " + (accuracy * 100f).ToString("0.0") +
                   "%；消耗 " + requiredThreads + " 根竹丝；游戏内用时 " + gameMinutesCost + " 分钟。", this);
     }
 
-    static WeavingGrade CalculateGrade(float accuracy, int misses)
+    static WeavingGrade CalculateGrade(float accuracy, int misses, bool automaticShuttle)
     {
+        if (automaticShuttle && accuracy >= SPlusAccuracy && misses == 0)
+            return WeavingGrade.SPlus;
         if (accuracy >= 0.90f && misses <= 5)
             return WeavingGrade.S;
         if (accuracy >= 0.80f)
@@ -980,8 +991,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
         AddOutline(introTitle.gameObject, new Color(0f, 0f, 0f, 0.9f), new Vector2(2f, -2f));
         musicTitleText = CreateText(introRect, "当前曲目", "", 24, TextAnchor.MiddleCenter,
             new Vector2(0f, 140f), new Vector2(680f, 38f), new Color32(231, 186, 127, 255));
-        CreateText(introRect, "Body",
-            "竹丝  " + requiredThreads + " 根\n\n竹丝落到横线时，按对应的 F 或 J\n每第 " + knotEvery + " 根同时按 F + J 打结",
+        introBodyText = CreateText(introRect, "Body", "",
             27, TextAnchor.MiddleCenter, new Vector2(0f, 25f), new Vector2(650f, 310f),
             new Color32(229, 219, 197, 255));
         Text startText = CreateText(introRect, "Start", "按 SPACE 开始", 33, TextAnchor.MiddleCenter,

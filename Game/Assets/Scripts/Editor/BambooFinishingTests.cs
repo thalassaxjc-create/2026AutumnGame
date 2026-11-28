@@ -68,6 +68,30 @@ public class BambooFinishingTests
         Assert.That(bambooStock, Is.Zero);
     }
 
+    [TestCase(0)]
+    [TestCase(1)]
+    [TestCase(3)]
+    public void UpgradedKnifeUsesOneScrapeAndOneGateThenConservesBothDrawingGroups(int defectivePieces)
+    {
+        int pieceRoll = 0;
+        var model = new BambooCraftProgress(() => pieceRoll < BambooCraftProgress.PiecesPerBatch
+            ? (pieceRoll++ < defectivePieces ? 0f : .99f) : .5f, () => true);
+        typeof(BambooCraftProgress).GetProperty(nameof(BambooCraftProgress.UpgradedKnife)).SetValue(model, true);
+        PrepareFine(model, defectivePieces);
+        Assert.That(model.ScrapingRoundsCompleted, Is.EqualTo(1));
+        Assert.That(model.ScrapingPiecesThisRound, Is.EqualTo(4));
+        Assert.That(model.BeginGates(), Is.True);
+        Assert.That(model.GatePassCount, Is.EqualTo(1));
+        Assert.That(model.RodsPerGate, Is.EqualTo(100));
+        PassGates(model);
+        Assert.That(model.GatesCompleted, Is.EqualTo(1));
+        Assert.That(model.RodCount + model.DefectiveRodCount, Is.EqualTo(100));
+        FinishDrawing(model);
+        Assert.That(model.DrawingGroupsCompleted, Is.EqualTo(2));
+        Assert.That(model.TotalThreads, Is.EqualTo(100));
+        Assert.That(model.DefectiveThreadCount, Is.EqualTo(defectivePieces * 25));
+    }
+
     [Test]
     public void TwoForgivingPassesProduce100RodsAndEveryOpeningChanges()
     {
@@ -306,7 +330,7 @@ public class BambooFinishingTests
     {
         Assert.That(model.Place(), Is.True);
         model.BeginStroke(new Vector2(0, 0.5f)); model.Drag(new Vector2(1, 0.5f), 1); model.EndStroke();
-        for (int round = 0; round < BambooCraftProgress.ScrapingRounds; round++)
+        for (int round = 0; round < model.ScrapingRoundCount; round++)
         {
             Assert.That(model.StartNextStrip(), Is.True);
             if (round * BambooCraftProgress.PiecesPerRound < defectivePieces)

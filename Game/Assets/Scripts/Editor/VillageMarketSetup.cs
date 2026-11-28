@@ -31,8 +31,81 @@ public static class VillageMarketSetup
             throw new InvalidOperationException("请先结束 Play Mode，再放置集市。");
 
         var palette = new Palette();
-        ConfigureScene(SceneTransitionState.WorldScenePath, scene => PlaceInVillage(scene, palette));
+        ConfigureScene(SceneTransitionState.WorldScenePath, scene =>
+        {
+            bool changed = PlaceInVillage(scene, palette);
+            return PlaceOfficial(scene, palette) || changed;
+        });
         ConfigureScene(SceneTransitionState.WorkshopScenePath, scene => PlaceBucket(scene, palette));
+    }
+
+    [MenuItem("宣纸帘/配置李婶斑竹支线")]
+    public static void ConfigureSpottedGrove()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+            throw new InvalidOperationException("请先结束 Play Mode，再配置斑竹地。");
+        var palette = new Palette();
+        ConfigureScene(SceneTransitionState.WorldScenePath, scene =>
+        {
+            Transform grove = Find(scene, "LiSpottedBambooGrove");
+            if (grove.Find("斑竹地背景竹丛") != null) return false;
+            Transform backdrop = Group(grove, "斑竹地背景竹丛", Vector3.zero);
+            Vector3[] positions = { new(-4.8f, 0, 1.8f), new(-4.1f, 0, 4.5f), new(-1.6f, 0, 5.1f),
+                new(1.2f, 0, 5.3f), new(4.5f, 0, 3.9f), new(4.7f, 0, 1.2f), new(-4.8f, 0, -1.4f) };
+            for (int i = 0; i < positions.Length; i++)
+            {
+                float height = 3.8f + (i % 3) * .45f;
+                Transform stem = Group(backdrop, "背景紫竹" + i, positions[i]);
+                Piece(stem, "竹竿", PrimitiveType.Cylinder, Vector3.up * height * .5f,
+                    new Vector3(.16f, height * .5f, .16f), palette.Plum);
+                Piece(stem, "竹叶", PrimitiveType.Sphere, new Vector3(.28f, height - .3f, 0),
+                    new Vector3(1.15f, .13f, .5f), palette.Plum);
+            }
+            return true;
+        });
+    }
+
+    [MenuItem("宣纸帘/配置黑市与小皮水桶支线")]
+    public static void ConfigureBlackMarket()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+            throw new InvalidOperationException("请先结束 Play Mode，再配置黑市支线。");
+        var palette = new Palette();
+        ConfigureScene(SceneTransitionState.WorkshopScenePath, scene =>
+        {
+            PlaceBucket(scene, palette);
+            Transform bucket = Find(scene, "小皮的编帘水桶");
+            if (bucket.GetComponent<XiaoPiBucketVisual>() != null) return false;
+            Transform rack = Group(bucket, "小皮今日帘架", new Vector3(1.2f, 0, .35f));
+            Box(rack, "帘架左柱", new Vector3(-.8f, .85f, 0), new Vector3(.08f, 1.7f, .08f), palette.Roof);
+            Box(rack, "帘架右柱", new Vector3(.8f, .85f, 0), new Vector3(.08f, 1.7f, .08f), palette.Roof);
+            Box(rack, "帘架横杆", new Vector3(0, 1.65f, 0), new Vector3(1.8f, .09f, .09f), palette.Roof);
+            Transform curtain = Box(rack, "小皮今日帘面", new Vector3(0, 1.08f, 0),
+                new Vector3(1.5f, 1.05f, .045f), palette.Wood);
+            for (int i = 0; i < 9; i++)
+                Box(curtain, "竹帘纹理" + i, new Vector3(-.46f + i * .115f, 0, -.57f),
+                    new Vector3(.006f, .97f, .15f), palette.Roof);
+            bucket.gameObject.AddComponent<XiaoPiBucketVisual>().Configure(
+                bucket.Find("水面").GetComponent<Renderer>(), curtain.GetComponent<Renderer>());
+            return true;
+        });
+    }
+
+    [MenuItem("宣纸帘/配置府上差事交付点")]
+    public static void ConfigureOfficial()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+            throw new InvalidOperationException("请先结束 Play Mode，再配置府上差事。");
+        ConfigureScene(SceneTransitionState.WorldScenePath, scene => PlaceOfficial(scene, new Palette()));
+    }
+
+    static bool PlaceOfficial(Scene scene, Palette palette)
+    {
+        Transform house = Find(scene, "晒谷人家");
+        if (house.Find("府上管事") != null)
+            return false;
+        Merchant(house, "府上管事", new Vector3(1.6f, 0, -6.1f), Role.OfficialSteward, palette.Plum, palette);
+        return true;
     }
 
     static void ConfigureScene(string path, Func<Scene, bool> place)

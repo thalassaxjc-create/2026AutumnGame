@@ -128,13 +128,13 @@ public sealed class CurtainPatternView : MonoBehaviour
     {
         draft?.Release();
         draft = null;
-        bool needsTurtle = order?.IsPatternOrder == true && order.DeliveredCount < WorkshopOrder.SheetsPerDay;
+        bool needsPattern = order?.IsPatternOrder == true && order.DeliveredCount < WorkshopOrder.SheetsPerDay;
         catalogNote.text = order == null ? "开发试玩"
-            : $"阴干素帘 ×{order.PlainCurtains}" + (needsTurtle ? "　今日订单需要龟纹" : "");
+            : $"阴干素帘 ×{order.PlainCurtains}" + (needsPattern ? "　浅绿标出今日待交纹样" : "");
         for (int i = 0; i < choices.Length; i++)
         {
             CurtainPatternKind kind = CurtainPatternDesign.Choices[i];
-            choices[i].image.color = needsTurtle && kind == CurtainPatternKind.Turtle ? OrderCard : Card;
+            choices[i].image.color = needsPattern && order.NeedsStyle(new WorkshopOrder.SheetStyle(kind)) ? OrderCard : Card;
         }
         bench.SetActive(false);
         catalog.SetActive(true);

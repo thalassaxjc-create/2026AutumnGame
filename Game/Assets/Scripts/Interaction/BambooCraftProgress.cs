@@ -24,6 +24,8 @@ public sealed partial class BambooCraftProgress
     public const float SafeNodeSpeed = 1.8f;
     public static readonly float[] Nodes = { 0.24f, 0.51f, 0.78f };
     public const float SplitGuideTolerance = 0.4f;
+    const int ScrapeMinutesPerRound = 5;
+    const int GateMinutesPerPass = 5;
     readonly bool[] removed = new bool[Columns * Rows];
     readonly bool[] nodeContact = new bool[3];
     readonly List<Vector2> scars = new List<Vector2>(32);
@@ -33,19 +35,24 @@ public sealed partial class BambooCraftProgress
     bool dragging, validStart;
     float strokeLength, strokeError, backtracking, startX, strokeDirection;
     float splitScoreSum, scrapeLength, unsafeLength;
-    int splitAttempts, removedCount;
+    int splitAttempts, removedCount, scrapingPieceCount;
     bool preparationCharged;
     bool finishingCharged;
     bool batchIsSpotted;
 
     public Step Stage { get; private set; }
     public bool IsProcessingBamboo => Stage != Step.PlaceBamboo && Stage != Step.CraftFinished;
+    public bool UpgradedKnife { get; internal set; }
     public int Splits { get; private set; }
     public int RoughCount { get; private set; }
     public int FineCount { get; private set; }
     public int DefectiveCount { get; private set; }
     public int FinishedInBatch { get; private set; }
-    public int ScrapingRoundsCompleted => FinishedInBatch / PiecesPerRound;
+    public int ScrapingRoundsCompleted { get; private set; }
+    public int ScrapingPiecesThisRound => scrapingPieceCount;
+    int ScrapingCapacity => UpgradedKnife ? PiecesPerBatch : PiecesPerRound;
+    public int ScrapingRoundCount => ScrapingRoundsCompleted + (Stage == Step.Scraping ? 1 : 0) +
+        (RoughCount + ScrapingCapacity - 1) / ScrapingCapacity;
     public int Damage { get; private set; }
     public int Revision { get; private set; }
     public bool LastDefective { get; private set; }
@@ -84,7 +91,7 @@ public sealed partial class BambooCraftProgress
             Say(spotted ? "背包没有斑竹" : "没有完整青竹，请先到竹林采集");
             return false;
         }
-        Splits = FinishedInBatch = splitAttempts = 0;
+        Splits = FinishedInBatch = splitAttempts = ScrapingRoundsCompleted = scrapingPieceCount = 0;
         splitScoreSum = 0;
         preparationCharged = finishingCharged = false;
         batchIsSpotted = spotted;
@@ -100,12 +107,12 @@ public sealed partial class BambooCraftProgress
         if (!preparationCharged && FinishedInBatch == PiecesPerBatch)
         {
             preparationCharged = true;
-            minutes += preparationMinutes;
+            minutes += Mathf.Max(0, preparationMinutes - (ScrapingRounds - ScrapingRoundsCompleted) * ScrapeMinutesPerRound);
         }
         if (!finishingCharged && Stage == Step.CraftFinished && DrawingGroupsCompleted == FinishingGroups)
         {
             finishingCharged = true;
-            minutes += finishingMinutes;
+            minutes += Mathf.Max(0, finishingMinutes - (FinishingGroups - GatePassCount) * GateMinutesPerPass);
         }
         return minutes;
     }
@@ -114,10 +121,11 @@ public sealed partial class BambooCraftProgress
     {
         if ((Stage != Step.RoughReady && Stage != Step.StripFinished) || RoughCount < PiecesPerRound)
             return false;
-        RoughCount -= PiecesPerRound;
+        scrapingPieceCount = Mathf.Min(RoughCount, ScrapingCapacity);
+        RoughCount -= scrapingPieceCount;
         ResetSurface();
         Stage = Step.Scraping;
-        Say("本轮处理两块竹片。按住左键刮竹青，刮净至 100% 完成");
+        Say($"本轮处理 {scrapingPieceCount} 块竹片。按住左键刮竹青，刮净至 100% 完成");
         return true;
     }
 
@@ -216,19 +224,20 @@ public sealed partial class BambooCraftProgress
         if (removedCount == removed.Length)
         {
             int defects = 0;
-            for (int piece = 0; piece < PiecesPerRound; piece++)
+            for (int piece = 0; piece < scrapingPieceCount; piece++)
             {
                 if (random() < DefectChance)
                     defects++;
             }
             LastDefective = defects > 0;
             DefectiveCount += defects;
-            FineCount += PiecesPerRound - defects;
-            FinishedInBatch += PiecesPerRound;
+            FineCount += scrapingPieceCount - defects;
+            FinishedInBatch += scrapingPieceCount;
+            ScrapingRoundsCompleted++;
             Stage = FinishedInBatch == PiecesPerBatch ? Step.BatchFinished : Step.StripFinished;
             CancelStroke();
-            Say(LastDefective ? $"本轮获得 {PiecesPerRound - defects} 块精竹片、{defects} 块残次竹片"
-                : $"本轮剐青完成，获得 {PiecesPerRound} 块精竹片");
+            Say(LastDefective ? $"本轮获得 {scrapingPieceCount - defects} 块精竹片、{defects} 块残次竹片"
+                : $"本轮剐青完成，获得 {scrapingPieceCount} 块精竹片");
         }
         return removedCount - before;
     }

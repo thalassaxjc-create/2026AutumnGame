@@ -26,6 +26,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     Text inventory;
     Text task;
     Text teaHint;
+    Text collectorHint;
     Image nightTraderHint;
     Text marker;
     float nightTraderHighlightUntil;
@@ -41,7 +42,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         WorkshopOrder.Current = null;
     }
 
-    // WorldScene 是完整游戏入口。直接从室内场景播放时，仍保留各工位的独立预览能力。
+    // 室内独立预览保持可用；第一次进入村庄时才开启完整游戏。
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void StartStory()
     {
@@ -51,27 +52,29 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         if (UnityEditor.SessionState.GetBool("BambooHarvest.StartPreview", false))
             return;
 #endif
-        Scene scene = SceneManager.GetActiveScene();
-        if (scene.name != SceneTransitionState.WorldSceneName)
-            return;
-
-        var settings = Resources.Load<WorkshopOrderSettings>("WorkshopOrderSettings");
-        if (settings == null)
-        {
-            Debug.LogError("找不到 WorkshopOrderSettings 订单配置。");
-            return;
-        }
-
-        WorkshopInventory.StartFirstDay();
-        WorkshopOrder.Current = new WorkshopOrder(settings);
+        SceneManager.sceneLoaded -= OnSceneLoaded;
         SceneManager.sceneLoaded += OnSceneLoaded;
-        OnSceneLoaded(scene, LoadSceneMode.Single);
+        OnSceneLoaded(SceneManager.GetActiveScene(), LoadSceneMode.Single);
     }
 
     static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
-        if (mode != LoadSceneMode.Single || WorkshopOrder.Current == null)
+        if (mode != LoadSceneMode.Single)
             return;
+
+        if (WorkshopOrder.Current == null)
+        {
+            if (scene.name != SceneTransitionState.WorldSceneName)
+                return;
+            var settings = Resources.Load<WorkshopOrderSettings>("WorkshopOrderSettings");
+            if (settings == null)
+            {
+                Debug.LogError("找不到 WorkshopOrderSettings 订单配置。");
+                return;
+            }
+            WorkshopInventory.StartFirstDay();
+            WorkshopOrder.Current = new WorkshopOrder(settings);
+        }
 
         var root = new GameObject("主线订单引导", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler),
             typeof(GraphicRaycaster));
@@ -139,14 +142,14 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         2 => new[]
         {
-            "舅舅：纸坊要两张龟纹小帘。看好那张满幅样稿，细细的龟甲格要一格接一格，铺满帘面。",
+            "舅舅：纸坊要一张龟纹帘、一张单丝路帘。两张样稿都放在工坊电脑的订单里了。",
             "舅舅：拖着木梭到交叉口。样稿写「下」就提起线从下面穿，写「上」就放下线，从上面跨过去。",
-            "舅舅：去工坊电脑看订单。手上有阴干的素帘，就能到纹样台选龟纹加工。"
+            "舅舅：有阴干素帘就去纹样台选样。先做哪张都行，交帘前看清订单。",
         },
         3 => new[]
         {
-            "舅舅：镇上体验馆要两张朱边青。先把青竹帘编好、刷漆阴干，留着竹帘的本色。",
-            "舅舅：阴干后拿去大漆台旁。沿四边贴红绸，四角折好压牢。这样帘边耐磨，在浆池里也看得清。",
+            "舅舅：镇上体验馆要一张朱边青、一张深褐。朱边青配红边，深褐用浅竹黄帘面和靛蓝边。",
+            "舅舅：阴干后拿到大漆台旁的上漆边台选样。推滚轮沿边走一圈，过角沿着弧线收边。",
             "小皮：我去把晾干的帘子拿来！"
         },
         4 => new[]
@@ -211,6 +214,12 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         AnchorTopRight(teaHint.rectTransform, new Vector2(-32, -112));
         teaHint.enabled = false;
 
+        collectorHint = CreateLabel("富商情报提示", 24, new Vector2(760, 44));
+        collectorHint.alignment = TextAnchor.MiddleRight;
+        collectorHint.color = new Color32(255, 225, 156, 255);
+        AnchorTopRight(collectorHint.rectTransform, new Vector2(-32, -112));
+        collectorHint.enabled = false;
+
         nightTraderHint = WorkshopStoryUI.Panel(transform, "夜间小贩提示", new Rect(1, 1, 0, 0), NightTraderHintColor);
         nightTraderHint.rectTransform.sizeDelta = new Vector2(650, 53);
         AnchorTopRight(nightTraderHint.rectTransform, new Vector2(-32, -162));
@@ -270,7 +279,12 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     void RefreshVillageHints(WorkshopOrder order, bool worldVisible)
     {
-        teaHint.enabled = worldVisible && order.CanExplore && !order.TeaNoticeCompleted;
+        teaHint.enabled = worldVisible && order.CanVisitTeaStall && !order.TeaNoticeCompleted;
+        collectorHint.enabled = worldVisible && order.CanVisitTeaStall && order.HasCollectorTip && order.Days <= 2;
+        string collectorText = order.Days == 1 ? "情报已解锁 · 明天集市东头富商收至少 A 级的罗纹帘"
+            : order.CollectorBoughtToday ? "罗纹帘已卖给富商 · 货款计入今日收入"
+            : "集市东头富商收至少 A 级的罗纹帘";
+        if (collectorHint.text != collectorText) collectorHint.text = collectorText;
         bool showNightTrader = worldVisible && order.BlackMarketOpen;
         if (nightTraderHint.gameObject.activeSelf != showNightTrader)
             nightTraderHint.gameObject.SetActive(showNightTrader);
@@ -280,7 +294,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         if (order.TakeNightTraderArrivalNotice())
             nightTraderHighlightUntil = Time.unscaledTime + NightTraderHighlightSeconds;
         nightTraderHint.color = Time.unscaledTime < nightTraderHighlightUntil ? NightTraderArrivalColor : NightTraderHintColor;
-        nightTraderHint.rectTransform.anchoredPosition = new Vector2(-32, teaHint.enabled ? -162 : -112);
+        nightTraderHint.rectTransform.anchoredPosition = new Vector2(-32, teaHint.enabled || collectorHint.enabled ? -162 : -112);
     }
 
     void RefreshHud(WorkshopOrder order)
@@ -356,8 +370,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             WorkshopOrder.Phase.NewOrder => $"去工坊电脑查看{order.DayName}订单",
             WorkshopOrder.Phase.ReadyToSubmit => order.CollectorCurtainGrade is WorkshopOrder.QualityGrade.S or WorkshopOrder.QualityGrade.A
                 ? "可去电脑交单，或带罗纹帘找集市东头的富商"
-                : order.RequiresVermilionTrim ? "朱边青已完成，回电脑交单"
-                : order.IsPatternOrder ? "龟纹完成，回电脑交单" : "阴干完成，返回工坊电脑提交订单",
+                : order.Days >= 4 ? "成品可以交付，回工坊电脑提交"
+                : $"{order.NextSheetStyle.Name} 可交付，回工坊电脑",
             WorkshopOrder.Phase.OrderComplete => "今日订单已交齐，可继续做帘或去集市",
             WorkshopOrder.Phase.Complete => order.CanAdvanceDay ? "今日已结算" : "五天比试已结束",
             _ => ProductionTarget(order)
@@ -373,9 +387,9 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 ? "今天的青竹已采完，明早竹林会长出新竹"
                 : "去竹林采青竹，或到集市买斑竹";
         if (order.GetStatus(WorkshopOrder.Stage.Pattern) == WorkshopOrder.StageStatus.Available)
-            return "有阴干素帘，到纹样台选「龟纹」";
+            return $"到纹样台选「{CurtainPatternDesign.Get(order.NextSheetStyle.Pattern).Name}」";
         if (order.GetStatus(WorkshopOrder.Stage.VermilionTrim) == WorkshopOrder.StageStatus.Available)
-            return "有阴干素帘，到大漆台旁的朱边台包红绸";
+            return $"到大漆台旁的上漆边台选「{order.NextSheetStyle.Name}」";
         if (order.GetStatus(WorkshopOrder.Stage.Preparation) != WorkshopOrder.StageStatus.Complete)
             return "带青竹回篾竹区完成劈竹与剐青";
         if (order.GetStatus(WorkshopOrder.Stage.BambooFinishing) != WorkshopOrder.StageStatus.Complete)
@@ -421,6 +435,9 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             if (dialogue == null)
                 dialogue = npc.gameObject.AddComponent<TemporaryDialogueEntryPoint>();
             dialogue.ConfigureStory(phase, lines, choices);
+            if (phase == WorkshopOrder.Phase.Home)
+                dialogue.ConfigureReminder(WorkshopOrder.Phase.Village,
+                    "舅舅：回来啦？先去村口和大爷打声招呼，再回来找我聊订单。\n\n到村口找大爷，按 E 交谈。");
             if (casualLines != null && casualLines.Length > 0)
                 dialogue.ConfigureCasual(casualLines);
             interaction.Configure(dialogue, "按 E 交谈", interaction.InteractionRadius);

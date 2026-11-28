@@ -10,6 +10,9 @@ public class BambooWorkbenchView : MonoBehaviour
     BambooSurfaceGraphic surface;
     BambooFinishingGraphic finishingSurface;
     RectTransform root, blade, coverageFill, basketRoot;
+    Image bladeFace;
+    GameObject bladeHandle;
+    WorkshopToolGraphic upgradedBlade;
     Text workHint, finishingNote;
     Text instruction, stage, stats, quality, detail, prompt, action, speedLabel, inventory;
     GameObject empty;
@@ -101,8 +104,14 @@ public class BambooWorkbenchView : MonoBehaviour
         detail = Label(root, "", new Vector2(435, 16), new Vector2(260, 76), 18, Ink);
         speedLabel = Label(root, "", new Vector2(435, -45), new Vector2(270, 38), 18, Ink);
         // A scraper rests next to the strip; during a drag its blade follows the cursor.
-        blade = Panel(root, "Scraper", new Vector2(320, -151), new Vector2(58, 16), new Color(0.74f, 0.78f, 0.74f)).rectTransform;
-        Panel(blade, "Handle", new Vector2(0, -23), new Vector2(14, 40), new Color(0.24f, 0.15f, 0.08f));
+        bladeFace = Panel(root, "Scraper", new Vector2(320, -151), new Vector2(58, 16), new Color(0.74f, 0.78f, 0.74f));
+        blade = bladeFace.rectTransform;
+        bladeHandle = Panel(blade, "Handle", new Vector2(0, -23), new Vector2(14, 40), new Color(0.24f, 0.15f, 0.08f)).gameObject;
+        var upgrade = WorkshopStoryUI.Region(blade, "黄铜嵌边篾刀", new Rect(.5f, .5f, 0, 0));
+        upgrade.sizeDelta = new Vector2(114, 46);
+        upgradedBlade = upgrade.gameObject.AddComponent<WorkshopToolGraphic>();
+        upgradedBlade.Show(false);
+        upgrade.gameObject.SetActive(false);
         blade.localRotation = Quaternion.Euler(0, 0, -20);
         basketRoot = new GameObject("BasketGroup", typeof(RectTransform)).GetComponent<RectTransform>();
         basketRoot.SetParent(root, false);
@@ -191,6 +200,15 @@ public class BambooWorkbenchView : MonoBehaviour
         else scrapeSource.Stop();
     }
 
+    internal void ShowKnife(bool upgraded)
+    {
+        bladeFace.color = upgraded ? Color.clear : new Color(.74f, .78f, .74f);
+        bladeHandle.SetActive(!upgraded);
+        upgradedBlade.gameObject.SetActive(upgraded);
+        lastRevision = -1;
+        Refresh();
+    }
+
     public void Refresh()
     {
         if (lastRevision == progress.Revision && lastRaw == GreenBambooBag.Count) return;
@@ -216,12 +234,12 @@ public class BambooWorkbenchView : MonoBehaviour
             }
             return;
         }
-        workHint.text = "顺着竹纹行刀";
+        workHint.text = progress.UpgradedKnife ? "黄铜嵌边篾刀 · 可一次剐青四片" : "顺着竹纹行刀";
         surface.SetVerticesDirty();
-        int rounds = BambooCraftProgress.ScrapingRounds;
+        int rounds = progress.ScrapingRoundCount;
         int round = Mathf.Min(progress.ScrapingRoundsCompleted + (step == BambooCraftProgress.Step.StripFinished ? 0 : 1), rounds);
         stage.text = waiting ? "准备 / 放置完整青竹" : splitting ? "01 / 劈竹     " + progress.Splits + " / 1 刀"
-            : $"02 / 剐竹青     第 {round} / {rounds} 轮 · 每轮两块";
+            : $"02 / 剐竹青     第 {round} / {rounds} 轮 · 本轮 {progress.ScrapingPiecesThisRound} 块";
         quality.text = waiting ? "准确率  —" : "准确率  " + Mathf.RoundToInt(progress.Accuracy * 100) + "%";
         stats.text = splitting ? $"粗竹片  {progress.RoughCount} / {BambooCraftProgress.PiecesPerBatch}"
             : "刮青完成  " + Mathf.FloorToInt(progress.Coverage * 100) + "%";
@@ -235,7 +253,7 @@ public class BambooWorkbenchView : MonoBehaviour
             : step == BambooCraftProgress.Step.RoughReady || step == BambooCraftProgress.Step.StripFinished ? "空格  开始下一轮" : "左键按住并拖动";
         if (step == BambooCraftProgress.Step.BatchFinished)
         {
-            stage.text = "两轮剐青完成 / 合格 " + progress.FineCount + " · 残次 " + progress.DefectiveCount;
+            stage.text = "剐青完成 / 合格 " + progress.FineCount + " · 残次 " + progress.DefectiveCount;
             prompt.text = "四片均可继续过剑门，残次标记会保留到后续成品";
         }
     }
@@ -247,16 +265,17 @@ public class BambooWorkbenchView : MonoBehaviour
         bool complete = step == BambooCraftProgress.Step.CraftFinished;
         int groups = BambooCraftProgress.FinishingGroups;
         int rods = BambooCraftProgress.RodsPerGroup;
-        int gateNumber = Mathf.Min(progress.GatesCompleted + (step == BambooCraftProgress.Step.GatePassing ? 1 : 0), groups);
-        stage.text = gate ? $"03 / 过剑门     第 {gateNumber} / {groups} 轮 · 每轮 {rods} 根"
+        int passes = progress.GatePassCount;
+        int gateNumber = Mathf.Min(progress.GatesCompleted + (step == BambooCraftProgress.Step.GatePassing ? 1 : 0), passes);
+        stage.text = gate ? $"03 / 过剑门     第 {gateNumber} / {passes} 轮 · 每轮 {progress.RodsPerGate} 根"
             : complete ? "两轮抽丝完成 / 100 根已入库"
             : step == BambooCraftProgress.Step.DrawingReady ? $"04 / 抽竹丝     已完成 {progress.DrawingGroupsCompleted} / {groups} 轮"
             : $"04 / 抽竹丝     第 {progress.DrawingGroupsCompleted + 1} / {groups} 轮 · 每轮 {rods} 根";
         quality.text = "准确率  " + Mathf.RoundToInt(progress.Accuracy * 100) + "%";
-        stats.text = gate ? $"已通过  {progress.GatesCompleted} / {groups}"
+        stats.text = gate ? $"已通过  {progress.GatesCompleted} / {passes}"
             : complete ? "抽丝完成  100%" : step == BambooCraftProgress.Step.DrawingReady ? $"下一轮  {rods} 根待加工"
             : "本组抽丝  " + Mathf.FloorToInt(progress.DrawProgress * 100) + "%";
-        coverageFill.sizeDelta = new Vector2(246 * (gate ? progress.GatesCompleted / (float)groups : complete ? 1 : progress.DrawProgress), 9);
+        coverageFill.sizeDelta = new Vector2(246 * (gate ? progress.GatesCompleted / (float)passes : complete ? 1 : progress.DrawProgress), 9);
         detail.text = gate ? "均匀 " + progress.PerfectGates + "  /  碰刃 " + (progress.GatesCompleted - progress.PerfectGates + (step == BambooCraftProgress.Step.GatePassing && progress.GateDamaged ? 1 : 0))
             + "\n合格竹条 " + progress.RodCount
             : $"张力 {Mathf.RoundToInt(progress.Tension * 100)}%  /  本轮受损 {progress.DrawErrors}\n已完成 {progress.DrawingGroupsCompleted} / {groups} 轮";
@@ -269,7 +288,9 @@ public class BambooWorkbenchView : MonoBehaviour
         finishingNote.text = gate ? "4 块已剐青竹片\n↓\n100 根竹条\n\n带入残次 " + progress.InheritedDefectivePieces + " 片"
             : $"{groups} 轮 × {rods} 根\n\n合格竹丝  {progress.ThreadCount}\n残次竹丝  {progress.DefectiveThreadCount}";
         instruction.text = progress.Message;
-        workHint.text = gate ? "W 上移 / S 下移    ·    松开后自动回平    ·    每轮剑门高度不同" : "钳子夹持 → 穿过圆钢片 → 分段抽细     下方为张力条";
+        workHint.text = gate ? (passes == 1 ? "篾刀已升级 · 四片一起过剑门，松开 W / S 回平"
+            : "W 上移 / S 下移    ·    松开后自动回平    ·    每轮剑门高度不同")
+            : "钳子夹持 → 穿过圆钢片 → 分段抽细     下方为张力条";
         prompt.text = gate ? "对齐刀孔后提前松手；允许小幅高度与角度偏差"
             : complete ? "成品已入库，退出工位或切换场景后本局库存保留"
             : "按住右键拉拽；松开降张力；橙色预警后出现红色危险区";

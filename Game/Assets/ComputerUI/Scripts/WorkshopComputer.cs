@@ -19,6 +19,7 @@ public sealed class WorkshopComputer : MonoBehaviour
     GameObject localEventSystem;
     bool isOpen;
     bool showingPrompt;
+    string shownPrompt;
     bool movementWasEnabled;
     bool followWasEnabled;
     bool cursorWasVisible;
@@ -45,13 +46,15 @@ public sealed class WorkshopComputer : MonoBehaviour
             return;
         }
 
-        bool canOpen = interfacePrefab != null && player != null && player.isActiveAndEnabled
+        var order = WorkshopOrder.Current;
+        bool nearby = interfacePrefab != null && player != null && player.isActiveAndEnabled
             && !SceneTransitionState.IsLoading
             && !GameFlowModalState.IsInteractionBlocked
-            && (WorkshopOrder.Current == null || WorkshopOrder.Current.CurrentPhase >= WorkshopOrder.Phase.NewOrder)
             && (player.transform.position - transform.position).sqrMagnitude
                 <= interactionDistance * interactionDistance;
-        SetPrompt(canOpen);
+        bool canOpen = nearby && (order == null || order.CurrentPhase >= WorkshopOrder.Phase.NewOrder);
+        SetPrompt(nearby && (canOpen || order?.IntroductionHint != null),
+            canOpen ? "按 E 使用电脑" : order?.IntroductionHint);
         if (canOpen && (WorkshopOrder.Current != null ? SceneTransitionManager.TryConsumeInteractPress()
             : (interactAction?.WasPressedThisFrame() ?? (keyboard?.eKey.wasPressedThisFrame == true))))
             Open();
@@ -134,15 +137,16 @@ public sealed class WorkshopComputer : MonoBehaviour
         }
     }
 
-    void SetPrompt(bool visible)
+    void SetPrompt(bool visible, string message = "按 E 使用电脑")
     {
-        if (showingPrompt == visible)
+        if (showingPrompt == visible && (!visible || shownPrompt == message))
             return;
 
         showingPrompt = visible;
         if (visible)
-            InteractionPromptUI.Show("按 E 使用电脑");
-        else
+            InteractionPromptUI.Show(message);
+        else if (InteractionPromptUI.CurrentMessage == shownPrompt)
             InteractionPromptUI.Hide();
+        shownPrompt = visible ? message : null;
     }
 }

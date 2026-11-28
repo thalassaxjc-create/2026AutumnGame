@@ -28,6 +28,8 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
     WorkshopOrder.Phase? storyPhase;
     bool canDebriefLesson;
     bool activeDebrief;
+    WorkshopOrder.Phase? reminderPhase;
+    string[] reminderMessages = Array.Empty<string>();
 
     public bool IsOpen => isOpen;
     public bool IsAwaitingChoice => awaitingChoice;
@@ -48,6 +50,15 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
     public void ConfigureCasual(params string[] messages) => casualMessages = messages ?? Array.Empty<string>();
 
     internal void EnableLessonDebrief() => canDebriefLesson = true;
+
+    public void ConfigureReminder(WorkshopOrder.Phase phase, params string[] messages)
+    {
+        reminderPhase = phase;
+        reminderMessages = messages ?? Array.Empty<string>();
+    }
+
+    public bool HasReminderFor(WorkshopOrder.Phase phase) =>
+        reminderPhase == phase && reminderMessages.Length > 0;
 
     void Update()
     {
@@ -105,12 +116,16 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
             return false;
         EnsureView();
         var order = WorkshopOrder.Current;
-        bool casual = casualMessages.Length > 0 && order?.CanExplore == true && order.CurrentPhase != storyPhase;
-        activeDebrief = canDebriefLesson && order?.TaughtLesson.HasValue == true &&
+        bool reminder = order != null && HasReminderFor(order.CurrentPhase);
+        activeDebrief = !reminder && canDebriefLesson && order?.TaughtLesson.HasValue == true &&
             order.CurrentPhase == WorkshopOrder.Phase.OrderComplete;
-        activeMessages = activeDebrief ? new[] { "舅舅：艾琳说，那张纸是她自己捞起来的。来，把这五天的账算一算。" } :
-            casual ? casualMessages : storyMessages.Length > 0 ? storyMessages : new[] { placeholderMessage };
-        activeCompletesStory = !casual && !activeDebrief;
+        bool casual = !reminder && !activeDebrief && casualMessages.Length > 0 &&
+            order?.CanExplore == true && order.CurrentPhase != storyPhase;
+        activeMessages = reminder ? reminderMessages
+            : activeDebrief ? new[] { "舅舅：艾琳说，那张纸是她自己捞起来的。来，把这五天的账算一算。" }
+            : casual ? casualMessages
+            : storyMessages.Length > 0 ? storyMessages : new[] { placeholderMessage };
+        activeCompletesStory = !reminder && !casual && !activeDebrief;
         messageIndex = 0;
         selectedChoice = 0;
         awaitingChoice = false;

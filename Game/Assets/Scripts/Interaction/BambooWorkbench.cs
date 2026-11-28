@@ -78,12 +78,15 @@ public class BambooWorkbench : MonoBehaviour
         {
             var order = WorkshopOrder.Current;
             bool inArea = player != null && Contains(player.transform.position) &&
-                (order == null || order.CanWorkBamboo) && !GameFlowModalState.IsInteractionBlocked;
-            if (inArea) InteractionPromptUI.Show(order != null && order.SpottedBamboo > 0
-                ? "按 E 篾竹，进台后按 V 放置斑竹" : "按 E 进入篾竹工作台");
+                !GameFlowModalState.IsInteractionBlocked;
+            bool canWork = order == null || order.CanWorkBamboo;
+            if (inArea) InteractionPromptUI.Show(!canWork
+                ? order.DayEnded ? "今日已收工" : order.IntroductionHint ?? "先采集完整青竹或到集市购买斑竹"
+                : order != null && order.SpottedBamboo > 0
+                    ? "按 E 篾竹，进台后按 V 放置斑竹" : "按 E 进入篾竹工作台");
             else if (wasInArea) InteractionPromptUI.Hide();
             wasInArea = inArea;
-            if (inArea && (order == null ? keyboard?.eKey.wasPressedThisFrame == true
+            if (inArea && canWork && (order == null ? keyboard?.eKey.wasPressedThisFrame == true
                 : SceneTransitionManager.TryConsumeInteractPress())) Open();
             return;
         }
@@ -179,8 +182,9 @@ public class BambooWorkbench : MonoBehaviour
             return false;
 #if UNITY_EDITOR
         if (WorkshopPracticeMode.Enabled)
-            practiceProgress = BambooCraftProgress.CreatePractice(step);
+            practiceProgress = BambooCraftProgress.CreatePractice(step, order?.HasUpgradedKnife == true);
 #endif
+        Progress.UpgradedKnife = order?.HasUpgradedKnife == true;
         GameFlowModalState.Acquire(this);
         if (view == null) view = BambooWorkbenchView.Create(Progress);
         else
@@ -188,6 +192,7 @@ public class BambooWorkbench : MonoBehaviour
             view.Bind(Progress);
             view.gameObject.SetActive(true);
         }
+        view.ShowKnife(Progress.UpgradedKnife);
         playerEnabled = player.enabled;
         player.enabled = false;
         follow = cameraView.GetComponent<CameraFollow>();

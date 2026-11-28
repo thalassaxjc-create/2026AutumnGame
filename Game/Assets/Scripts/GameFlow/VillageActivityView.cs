@@ -21,10 +21,15 @@ internal sealed class VillageActivityView
     Text[] firstCorners;
     Text[] secondCorners;
     Text firstProofCaption;
+    readonly WorkshopToolGraphic[] toolPreviews = new WorkshopToolGraphic[OptionCount];
     readonly Button primary;
     readonly Text primaryLabel;
     readonly Button secondary;
     readonly Text secondaryLabel;
+    readonly Button undo;
+    readonly Text draft;
+    readonly Button headerAction;
+    readonly Text headerActionLabel;
 
     internal GameObject Root { get; }
 
@@ -48,8 +53,14 @@ internal sealed class VillageActivityView
         WorkshopStoryUI.Panel(card, "木色横边", new Rect(0, .98f, 1, .02f), WorkshopStoryUI.Wood);
         title = WorkshopStoryUI.Label(card, "标题", "", new Rect(.06f, .84f, .88f, .11f),
             48, WorkshopStoryUI.Ink, TextAnchor.MiddleLeft, true);
+        headerAction = WorkshopStoryUI.Button(card, "茶摊消息", "", new Rect(.655f, .855f, .285f, .072f),
+            WorkshopStoryUI.Green, 24, NoAction);
+        headerActionLabel = headerAction.GetComponentInChildren<Text>();
         body = WorkshopStoryUI.Label(card, "说明", "", new Rect(.06f, .54f, .88f, .28f),
             31, WorkshopStoryUI.Ink, TextAnchor.UpperLeft);
+        draft = WorkshopStoryUI.Label(card, "告示草稿", "", new Rect(.06f, .54f, .88f, .10f),
+            29, WorkshopStoryUI.Green, TextAnchor.MiddleLeft, true);
+        draft.gameObject.SetActive(false);
 
         for (int i = 0; i < options.Length; i++)
         {
@@ -63,6 +74,9 @@ internal sealed class VillageActivityView
         secondary = WorkshopStoryUI.Button(card, "清空词组", "清空", new Rect(.37f, .035f, .22f, .078f),
             WorkshopStoryUI.Wood, 26, NoAction);
         secondaryLabel = secondary.GetComponentInChildren<Text>();
+        undo = WorkshopStoryUI.Button(card, "撤回词组", "撤回", new Rect(.34f, .035f, .13f, .078f),
+            WorkshopStoryUI.Wood, 26, NoAction);
+        undo.gameObject.SetActive(false);
         primary = WorkshopStoryUI.Button(card, "确认动作", "", new Rect(.64f, .035f, .30f, .078f),
             WorkshopStoryUI.Green, 27, NoAction);
         primaryLabel = primary.GetComponentInChildren<Text>();
@@ -77,10 +91,22 @@ internal sealed class VillageActivityView
         if (pullGauges != null)
             pullGauges.gameObject.SetActive(false);
         SetBody(description);
-        foreach (Button option in options)
-            option.gameObject.SetActive(false);
+        for (int i = 0; i < options.Length; i++)
+        {
+            options[i].gameObject.SetActive(false);
+            if (toolPreviews[i] == null)
+                continue;
+            toolPreviews[i].gameObject.SetActive(false);
+            Layout(optionLabels[i].rectTransform, new Rect(.04f, .03f, .92f, .94f));
+        }
+        headerAction.gameObject.SetActive(false);
+        Layout(title.rectTransform, new Rect(.06f, .84f, .88f, .11f));
         primary.gameObject.SetActive(false);
         secondary.gameObject.SetActive(false);
+        undo.gameObject.SetActive(false);
+        draft.gameObject.SetActive(false);
+        Layout(body.rectTransform, new Rect(.06f, .54f, .88f, .28f));
+        Layout((RectTransform)secondary.transform, new Rect(.37f, .035f, .22f, .078f));
     }
 
     internal void ShowTrialProof(bool turned, bool followsCurtain)
@@ -179,14 +205,51 @@ internal sealed class VillageActivityView
 
     internal void SetBody(string description) => body.text = description;
 
+    internal void SetExpandedBody() => Layout(body.rectTransform, new Rect(.06f, .17f, .88f, .65f));
+
     internal void SetOption(int index, string caption, UnityAction action, bool enabled = true) =>
         Bind(options[index], optionLabels[index], caption, action, enabled);
 
     internal void SetPrimary(string caption, UnityAction action, bool enabled = true) =>
         Bind(primary, primaryLabel, caption, action, enabled);
 
+    internal void SetHeaderAction(string caption, UnityAction action, bool enabled = true)
+    {
+        Layout(title.rectTransform, new Rect(.06f, .84f, .565f, .11f));
+        Bind(headerAction, headerActionLabel, caption, action, enabled);
+    }
+
+    internal void ShowTool(int index, bool shuttle)
+    {
+        if (toolPreviews[index] == null)
+        {
+            var swatch = WorkshopStoryUI.Region(options[index].transform, "工具样图", new Rect(.052f, .10f, .22f, .80f));
+            toolPreviews[index] = swatch.gameObject.AddComponent<WorkshopToolGraphic>();
+            toolPreviews[index].Show(shuttle);
+        }
+        toolPreviews[index].gameObject.SetActive(true);
+        Layout(optionLabels[index].rectTransform, new Rect(.286f, .03f, .69f, .94f));
+    }
+
     internal void SetClear(UnityAction action, bool enabled, string caption = "清空") =>
         Bind(secondary, secondaryLabel, caption, action, enabled);
+
+    internal void SetTeaDraft(string sentence, UnityAction withdraw, bool canWithdraw)
+    {
+        Layout(body.rectTransform, new Rect(.06f, .66f, .88f, .17f));
+        Layout((RectTransform)secondary.transform, new Rect(.49f, .035f, .13f, .078f));
+        draft.text = sentence;
+        draft.gameObject.SetActive(true);
+        if (withdraw != null) Bind(undo, null, "撤回", withdraw, canWithdraw);
+        else undo.gameObject.SetActive(false);
+    }
+
+    static void Layout(RectTransform rect, Rect anchors)
+    {
+        rect.anchorMin = anchors.min;
+        rect.anchorMax = anchors.max;
+        rect.offsetMin = rect.offsetMax = Vector2.zero;
+    }
 
     static void Bind(Button button, Text label, string caption, UnityAction action, bool enabled)
     {
