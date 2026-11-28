@@ -96,7 +96,14 @@ public sealed class WeavingMinigameController : MonoBehaviour
     const float HitY = -250f;
     const float LeftLaneX = -118f;
     const float RightLaneX = 118f;
-    const string MusicResourcePath = "Audio/Weaving_11_15";
+    static readonly string[] MusicPaths = { "Audio/Weaving_11_15", "Audio/Weaving/area184", "Audio/Weaving/coronation" };
+    static readonly string[] MusicTitles = { "11月15日", "area184", "coronation" };
+
+    [Serializable]
+    sealed class SongChart
+    {
+        public float[] beats;
+    }
 
     // 依据缩短版《11月15日(1).wav》的明显起音制作：100 个目标覆盖 66.55 秒音乐。
     // 保留原曲前 66 秒的落点，并在较长间隔补入半拍，避免把未加速的音乐整体压缩。
@@ -133,6 +140,8 @@ public sealed class WeavingMinigameController : MonoBehaviour
     AudioClip missClip;
     AudioClip musicClip;
     AudioSource musicSource;
+    float[] beatTimes;
+    int musicDay;
 
     RectTransform noteLayer;
     RectTransform progressFill;
@@ -141,6 +150,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
     Text feedbackText;
     Text countdownText;
     Text resultText;
+    Text musicTitleText;
     GameObject introPanel;
     GameObject resultPanel;
     WeavingLoomGraphic loomGraphic;
@@ -230,12 +240,13 @@ public sealed class WeavingMinigameController : MonoBehaviour
         canvasRoot = root;
     }
 
-    public void Open(Action onExitRequested)
+    public void Open(Action onExitRequested, int day = 1)
     {
         EnsureInitialized();
         if (!initialized || canvasRoot == null)
             return;
 
+        SelectMusic(day);
         exitRequested = onExitRequested;
         canvasRoot.SetActive(true);
         ResetToReady();
@@ -244,7 +255,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
     /// <summary>供编辑器运行时预览菜单使用，不需要玩家进入触发器。</summary>
     public void OpenPreview()
     {
-        Open(Close);
+        Open(Close, WorkshopOrder.Current?.Days ?? 1);
     }
 
     public void Close()
@@ -260,6 +271,20 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
         if (canvasRoot != null)
             canvasRoot.SetActive(false);
+    }
+
+    void OnDisable()
+    {
+        if (IsOpen)
+            RequestExit();
+    }
+
+    void OnDestroy()
+    {
+        Destroy(leftClip);
+        Destroy(rightClip);
+        Destroy(knotClip);
+        Destroy(missClip);
     }
 
     void RequestExit()
@@ -380,7 +405,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
                 {
                     int group = i / groupSize;
                     int slot = i % groupSize;
-                    string pattern = MusicLanePatterns[group % MusicLanePatterns.Length];
+                    string pattern = MusicLanePatterns[(group + (musicDay - 1) * 3) % MusicLanePatterns.Length];
                     kind = pattern[slot % pattern.Length] == 'F' ? NoteKind.Left : NoteKind.Right;
                 }
 
@@ -388,7 +413,7 @@ public sealed class WeavingMinigameController : MonoBehaviour
                 {
                     kind = kind,
                     index = i,
-                    targetTime = MusicBeatTimes[i]
+                    targetTime = beatTimes[i]
                 });
             }
 
@@ -449,7 +474,8 @@ public sealed class WeavingMinigameController : MonoBehaviour
         ResolvePendingChordTimeout();
         ResolveMissedNotes();
 
-        if (judgedCount >= requiredThreads && activeNotes.Count == 0)
+        if (judgedCount >= requiredThreads && activeNotes.Count == 0 &&
+            (musicDay == 1 || !musicClockActive || songTime >= musicClip.length))
             FinishRound();
     }
 
@@ -952,8 +978,10 @@ public sealed class WeavingMinigameController : MonoBehaviour
         Text introTitle = CreateText(introRect, "Title", "编一张抄纸竹帘", 46, TextAnchor.MiddleCenter,
             new Vector2(0f, 205f), new Vector2(650f, 80f), new Color32(248, 224, 170, 255));
         AddOutline(introTitle.gameObject, new Color(0f, 0f, 0f, 0.9f), new Vector2(2f, -2f));
+        musicTitleText = CreateText(introRect, "当前曲目", "", 24, TextAnchor.MiddleCenter,
+            new Vector2(0f, 140f), new Vector2(680f, 38f), new Color32(231, 186, 127, 255));
         CreateText(introRect, "Body",
-            "材料检查：竹丝 100 / 100\n音乐谱面：中等难度\n\n跟随音乐，在竹丝落到横线时按 F 或 J\n白色弧线代表木梭带线摆过帘面\n每第 5 根会出现“结”，请同时按 F + J\n\n失误不会卡住进度，但会影响最终评级",
+            "竹丝  " + requiredThreads + " 根\n\n竹丝落到横线时，按对应的 F 或 J\n每第 " + knotEvery + " 根同时按 F + J 打结",
             27, TextAnchor.MiddleCenter, new Vector2(0f, 25f), new Vector2(650f, 310f),
             new Color32(229, 219, 197, 255));
         Text startText = CreateText(introRect, "Start", "按 SPACE 开始", 33, TextAnchor.MiddleCenter,
@@ -1054,25 +1082,64 @@ public sealed class WeavingMinigameController : MonoBehaviour
         knotClip = CreateTone("Weaving_Knot", 790f, 0.13f, 0.02f);
         missClip = CreateTone("Weaving_Miss", 125f, 0.11f, 0.12f);
 
-        musicClip = Resources.Load<AudioClip>(MusicResourcePath);
         musicSource = gameObject.AddComponent<AudioSource>();
         musicSource.playOnAwake = false;
         musicSource.loop = false;
         musicSource.spatialBlend = 0f;
         musicSource.volume = 0.46f;
         musicSource.priority = 32;
+    }
 
-        if (musicClip == null)
-            Debug.LogWarning("未找到编帘音乐 Resources/" + MusicResourcePath + "，将使用原有匀速谱面。", this);
-        else if (musicClip.loadState == AudioDataLoadState.Unloaded)
-            musicClip.LoadAudioData();
+    void SelectMusic(int day)
+    {
+        day = Mathf.Clamp(day, 1, MusicPaths.Length);
+        if (day != musicDay)
+        {
+            StopMusic();
+            musicDay = day;
+            string path = MusicPaths[day - 1];
+            musicClip = Resources.Load<AudioClip>(path);
+            beatTimes = day == 1 ? MusicBeatTimes : LoadBeats(path + "_Chart");
+            musicSource.clip = CanUseMusicChart() ? musicClip : null;
+            if (musicSource.clip == null)
+                Debug.LogWarning("编帘音乐或谱面无效 " + path, this);
+            else if (musicClip.loadState == AudioDataLoadState.Unloaded)
+                musicClip.LoadAudioData();
+        }
+
+        musicTitleText.text = CanUseMusicChart() ? $"第 {day} 天  ·  {MusicTitles[day - 1]}" : "";
+    }
+
+    static float[] LoadBeats(string path)
+    {
+        TextAsset asset = Resources.Load<TextAsset>(path);
+        if (asset == null)
+            return null;
+        try
+        {
+            float[] beats = JsonUtility.FromJson<SongChart>(asset.text)?.beats;
+            if (beats == null)
+                return null;
+            float previous = 0f;
+            foreach (float beat in beats)
+            {
+                if (!(beat > previous))
+                    return null;
+                previous = beat;
+            }
+            return beats;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
     bool CanUseMusicChart()
     {
         return musicClip != null && musicSource != null && requiredThreads > 0 &&
-               MusicBeatTimes.Length >= requiredThreads &&
-               MusicBeatTimes[requiredThreads - 1] + missWindow < musicClip.length;
+               beatTimes != null && beatTimes.Length >= requiredThreads &&
+               beatTimes[requiredThreads - 1] + missWindow < musicClip.length;
     }
 
     bool StartMusicChart()
@@ -1082,10 +1149,10 @@ public sealed class WeavingMinigameController : MonoBehaviour
             return false;
 
         musicSource.clip = musicClip;
-        musicSource.time = 0f;
+        musicSource.timeSamples = 0;
 
         // 在音乐开始前让第一根竹丝从顶部完整下落，首个鼓点仍与谱面精确对齐。
-        float leadIn = Mathf.Max(0.1f, noteTravelTime - MusicBeatTimes[0]);
+        float leadIn = Mathf.Max(0.1f, noteTravelTime - beatTimes[0]);
         musicDspStart = AudioSettings.dspTime + leadIn;
         songTime = -leadIn;
         musicSource.PlayScheduled(musicDspStart);

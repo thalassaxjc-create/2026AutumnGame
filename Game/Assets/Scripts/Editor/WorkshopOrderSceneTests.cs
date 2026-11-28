@@ -9,6 +9,7 @@ using TMPro;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using Unity.Profiling;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
@@ -36,6 +37,307 @@ public sealed class WorkshopOrderSceneTests
     }
 
     [UnityTest]
+    public IEnumerator FirstLacquerTapStaysPlayableAcrossAllSongs()
+    {
+        const string practiceKey = WorkshopPracticeMode.PreferenceKey;
+        bool previous = SessionState.GetBool(practiceKey, false);
+        try
+        {
+            SessionState.SetBool(practiceKey, true);
+            EditorSceneManager.OpenScene(SceneTransitionState.WorkshopScenePath);
+            yield return new EnterPlayMode();
+            yield return PlayFirstLacquerTaps();
+        }
+        finally
+        {
+            SessionState.SetBool(practiceKey, previous);
+        }
+    }
+
+    IEnumerator PlayFirstLacquerTaps()
+    {
+        previousBackground = InputSystem.settings.backgroundBehavior;
+        previousEditorBehavior = InputSystem.settings.editorInputBehaviorInPlayMode;
+        restoreInput = true;
+        InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+        InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+        yield return Frames(2);
+
+        var keyboard = InputSystem.AddDevice<Keyboard>("LacquerTapKeyboard");
+        var mouse = InputSystem.AddDevice<Mouse>("LacquerTapMouse");
+        var controller = Object.FindFirstObjectByType<LacquerMinigameController>();
+        IList schedule = LacquerField<IList>(controller, "schedule");
+        RectTransform area = LacquerField<RectTransform>(controller, "playArea");
+
+        foreach (string suffix in new[] { "", " · 第二天", " · 第三天" })
+        {
+            Assert.That(EditorApplication.ExecuteMenuItem("宣纸帘/工位试玩/刷大漆" + suffix), Is.True);
+            if (suffix.Length == 0)
+                yield return MouseClick(mouse, RectTransformUtility.WorldToScreenPoint(null, area.position), MouseButton.Left);
+            else
+                yield return Press(keyboard, Key.Space);
+
+            double deadline = EditorApplication.timeSinceStartup + 10d;
+            while (schedule.Count == 0)
+            {
+                Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待开场倒数" + suffix);
+                yield return null;
+            }
+            object first = schedule[0];
+            Assert.That(LacquerField<object>(first, "type").ToString(), Is.EqualTo("Tap"));
+            float beat = LacquerField<float>(first, "targetTime");
+            Vector2 point = RectTransformUtility.WorldToScreenPoint(null, area.TransformPoint(LacquerField<Vector2>(first, "start")));
+            MouseButton button = LacquerField<object>(first, "color").ToString() == "Red" ? MouseButton.Left : MouseButton.Right;
+            float earlyClick = beat - (LacquerField<float>(controller, "goodWindow") + LacquerField<float>(controller, "missWindow")) * .5f;
+            while (LacquerField<float>(controller, "songTime") < earlyClick - .02f)
+            {
+                Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline));
+                yield return null;
+            }
+            yield return MouseClick(mouse, point, button);
+            Assert.That(LacquerField<int>(controller, "judgedCount"), Is.Zero, "点早时首点应继续保留" + suffix);
+
+            while (LacquerField<float>(controller, "songTime") < beat - .05f)
+            {
+                Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline));
+                yield return null;
+            }
+            yield return MouseClick(mouse, point, button);
+            Assert.That(LacquerField<int>(controller, "judgedCount"), Is.EqualTo(1), "正确点到首拍" + suffix);
+            Assert.That(LacquerField<int>(controller, "score"), Is.GreaterThanOrEqualTo(85), "首点得分" + suffix);
+            Assert.That(LacquerField<int>(controller, "missCount"), Is.Zero);
+            yield return Press(keyboard, Key.Escape);
+            yield return Frames(2);
+        }
+        InputSystem.RemoveDevice(mouse);
+        InputSystem.RemoveDevice(keyboard);
+    }
+
+    [UnityTest]
+    public IEnumerator LacquerStrokesTrackTheGuideAcrossAllSongs()
+    {
+        const string practiceKey = WorkshopPracticeMode.PreferenceKey;
+        bool previous = SessionState.GetBool(practiceKey, false);
+        try
+        {
+            SessionState.SetBool(practiceKey, true);
+            EditorSceneManager.OpenScene(SceneTransitionState.WorkshopScenePath);
+            yield return new EnterPlayMode();
+            yield return PlayLacquerStrokes();
+        }
+        finally
+        {
+            SessionState.SetBool(practiceKey, previous);
+        }
+    }
+
+    IEnumerator PlayLacquerStrokes()
+    {
+        previousBackground = InputSystem.settings.backgroundBehavior;
+        previousEditorBehavior = InputSystem.settings.editorInputBehaviorInPlayMode;
+        restoreInput = true;
+        InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+        InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+        yield return Frames(2);
+        var keyboard = InputSystem.AddDevice<Keyboard>("LacquerStrokeKeyboard");
+        var mouse = InputSystem.AddDevice<Mouse>("LacquerStrokeMouse");
+        var controller = Object.FindFirstObjectByType<LacquerMinigameController>();
+        var directions = new HashSet<Vector2>();
+        int strokeCount = 0;
+        bool captured = false;
+
+        foreach (string suffix in new[] { "", " · 第二天", " · 第三天" })
+        {
+            Assert.That(EditorApplication.ExecuteMenuItem("宣纸帘/工位试玩/刷大漆" + suffix), Is.True);
+            Assert.That(controller.IsOpen, Is.True);
+            yield return Press(keyboard, Key.Space);
+            IList schedule = LacquerField<IList>(controller, "schedule");
+            double roundDeadline = EditorApplication.timeSinceStartup + 8d;
+            while (schedule.Count == 0)
+            {
+                Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(roundDeadline), "等待开场倒数");
+                yield return null;
+            }
+            Assert.That(LacquerField<GameObject>(controller, "introPanel").activeSelf, Is.False);
+            var strokes = schedule.Cast<object>().Where(cue => LacquerField<float>(cue, "endTime") > 0f).ToArray();
+            foreach (object cue in strokes)
+            {
+                Vector2 delta = LacquerField<Vector2>(cue, "end") - LacquerField<Vector2>(cue, "start");
+                float duration = LacquerField<float>(cue, "endTime") - LacquerField<float>(cue, "targetTime");
+                Assert.That(delta.magnitude / duration, Is.EqualTo(128f).Within(.02f));
+                directions.Add(delta.normalized);
+                strokeCount++;
+            }
+
+            object stroke = strokes[0];
+            float startBeat = LacquerField<float>(stroke, "targetTime");
+            float endBeat = LacquerField<float>(stroke, "endTime");
+            Vector2 start = LacquerField<Vector2>(stroke, "start");
+            Vector2 end = LacquerField<Vector2>(stroke, "end");
+            Vector2 tangent = (end - start).normalized;
+            Vector2 offset = new Vector2(-tangent.y, tangent.x) * 24f;
+            MouseButton button = LacquerField<object>(stroke, "color").ToString() == "Red" ? MouseButton.Left : MouseButton.Right;
+            RectTransform area = LacquerField<RectTransform>(controller, "playArea");
+            Vector2 ScreenPoint(Vector2 point) => RectTransformUtility.WorldToScreenPoint(null, area.TransformPoint(point));
+
+            double deadline = EditorApplication.timeSinceStartup + 12d;
+            while (LacquerField<float>(controller, "songTime") < startBeat - .07f)
+            {
+                Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待实际音乐到起刷拍");
+                yield return null;
+            }
+            int scoreBefore = LacquerField<int>(controller, "score");
+            yield return SetMouse(mouse, ScreenPoint(start + offset), held: true, button);
+            object active = LacquerField<object>(controller, "activeDrag");
+            Assert.That(active, Is.Not.Null, "鼠标按住起刷圈");
+            var graphic = LacquerField<LacquerNoteGraphic>(active, "graphic");
+            bool waitedAtEnd = false;
+            double dspStart = LacquerField<double>(controller, "musicDspStart");
+            Action followStroke = () =>
+            {
+                if (InputState.currentUpdateType != InputUpdateType.Dynamic)
+                    return;
+                float time = (float)(AudioSettings.dspTime - dspStart);
+                float progress = Mathf.InverseLerp(startBeat, endBeat, time);
+                Vector2 point = Vector2.Lerp(start, end, progress) + offset;
+                if (time >= endBeat - .46f)
+                {
+                    point = end;
+                    waitedAtEnd |= time < endBeat - .02f;
+                }
+                mouse.MakeCurrent();
+                InputSystem.QueueStateEvent(mouse, new MouseState { position = ScreenPoint(point) }.WithButton(button));
+            };
+            InputSystem.onBeforeUpdate += followStroke;
+            try
+            {
+                while (LacquerField<object>(controller, "activeDrag") != null)
+                {
+                    Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "跟随亮点拖到收刷拍");
+                    float time = LacquerField<float>(controller, "songTime");
+                    float progress = Mathf.InverseLerp(startBeat, endBeat, time);
+                    Assert.That(LacquerField<float>(graphic, "strokeProgress"), Is.EqualTo(progress).Within(.004f));
+                    if (!captured && progress >= .42f && progress < .76f)
+                    {
+                        ScreenCapture.CaptureScreenshot("Logs/BambooHarvest/lacquer-synchronized-stroke.png");
+                        captured = true;
+                    }
+                    yield return null;
+                }
+            }
+            finally
+            {
+                InputSystem.onBeforeUpdate -= followStroke;
+            }
+            string feedback = LacquerField<Text>(controller, "feedbackText").text;
+            float stoppedAt = LacquerField<float>(controller, "songTime");
+            Assert.That(LacquerField<int>(controller, "score") - scoreBefore, Is.GreaterThanOrEqualTo(85),
+                $"曲目{suffix}，终点拍 {endBeat:F2}，结束时间 {stoppedAt:F2}，判定 {feedback}");
+            Assert.That(waitedAtEnd, Is.True, "提前到终点时仍在等尾拍");
+            yield return SetMouse(mouse, ScreenPoint(end), held: false, button);
+            yield return Press(keyboard, Key.Escape);
+            Assert.That(controller.IsOpen, Is.False);
+            yield return Frames(2);
+        }
+        Assert.That(strokeCount, Is.EqualTo(29));
+        Assert.That(directions, Is.EquivalentTo(new[] { Vector2.right, Vector2.left, Vector2.up, Vector2.down }));
+        InputSystem.RemoveDevice(mouse);
+        InputSystem.RemoveDevice(keyboard);
+    }
+
+    static T LacquerField<T>(object instance, string name) =>
+        (T)instance.GetType().GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .GetValue(instance);
+
+    [UnityTest]
+    public IEnumerator PracticeMenuStartsInWorkshopAndReopensEveryWorkstationWithoutStock()
+    {
+        const string key = WorkshopPracticeMode.PreferenceKey;
+        const string menu = "宣纸帘/工位试玩/";
+        bool previous = SessionState.GetBool(key, false);
+        try
+        {
+            SessionState.SetBool(key, true);
+            EditorSceneManager.OpenScene(SceneTransitionState.WorldScenePath);
+            yield return new EnterPlayMode();
+            double deadline = EditorApplication.timeSinceStartup + 20;
+            while (SceneManager.GetActiveScene().name != SceneTransitionState.WorkshopSceneName)
+            {
+                Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待试玩工坊");
+                yield return null;
+            }
+            yield return Frames(2);
+            Assert.That(WorkshopPracticeMode.Enabled, Is.True);
+            Assert.That(WorkshopOrder.Current, Is.Null);
+            Assert.That(WorkshopInventory.TotalThreads, Is.Zero);
+
+            previousBackground = InputSystem.settings.backgroundBehavior;
+            previousEditorBehavior = InputSystem.settings.editorInputBehaviorInPlayMode;
+            restoreInput = true;
+            InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            var keyboard = InputSystem.AddDevice<Keyboard>();
+            var workbench = Object.FindFirstObjectByType<BambooWorkbench>();
+            var mouse = InputSystem.AddDevice<Mouse>();
+            var player = Object.FindFirstObjectByType<PlayerController>();
+            foreach (var (name, step) in new[]
+            {
+                ("劈竹", BambooCraftProgress.Step.Splitting),
+                ("剐竹青", BambooCraftProgress.Step.Scraping),
+                ("过剑门", BambooCraftProgress.Step.GatePassing),
+                ("抽竹丝", BambooCraftProgress.Step.Drawing)
+            })
+            {
+                Assert.That(EditorApplication.ExecuteMenuItem(menu + name), Is.True);
+                Assert.That(workbench.IsOpen, Is.True);
+                Assert.That(workbench.Progress.Stage, Is.EqualTo(step));
+                yield return Press(keyboard, Key.Escape);
+                Assert.That(workbench.IsOpen, Is.False);
+            }
+            foreach (var (name, track) in new[]
+            {
+                ("编帘", ""), ("刷大漆", "encanto"), ("刷大漆 · 第二天", "shoudie"), ("刷大漆 · 第三天", "orchid"),
+                ("纹样", ""), ("上朱边", ""), ("上朱边", "")
+            })
+            {
+                Assert.That(EditorApplication.ExecuteMenuItem(menu + name), Is.True);
+                Assert.That(GameFlowModalState.IsModalOpen, Is.True, name);
+                AudioSource music = null;
+                if (track.Length > 0)
+                {
+                    var lacquer = Object.FindFirstObjectByType<LacquerMinigameController>();
+                    music = lacquer.GetComponents<AudioSource>().Single(source => source.clip != null);
+                    Assert.That(music.clip.name, Is.EqualTo(track));
+                    Assert.That(lacquer.TotalMarks, Is.InRange(34, 43));
+                    typeof(LacquerMinigameController).GetMethod("StartRound", BindingFlags.Instance | BindingFlags.NonPublic)
+                        .Invoke(lacquer, null);
+                    double audioDeadline = EditorApplication.timeSinceStartup + 5d;
+                    while (music.timeSamples <= 0)
+                    {
+                        Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(audioDeadline),
+                            track + " 背景音乐开始播放");
+                        yield return null;
+                    }
+                }
+                if (name == "纹样")
+                    yield return TryAllPatterns(keyboard, mouse);
+                yield return Press(keyboard, Key.Escape);
+                Assert.That(GameFlowModalState.IsModalOpen, Is.False, name);
+                Assert.That(player.enabled, Is.True, name);
+                if (music != null)
+                    Assert.That(music.isPlaying, Is.False, track + " 退出时停止音乐");
+            }
+            Assert.That((GreenBambooBag.Count, WorkshopInventory.TotalThreads), Is.EqualTo((0, 0)));
+            InputSystem.RemoveDevice(mouse);
+            InputSystem.RemoveDevice(keyboard);
+        }
+        finally
+        {
+            SessionState.SetBool(key, previous);
+        }
+    }
+
+    [UnityTest]
     public IEnumerator StoryOrderAndSettlementUseExistingSceneObjects()
     {
         EditorSceneManager.OpenScene(SceneTransitionState.WorldScenePath);
@@ -49,6 +351,7 @@ public sealed class WorkshopOrderSceneTests
         var mouse = InputSystem.AddDevice<Mouse>();
         var order = WorkshopOrder.Current;
         Assert.That(order, Is.Not.Null);
+        SetMorningClock(order);
         // A full-suite Play Mode reload can finish the opening before the runner resumes.
         Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Opening).Or.EqualTo(WorkshopOrder.Phase.Village));
         var opening = Object.FindFirstObjectByType<OpeningSequence>();
@@ -119,7 +422,7 @@ public sealed class WorkshopOrderSceneTests
         yield return Press(keyboard, Key.Escape);
         Assert.That(order.CanHarvest, Is.True);
 
-        int[] pricesAtTestGrade = { 80, 126, 162, 120 };
+        int[] pricesAtTestGrade = { 80, 112, 144, 120 };
         for (int day = 1; day <= WorkshopOrder.LastStoryDay; day++)
         {
             if (day > 1)
@@ -139,7 +442,9 @@ public sealed class WorkshopOrderSceneTests
                 else
                     yield return ProduceAndDry(order, keyboard, dailyStalkNames);
                 if (order.IsPatternOrder)
-                    yield return FinishPattern(order, keyboard, mouse, sheet == 1 && day <= 3);
+                    yield return FinishPattern(order, keyboard, mouse, sheet == 1);
+                if (order.RequiresVermilionTrim)
+                    yield return BindVermilionTrim(order, keyboard, mouse, sheet == 1);
                 if (day == 4 && sheet == 1)
                 {
                     Assert.That(order.Submit(), Is.False, "样帘先试捞再交付");
@@ -165,6 +470,8 @@ public sealed class WorkshopOrderSceneTests
                 var reportComputer = Object.FindFirstObjectByType<WorkshopComputer>();
                 if (sheet == 1 && order.RequiredSheets > 1)
                     Assert.That(Find(reportComputer.Screen, "结算标题").GetComponent<TMP_Text>().text, Is.EqualTo("第 1 张已交付"));
+                if (order.IsPatternOrder)
+                    Assert.That(Find(reportComputer.Screen, "结算明细").GetComponent<TMP_Text>().text, Does.Contain("纹样 D"));
                 Click(reportComputer.Screen, "确认");
                 if (day == 1 && sheet == 1)
                     yield return CloseJournal(checkPeople: true);
@@ -224,7 +531,7 @@ public sealed class WorkshopOrderSceneTests
                 yield return CloseJournal();
             }
         }
-        Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((1396, 1574, 1362)));
+        Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((1332, 1574, 1362)));
         Assert.That(order.Days, Is.EqualTo(5));
         Assert.That(order.Settlements.Count, Is.EqualTo(5));
         Assert.That(order.Settlements.All(record => record.Delivered), Is.True);
@@ -247,6 +554,7 @@ public sealed class WorkshopOrderSceneTests
         var mouse = InputSystem.AddDevice<Mouse>();
         var order = WorkshopOrder.Current;
         Assert.That(order, Is.Not.Null);
+        SetMorningClock(order);
         Object.FindFirstObjectByType<OpeningSequence>().CompleteImmediately();
         order.CloseIntroduction(WorkshopOrder.Phase.Village);
         order.CloseIntroduction(WorkshopOrder.Phase.Home);
@@ -398,7 +706,7 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(order.Begin(WorkshopOrder.Stage.Weaving), Is.True);
         order.ConfirmWeaving(new WeavingMinigameController.WeavingResult
             { grade = WeavingMinigameController.WeavingGrade.S, gameMinutes = 60 });
-        Assert.That(order.UsedSpottedBamboo, Is.True);
+        Assert.That(order.WovenCurtains, Is.EqualTo(1));
         Assert.That(WorkshopInventory.SpottedThreads, Is.Zero);
         Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.True);
         order.ConfirmLacquer(new LacquerMinigameController.LacquerResult
@@ -455,6 +763,13 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(harvest.CurrentTarget, Is.SameAs(stalk), "拾取目标 " + stalk.name);
         yield return Press(keyboard, Key.Space);
         Assert.That(stalk.CurrentStage, Is.EqualTo(ChopableBamboo.Stage.Collected), stalk.name);
+    }
+
+    static void SetMorningClock(WorkshopOrder order)
+    {
+        // Run the story from the morning even when the local settings are set up for a midnight test.
+        typeof(WorkshopOrder).GetField("minuteOfDay", BindingFlags.Instance | BindingFlags.NonPublic)
+            .SetValue(order, WorkshopOrder.FirstDayStartMinute);
     }
 
     static string[] CheckFreshBamboo()
@@ -515,7 +830,7 @@ public sealed class WorkshopOrderSceneTests
             ShowResult(weaving.GetComponent<WeavingMinigameController>());
         }
         yield return Press(keyboard, Key.Enter);
-        Assert.That(order.WeavingResult.Value.grade, Is.EqualTo(WeavingMinigameController.WeavingGrade.D));
+        Assert.That(order.WovenCurtains, Is.EqualTo(1));
         Assert.That(WorkshopInventory.TotalThreads, Is.Zero);
         Assert.That(workbench.Progress.TotalThreads, Is.Zero);
 
@@ -525,7 +840,7 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(lacquer.IsMinigameOpen, Is.True);
         ShowResult(lacquer.GetComponent<LacquerMinigameController>());
         yield return Press(keyboard, Key.Enter);
-        Assert.That(order.LacquerResult.Value.grade, Is.EqualTo(LacquerMinigameController.LacquerGrade.D));
+        Assert.That(order.LacqueredCurtains, Is.EqualTo(1));
 
         var drying = Object.FindFirstObjectByType<DryingStationTrigger>();
         MoveNear(drying.transform);
@@ -541,12 +856,8 @@ public sealed class WorkshopOrderSceneTests
         order.Tick(30f, true);
         order.SetClockSpeed(WorkshopOrder.ClockSpeed.Normal);
         Assert.That(order.IsDrying, Is.False);
-        Assert.That(order.CanCollectCurtain, Is.True);
-        Assert.That(order.CanUsePatternStation, Is.False);
-        Assert.That(order.FinishedCurtainCount, Is.Zero);
-        yield return CollectCurtain(keyboard);
-        Assert.That(order.CanUsePatternStation, Is.EqualTo(order.IsPatternOrder));
-        Assert.That(order.FinishedCurtainCount, Is.EqualTo(order.IsPatternOrder ? 0 : 1));
+        Assert.That(order.CanUsePatternStation, Is.True);
+        Assert.That(order.CanUseTrimStation, Is.True);
     }
 
     static IEnumerator RepairReturnedCurtain(int sheet, Keyboard keyboard)
@@ -567,7 +878,7 @@ public sealed class WorkshopOrderSceneTests
             Click(GameObject.Find("转半圈检查"));
             Click(GameObject.Find("压平并检查"));
         }
-        Assert.That(WorkshopOrder.Current.FinishedCurtainCount, Is.EqualTo(1));
+        Assert.That(WorkshopOrder.Current.AvailableOrderCurtains, Is.EqualTo(1));
         yield return Press(keyboard, Key.Escape);
         yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
     }
@@ -582,15 +893,6 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(controller.transform.position.x, Is.LessThan(customer.position.x - .3f));
     }
 
-    static IEnumerator CollectCurtain(Keyboard keyboard)
-    {
-        MoveNear(Object.FindFirstObjectByType<DryingStationTrigger>().transform);
-        yield return Frames(2);
-        Assert.That(InteractionPromptUI.CurrentMessage, Is.EqualTo("按 E 收下纸帘"));
-        yield return Press(keyboard, Key.E);
-        Assert.That(WorkshopOrder.Current.CanCollectCurtain, Is.False);
-    }
-
     static IEnumerator FinishPattern(WorkshopOrder order, Keyboard keyboard, Mouse mouse, bool verifyPreview)
     {
         var station = Object.FindFirstObjectByType<PatternStationTrigger>();
@@ -598,64 +900,170 @@ public sealed class WorkshopOrderSceneTests
         MoveNear(station.transform);
         yield return Press(keyboard, Key.E);
         Assert.That(station.IsOpen, Is.True);
-        var board = Object.FindFirstObjectByType<CurtainPatternView>().Board;
-        if (order.PatternKind == CurtainPatternKind.Turtle)
+        Assert.That(GameObject.Find("纹样选样页"), Is.Not.Null);
+        Assert.That(order.PatternDraft, Is.Null, "打开纹样台时仍未选择订单纹样");
+        if (verifyPreview && order.Days == 2)
         {
-            if (verifyPreview)
+            yield return CaptureFrame("pattern-catalog.png");
+            using (var frameTime = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread"))
             {
-                yield return AssertPatternRendered(board, "pattern-day2-stitching.png");
-                Click(GameObject.Find("对样"));
-                yield return AssertPatternRendered(board, "pattern-day2-inspection.png");
-                Click(GameObject.Find("返回修补"));
-                yield return Stitch(mouse, board, 1, 0);
-                yield return Stitch(mouse, board, 1, 1);
-                yield return Stitch(mouse, board, 1, CurtainPatternDraft.DetourPin);
-                Assert.That(order.PatternDraft.CurrentPin, Is.EqualTo(CurtainPatternDraft.DetourPin));
-                yield return MouseClick(mouse, Vector2.zero, MouseButton.Right);
-                Assert.That(order.PatternDraft.CurrentPin, Is.EqualTo(1));
-                yield return Press(keyboard, Key.Escape);
-                Assert.That(station.IsOpen, Is.False);
-                Assert.That(Object.FindFirstObjectByType<PlayerController>().enabled, Is.True);
-                yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
-                yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
-                station = Object.FindFirstObjectByType<PatternStationTrigger>();
-                MoveNear(station.transform);
-                yield return Press(keyboard, Key.E);
-                Assert.That(station.IsOpen, Is.True);
-                Assert.That(order.PatternDraft.CurrentPin, Is.EqualTo(1));
-                board = Object.FindFirstObjectByType<CurtainPatternView>().Board;
-                for (int pin = 2; pin <= CurtainPatternDraft.MainPins; pin++)
-                    yield return Stitch(mouse, board, 1, pin % CurtainPatternDraft.MainPins);
+                yield return Frames(12);
+                if (frameTime.Valid && frameTime.LastValue > 0)
+                    Debug.Log($"Pattern catalog main thread {frameTime.LastValue / 1000000d:F2} ms");
             }
-            else
-                yield return StitchLoop(mouse, board, 1);
-            yield return StitchLoop(mouse, board, 3);
+            foreach (string name in new[] { "单丝路", "双丝路", "罗纹", "扎花" })
+            {
+                Click(GameObject.Find("选样_" + name));
+                yield return Frames(2);
+                Assert.That(GameObject.Find("当前纹样").GetComponent<Text>().text, Is.EqualTo(name));
+                Assert.That(GameObject.Find("加工类型").GetComponent<Text>().text, Does.Contain("阴干素帘"));
+                Assert.That(order.PatternDraft, Is.Not.Null);
+                Assert.That(order.PlainCurtains, Is.EqualTo(1), "选样不消耗库存");
+                Click(GameObject.Find("返回选样"));
+                yield return Frames(2);
+            }
         }
-        else
+        Click(GameObject.Find("选样_龟纹"));
+        yield return Frames(2);
+        var board = Object.FindFirstObjectByType<CurtainPatternView>().Board;
+        var draft = order.PatternDraft;
+        int before = order.ElapsedGameMinutes;
+        if (verifyPreview && order.Days == 2)
         {
-            for (int loop = 0; loop < CurtainPatternDraft.TurtleCount; loop++)
-                yield return StitchLoop(mouse, board, loop);
-            Click(GameObject.Find("换朱线"));
-            Assert.That(order.PatternDraft.UsesVermilion, Is.True);
-            for (int pin = 0; pin <= CurtainPatternDraft.MainPins; pin++)
-            {
-                int index = pin % CurtainPatternDraft.MainPins;
-                yield return Stitch(mouse, board, CurtainPatternDraft.Frame, index);
-                if (CurtainPatternDraft.IsJoin(index))
-                    Click(GameObject.Find("压线"));
-            }
+            Assert.That(GameObject.Find("穿线顺序").GetComponent<Text>().text, Does.Contain("道 ←"));
+            yield return CaptureFrame("pattern-shuttle.png");
+            Vector2 firstCrossing = draft.GuidePosition(0, .24f);
+            yield return SetShuttleInput(keyboard, mouse, board, 0, draft.Shuttle, under: true);
+            yield return SetShuttleInput(keyboard, mouse, board, 0, firstCrossing, under: true);
+            Assert.That(draft.ResultAt(0, 0), Is.EqualTo(CurtainPatternDraft.CrossingResult.Wrong));
+            yield return SetShuttleInput(keyboard, mouse, board, 0, firstCrossing, under: true, held: false);
+            yield return SetShuttleInput(keyboard, mouse, board, 0, draft.GuidePosition(0, .6f), under: false, held: false);
+            Assert.That(draft.Shuttle.x, Is.EqualTo(.24f).Within(.002f));
+            yield return MouseClick(mouse, Vector2.zero, MouseButton.Right);
+            Assert.That(draft.Shuttle.x, Is.Zero);
+            Assert.That(draft.ResultAt(0, 0), Is.EqualTo(CurtainPatternDraft.CrossingResult.Pending));
+
+            yield return SetShuttleInput(keyboard, mouse, board, 0, draft.Shuttle, under: true);
+            yield return SetShuttleInput(keyboard, mouse, board, 0, firstCrossing, under: true);
+            yield return Press(keyboard, Key.Escape);
+            Assert.That(station.IsOpen, Is.False);
+            Assert.That(draft.IsGripped, Is.False);
+            Assert.That(order.ElapsedGameMinutes, Is.EqualTo(before), "拖梭时世界时钟暂停");
+            Assert.That(Object.FindFirstObjectByType<PlayerController>().enabled, Is.True);
+            yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
+            yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
+            station = Object.FindFirstObjectByType<PatternStationTrigger>();
+            MoveNear(station.transform);
+            yield return Press(keyboard, Key.E);
+            Assert.That(station.IsOpen, Is.True);
+            Assert.That(GameObject.Find("纹样选样页"), Is.Not.Null);
+            Click(GameObject.Find("选样_龟纹"));
+            yield return Frames(2);
+            Assert.That(order.PatternDraft, Is.SameAs(draft));
+            Assert.That(draft.Shuttle.x, Is.EqualTo(.24f).Within(.002f));
+            board = Object.FindFirstObjectByType<CurtainPatternView>().Board;
+            yield return SetShuttleInput(keyboard, mouse, board, 0, draft.Shuttle, under: false, held: false);
         }
 
-        int before = order.ElapsedGameMinutes;
-        Click(GameObject.Find("对样"));
-        if (verifyPreview && order.PatternKind == CurtainPatternKind.VermilionJade)
-            yield return AssertPatternRendered(board, "pattern-day3-inspection.png", colored: true);
-        Click(GameObject.Find("对样"));
-        Assert.That(order.PatternResult.Value.Grade, Is.EqualTo(WorkshopOrder.QualityGrade.S));
+        yield return WeaveShuttleRows(draft, board, keyboard, mouse, correct: false);
+        Assert.That(draft.ThreadingScore, Is.Zero);
+        Assert.That(draft.Grade, Is.EqualTo(WorkshopOrder.QualityGrade.D));
+        before = order.ElapsedGameMinutes;
+        Click(GameObject.Find("预览纹样"));
+        Assert.That(GameObject.Find("计分").GetComponent<Text>().text, Does.Contain("纹样 D"));
+        if (verifyPreview && order.Days == 2)
+            yield return CaptureFrame("pattern-turtle-inspection.png", image =>
+            {
+                AssertFullTurtle(image, board);
+                AssertFullTurtle(image, GameObject.Find("样稿").GetComponent<CurtainPatternGraphic>());
+                Vector2 fault = ScreenAt(board, board.ShuttleLocalPosition(0, draft.GuidePosition(0,
+                    CurtainPatternDraft.CrossingProgress(0))));
+                bool hasVermilion = false;
+                for (int y = -4; y <= 4 && !hasVermilion; y++)
+                    for (int x = -4; x <= 4 && !hasVermilion; x++)
+                    {
+                        Color32 pixel = PixelAt(image, fault + new Vector2(x, y));
+                        hasVermilion = pixel.r > 120 && pixel.r - pixel.g > 50;
+                    }
+                Assert.That(hasVermilion, Is.True, "成品对样保留错针的朱色线结");
+            });
+        Click(GameObject.Find("返回修补"));
+        Assert.That(GameObject.Find("计分"), Is.Null);
+        Click(GameObject.Find("预览纹样"));
+        Click(GameObject.Find("预览纹样"));
+        Assert.That(order.GetStatus(WorkshopOrder.Stage.Pattern), Is.EqualTo(WorkshopOrder.StageStatus.Complete));
         Assert.That(order.ElapsedGameMinutes - before, Is.EqualTo(order.PatternMinutes));
-        Assert.That(order.HasPatternBlank, Is.False);
-        Assert.That(order.FinishedCurtainCount, Is.EqualTo(1));
+        Assert.That(order.PlainCurtains, Is.Zero);
+        Assert.That(order.FinishedCurtains, Is.EqualTo(1));
         Assert.That(station.IsOpen, Is.False);
+    }
+
+    static IEnumerator BindVermilionTrim(WorkshopOrder order, Keyboard keyboard, Mouse mouse, bool verifyResume)
+    {
+        Assert.That(order.CanUseTrimStation, Is.True);
+        Assert.That(order.PatternDraft, Is.Null, "第三天阴干后直接包朱边");
+        Assert.That(order.Submit(), Is.False);
+        var station = Object.FindFirstObjectByType<VermilionTrimStation>();
+        Assert.That(station, Is.Not.Null);
+        Assert.That(station.transform.parent.parent.name, Is.EqualTo("LacqueringArea"));
+        MoveTo(station.transform.position + new Vector3(0f, .15f, .25f));
+        yield return Frames(2);
+        Assert.That(InteractionPromptUI.CurrentMessage, Is.EqualTo("按 E 给帘框上朱边"));
+        yield return Press(keyboard, Key.E);
+        Assert.That(station.IsOpen, Is.True);
+        Assert.That(GameObject.Find("包边评分"), Is.Null);
+        var board = Object.FindFirstObjectByType<VermilionTrimView>().Board;
+        var draft = order.TrimDraft;
+
+        if (verifyResume)
+        {
+            yield return DragEdge(mouse, board, 0, 0f, .51f);
+            Assert.That(draft.EdgeProgress, Is.EqualTo(.5f));
+            yield return Press(keyboard, Key.Escape);
+            Assert.That(station.IsOpen, Is.False);
+            Assert.That(Object.FindFirstObjectByType<PlayerController>().enabled, Is.True);
+            yield return Press(keyboard, Key.E);
+            Assert.That(station.IsOpen, Is.True);
+            Assert.That(order.TrimDraft, Is.SameAs(draft));
+            Assert.That(draft.EdgeProgress, Is.EqualTo(.5f));
+        }
+
+        for (int side = 0; side < VermilionTrimDraft.SideCount; side++)
+        {
+            yield return DragEdge(mouse, board, side, draft.EdgeProgress, 1f);
+            Assert.That(draft.NeedsCorner, Is.True);
+            Vector2 end = ScreenAt(board, board.EdgeLocalPosition(side, 1f));
+            yield return MouseClick(mouse, end, MouseButton.Left);
+            Assert.That(draft.SealedCorners, Is.EqualTo(side + 1));
+        }
+
+        if (verifyResume)
+            yield return CaptureFrame("vermilion-trim.png", image =>
+            {
+                Color32 bamboo = PixelAt(image, ScreenAt(board, board.ClothPoint(new Vector2(.45f, .45f))));
+                Assert.That(bamboo.g > bamboo.r + 10 && bamboo.g > bamboo.b + 12, Is.True, $"青竹帘面 {bamboo}");
+                for (int side = 0; side < VermilionTrimDraft.SideCount; side++)
+                {
+                    Color32 edge = PixelAt(image, ScreenAt(board, board.EdgeLocalPosition(side, .36f)));
+                    Assert.That(edge.r > 100 && edge.r > edge.g + 38, Is.True, $"第 {side + 1} 边 {edge}");
+                }
+            });
+
+        int before = order.ElapsedGameMinutes;
+        Click(GameObject.Find("确认朱边"));
+        Assert.That(order.GetStatus(WorkshopOrder.Stage.VermilionTrim), Is.EqualTo(WorkshopOrder.StageStatus.Complete));
+        Assert.That(order.ElapsedGameMinutes - before, Is.EqualTo(order.TrimMinutes));
+        Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.ReadyToSubmit));
+        Assert.That(station.IsOpen, Is.False);
+    }
+
+    static IEnumerator DragEdge(Mouse mouse, CurtainPatternGraphic board, int side, float from, float to)
+    {
+        Canvas.ForceUpdateCanvases();
+        yield return SetMouse(mouse, ScreenAt(board, board.EdgeLocalPosition(side, from)), held: true);
+        Vector2 end = ScreenAt(board, board.EdgeLocalPosition(side, to));
+        yield return SetMouse(mouse, end, held: true);
+        yield return SetMouse(mouse, end, held: false);
     }
 
     static IEnumerator WaitForMorning(WorkshopOrder order, int day)
@@ -693,7 +1101,8 @@ public sealed class WorkshopOrderSceneTests
         MoveNear(computer.transform);
         yield return Press(keyboard, Key.E);
         Click(computer.Screen, "订单");
-        Assert.That(Find(computer.Screen, "订单样稿").activeInHierarchy, Is.EqualTo(order.IsPatternOrder));
+        Assert.That(Find(computer.Screen, "订单样稿").activeInHierarchy,
+            Is.EqualTo(order.IsPatternOrder || order.RequiresVermilionTrim));
         yield return Press(keyboard, Key.Escape);
         Assert.That(order.CanUsePatternStation, Is.False);
         Assert.That(order.CanHarvest, Is.True);
@@ -743,14 +1152,13 @@ public sealed class WorkshopOrderSceneTests
         yield return Frames(2);
         Click(computer.Screen, "提交订单");
         yield return Frames(2);
-        Assert.That(Find(computer.Screen, "结算明细").GetComponent<TMP_Text>().text, Does.Contain(expectedIncome));
+        string details = Find(computer.Screen, "结算明细").GetComponent<TMP_Text>().text;
+        Assert.That(details, Does.Contain(expectedIncome).And.Not.Contain("纹样 ").And.Not.Contain("朱边 "));
     }
 
-    static IEnumerator AssertPatternRendered(CurtainPatternGraphic board, string fileName, bool colored = false)
+    static IEnumerator CaptureFrame(string fileName, Action<Texture2D> verify = null)
     {
-        var sample = GameObject.Find("样稿").GetComponent<CurtainPatternGraphic>();
         yield return Frames(2);
-
         string path = Path.Combine("Logs", "BambooHarvest", fileName);
         DateTime previousWrite = File.GetLastWriteTimeUtc(path);
         ScreenCapture.CaptureScreenshot(path);
@@ -761,26 +1169,14 @@ public sealed class WorkshopOrderSceneTests
             yield return null;
         }
         yield return Frames(1);
+        if (verify == null)
+            yield break;
 
         var screenshot = new Texture2D(2, 2, TextureFormat.RGBA32, false);
         try
         {
             Assert.That(screenshot.LoadImage(File.ReadAllBytes(path)), Is.True);
-            foreach (CurtainPatternGraphic graphic in new[] { board, sample })
-            {
-                Color32 pin = PixelAt(screenshot, graphic, 0, 0);
-                if (!colored)
-                {
-                    Assert.That(pin.r < 185 && pin.g < 170 && pin.b < 145, Is.True,
-                        $"{graphic.name} 应显示深色龟纹结，取样颜色 {pin}");
-                    continue;
-                }
-                Assert.That(pin.g > pin.r + 30 && pin.b > pin.r + 20, Is.True,
-                    $"{graphic.name} 应显示青纹，取样颜色 {pin}");
-                Color32 edge = PixelAt(screenshot, graphic, CurtainPatternDraft.Frame, CurtainPatternDraft.RightJoin);
-                Assert.That(edge.r > 120 && edge.r > edge.g + 35, Is.True,
-                    $"{graphic.name} 应显示朱边，取样颜色 {edge}");
-            }
+            verify(screenshot);
         }
         finally
         {
@@ -788,35 +1184,100 @@ public sealed class WorkshopOrderSceneTests
         }
     }
 
-    static Color32 PixelAt(Texture2D screenshot, CurtainPatternGraphic graphic, int loop, int pin)
+    static void AssertFullTurtle(Texture2D image, CurtainPatternGraphic graphic)
     {
-        Vector2 screen = RectTransformUtility.WorldToScreenPoint(null,
-            graphic.rectTransform.TransformPoint(graphic.PinLocalPosition(loop, pin)));
+        for (int row = 0; row < 3; row++)
+            for (int column = 0; column < 4; column++)
+            {
+                Vector2 min = ScreenAt(graphic, graphic.ClothPoint(new Vector2(column * .25f + .06f, row / 3f + .06f)));
+                Vector2 max = ScreenAt(graphic, graphic.ClothPoint(new Vector2((column + 1) * .25f - .06f, (row + 1) / 3f - .06f)));
+                int seams = 0;
+                for (float y = min.y; y <= max.y && seams < 10; y += 2f)
+                    for (float x = min.x; x <= max.x && seams < 10; x += 2f)
+                    {
+                        Color32 pixel = PixelAt(image, new Vector2(x, y));
+                        if (pixel.r < 187 && pixel.g < 180 && pixel.b < 151)
+                            seams++;
+                    }
+                Assert.That(seams, Is.EqualTo(10), $"{graphic.name} 第 {row + 1} 行第 {column + 1} 区应有龟纹");
+            }
+    }
+
+    static Color32 PixelAt(Texture2D screenshot, Vector2 screen)
+    {
         int x = Mathf.Clamp(Mathf.FloorToInt(screen.x * screenshot.width / Screen.width), 0, screenshot.width - 1);
         int y = Mathf.Clamp(Mathf.FloorToInt(screen.y * screenshot.height / Screen.height), 0, screenshot.height - 1);
         return screenshot.GetPixel(x, y);
     }
 
-    static IEnumerator StitchLoop(Mouse mouse, CurtainPatternGraphic board, int loop)
+    static Vector2 ScreenAt(CurtainPatternGraphic board, Vector2 local) =>
+        RectTransformUtility.WorldToScreenPoint(null, board.rectTransform.TransformPoint(local));
+
+    static IEnumerator TryAllPatterns(Keyboard keyboard, Mouse mouse)
     {
-        for (int pin = 0; pin <= CurtainPatternDraft.MainPins; pin++)
-            yield return Stitch(mouse, board, loop, pin % CurtainPatternDraft.MainPins);
+        var view = Object.FindFirstObjectByType<CurtainPatternView>();
+        var draftField = typeof(CurtainPatternView).GetField("draft", BindingFlags.Instance | BindingFlags.NonPublic);
+        foreach (string name in new[] { "单丝路", "双丝路", "罗纹", "龟纹", "扎花" })
+        {
+            Click(GameObject.Find("选样_" + name));
+            yield return Frames(2);
+            var draft = (CurtainPatternDraft)draftField.GetValue(view);
+            Assert.That(GameObject.Find("穿线顺序").GetComponent<Text>().text, Does.Contain("第 3 道"));
+            yield return WeaveShuttleRows(draft, view.Board, keyboard, mouse, correct: true);
+            Click(GameObject.Find("预览纹样"));
+            Assert.That(GameObject.Find("计分").GetComponent<Text>().text, Does.Contain("纹样 S"), name);
+            Click(GameObject.Find("预览纹样"));
+            yield return Frames(2);
+            Assert.That(GameObject.Find("纹样选样页"), Is.Not.Null);
+        }
     }
 
-    static IEnumerator Stitch(Mouse mouse, CurtainPatternGraphic board, int loop, int pin)
+    static IEnumerator WeaveShuttleRows(CurtainPatternDraft draft, CurtainPatternGraphic board, Keyboard keyboard,
+        Mouse mouse, bool correct)
+    {
+        for (int row = draft.CompletedRows; row < CurtainPatternDraft.RowCount; row++)
+        {
+            yield return SetShuttleInput(keyboard, mouse, board, row, draft.Shuttle, under: false);
+            Assert.That(draft.IsGripped, Is.True);
+            for (int crossing = draft.CheckedCrossings(row); crossing < CurtainPatternDraft.CrossingsPerRow; crossing++)
+            {
+                Vector2 point = draft.GuidePosition(row, CurtainPatternDraft.CrossingProgress(crossing) + .008f);
+                yield return SetShuttleInput(keyboard, mouse, board, row, point, draft.GoesUnder(row, crossing) == correct);
+                Assert.That(draft.CheckedCrossings(row), Is.EqualTo(crossing + 1));
+            }
+            Vector2 end = draft.GuidePosition(row, 1f);
+            yield return SetShuttleInput(keyboard, mouse, board, row, end, under: false);
+            Assert.That(draft.CompletedRows, Is.EqualTo(row + 1));
+            yield return SetShuttleInput(keyboard, mouse, board, row, end, under: false, held: false);
+        }
+    }
+
+    static IEnumerator SetShuttleInput(Keyboard keyboard, Mouse mouse, CurtainPatternGraphic board,
+        int row, Vector2 travel, bool under, bool held = true)
     {
         Canvas.ForceUpdateCanvases();
-        Vector2 screen = RectTransformUtility.WorldToScreenPoint(null,
-            board.rectTransform.TransformPoint(board.PinLocalPosition(loop, pin)));
-        yield return MouseClick(mouse, screen, MouseButton.Left);
+        Vector2 screen = ScreenAt(board, board.ShuttleLocalPosition(row, travel));
+        return InputFrame(() =>
+        {
+            keyboard.MakeCurrent();
+            InputSystem.QueueStateEvent(keyboard, under ? new KeyboardState(Key.Space) : new KeyboardState());
+            mouse.MakeCurrent();
+            InputSystem.QueueStateEvent(mouse, new MouseState { position = screen }.WithButton(MouseButton.Left, held));
+        });
     }
 
     static IEnumerator MouseClick(Mouse mouse, Vector2 position, MouseButton button)
     {
-        yield return InputFrame(() => InputSystem.QueueStateEvent(mouse,
-            new MouseState { position = position }.WithButton(button, true)));
-        yield return InputFrame(() => InputSystem.QueueStateEvent(mouse, new MouseState { position = position }));
+        yield return SetMouse(mouse, position, held: true, button);
+        yield return SetMouse(mouse, position, held: false, button);
     }
+
+    static IEnumerator SetMouse(Mouse mouse, Vector2 position, bool held, MouseButton button = MouseButton.Left) =>
+        InputFrame(() =>
+        {
+            mouse.MakeCurrent();
+            InputSystem.QueueStateEvent(mouse, new MouseState { position = position }.WithButton(button, held));
+        });
 
     static void ShowResult(MonoBehaviour controller)
     {

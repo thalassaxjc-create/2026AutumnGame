@@ -8,6 +8,8 @@ using UnityEngine.UI;
 [RequireComponent(typeof(CanvasRenderer))]
 public sealed class LacquerNoteGraphic : MaskableGraphic
 {
+    public const float StrokePadding = 105f;
+
     public enum NoteShape
     {
         Tap,
@@ -17,15 +19,17 @@ public sealed class LacquerNoteGraphic : MaskableGraphic
     NoteShape shape;
     Color lacquerColor = Color.red;
     float approach;
-    float dragProgress;
-    bool dragInside = true;
+    float strokeProgress;
+    bool strokeActive;
+    bool following;
 
     public void Configure(NoteShape noteShape, Color color)
     {
         shape = noteShape;
         lacquerColor = color;
-        dragProgress = 0f;
-        dragInside = true;
+        strokeProgress = 0f;
+        strokeActive = false;
+        following = true;
         SetVerticesDirty();
     }
 
@@ -39,14 +43,15 @@ public sealed class LacquerNoteGraphic : MaskableGraphic
         SetVerticesDirty();
     }
 
-    public void SetDragProgress(float value, bool inside)
+    public void SetStrokeProgress(float value, bool onTrack)
     {
         value = Mathf.Clamp01(value);
-        if (Mathf.Abs(dragProgress - value) < 0.002f && dragInside == inside)
+        if (strokeActive && Mathf.Abs(strokeProgress - value) < 0.002f && following == onTrack)
             return;
 
-        dragProgress = value;
-        dragInside = inside;
+        strokeActive = true;
+        strokeProgress = value;
+        following = onTrack;
         SetVerticesDirty();
     }
 
@@ -88,21 +93,23 @@ public sealed class LacquerNoteGraphic : MaskableGraphic
     void DrawStroke(VertexHelper vh, Rect r)
     {
         float radius = Mathf.Min(35f, r.height * 0.27f);
-        Vector2 start = new Vector2(r.xMin + radius + 12f, r.center.y);
-        Vector2 end = new Vector2(r.xMax - radius - 12f, r.center.y);
-        Vector2 filledEnd = Vector2.Lerp(start, end, dragProgress);
+        Vector2 offset = Vector2.right * ((r.width - StrokePadding) * .5f);
+        Vector2 start = r.center - offset;
+        Vector2 end = r.center + offset;
+        Vector2 filledEnd = Vector2.Lerp(start, end, strokeProgress);
         Color dark = Darken(lacquerColor, 0.42f);
-        Color fill = dragInside ? lacquerColor : new Color32(202, 104, 74, 255);
+        Color fill = following ? lacquerColor : Color.Lerp(dark, lacquerColor, .42f);
 
         float ringRadius = Mathf.Lerp(radius * 1.75f, radius * 1.12f, approach);
-        DrawRing(vh, start, ringRadius, 4f, new Color(1f, 0.94f, 0.82f, Mathf.Lerp(0.18f, 0.90f, approach)), 30);
+        if (!strokeActive)
+            DrawRing(vh, start, ringRadius, 4f, new Color(1f, 0.94f, 0.82f, Mathf.Lerp(0.18f, 0.90f, approach)), 30);
 
         AddLine(vh, start + new Vector2(4f, -5f), end + new Vector2(4f, -5f), radius * 1.65f,
             new Color(0f, 0f, 0f, 0.42f));
         AddLine(vh, start, end, radius * 1.52f, dark);
         AddLine(vh, start, end, radius * 1.12f, new Color(lacquerColor.r, lacquerColor.g, lacquerColor.b, 0.34f));
 
-        if (dragProgress > 0.001f)
+        if (strokeProgress > 0.001f)
         {
             AddLine(vh, start, filledEnd, radius * 1.10f, fill);
             AddCircle(vh, filledEnd, radius * 0.55f, fill, 24);
@@ -121,6 +128,11 @@ public sealed class LacquerNoteGraphic : MaskableGraphic
             float t = i / 4f;
             Vector2 center = Vector2.Lerp(start, end, t);
             DrawChevron(vh, center, radius * 0.35f, new Color(1f, 0.94f, 0.84f, 0.72f));
+        }
+        if (strokeActive)
+        {
+            AddCircle(vh, filledEnd, 15f, new Color32(241, 176, 63, 142), 24);
+            AddCircle(vh, filledEnd, 8f, new Color32(255, 249, 214, 255), 24);
         }
     }
 

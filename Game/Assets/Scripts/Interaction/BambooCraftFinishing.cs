@@ -60,6 +60,38 @@ public sealed partial class BambooCraftProgress
         ? preFinishingAccuracy * 0.5f + GateAccuracy * 0.5f
         : preFinishingAccuracy * 0.5f + GateAccuracy * 0.25f + DrawingAccuracy * 0.25f;
 
+#if UNITY_EDITOR
+    internal static BambooCraftProgress CreatePractice(Step step)
+    {
+        var craft = new BambooCraftProgress(consumeBamboo: () => true);
+        switch (step)
+        {
+            case Step.Splitting:
+                craft.Place();
+                break;
+            case Step.Scraping:
+                craft.RoughCount = PiecesPerBatch;
+                craft.Stage = Step.RoughReady;
+                craft.StartNextStrip();
+                break;
+            case Step.GatePassing:
+                craft.FineCount = craft.FinishedInBatch = PiecesPerBatch;
+                craft.Stage = Step.BatchFinished;
+                craft.BeginGates();
+                break;
+            case Step.Drawing:
+                for (int i = 0; i < FinishingGroups; i++)
+                    craft.goodRodOutputs[i] = RodsPerGroup;
+                craft.GatesCompleted = craft.PerfectGates = FinishingGroups;
+                craft.RodCount = ThreadsPerBatch;
+                craft.Stage = Step.DrawingReady;
+                craft.BeginDrawingGroup();
+                break;
+        }
+        return craft;
+    }
+#endif
+
     public bool Advance()
     {
         switch (Stage)

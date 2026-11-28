@@ -1,213 +1,154 @@
-using System.Collections.Generic;
+using System;
 using UnityEngine;
 
-public enum CurtainPatternKind { None, Turtle, VermilionJade }
+public enum CurtainPatternKind { None, Turtle, SingleThread, DoubleThread, Ribbed, TiedFlower }
 
-public readonly struct CurtainPatternResult
-{
-    public int Correct { get; }
-    public int Total { get; }
-    public WorkshopOrder.QualityGrade Grade { get; }
-
-    public CurtainPatternResult(int correct, int total)
-    {
-        Correct = correct;
-        Total = total;
-        Grade = correct == total ? WorkshopOrder.QualityGrade.S
-            : correct * 100 >= total * 90 ? WorkshopOrder.QualityGrade.A
-            : correct * 100 >= total * 75 ? WorkshopOrder.QualityGrade.B
-            : correct * 100 >= total * 60 ? WorkshopOrder.QualityGrade.C
-            : WorkshopOrder.QualityGrade.D;
-    }
-}
-
-/// <summary>Order-owned stitching, with no scene objects or native resources.</summary>
+/// <summary>Records the shuttle position and the fixed scoring points on each pass.</summary>
 public sealed class CurtainPatternDraft
 {
-    public const int TurtleCount = 4;
-    public const int Frame = 4;
-    public const int MainPins = 6;
-    public const int DetourPin = 6;
-    public const int RightJoin = 2;
-    public const int LeftJoin = 5;
+    public enum CrossingResult { Pending, Correct, Wrong }
 
-    enum Action { Start, Stitch, SwitchThread, Press }
-    readonly Stack<(Action action, int loop, int pin)> history = new();
-    readonly List<int>[] paths = { new(), new(), new(), new(), new() };
-    readonly bool[] pressed = new bool[MainPins];
+    public const int RowCount = 3;
+    public const int CrossingsPerRow = 4;
+    public const int SamplesPerRow = 8;
+    internal const float PrecisionHalfWidth = .115f;
+    const float GripReach = .052f;
+    const float GripHeight = .24f;
+    const float EndOfPass = .998f;
+
+    sealed class Pass
+    {
+        public Vector2 Shuttle;
+        public readonly CrossingResult[] Crossings = new CrossingResult[CrossingsPerRow];
+        public int CheckedCrossings;
+        public int CheckedSamples;
+        public int AlignedSamples;
+
+        public void Reset(Vector2 start)
+        {
+            Shuttle = start;
+            Array.Clear(Crossings, 0, Crossings.Length);
+            CheckedCrossings = CheckedSamples = AlignedSamples = 0;
+        }
+    }
+
+    readonly CurtainPatternDesign design;
+    readonly Pass[] passes = { new(), new(), new() };
+    Vector2 gripOffset;
 
     public CurtainPatternKind Kind { get; }
-    public int ActiveLoop { get; private set; } = -1;
-    public bool UsesVermilion { get; private set; }
-    public bool CanUndo => history.Count > 0;
-    public int CurrentPin => ActiveLoop < 0 ? -1 : paths[ActiveLoop][paths[ActiveLoop].Count - 1];
-    public bool CanSwitchThread => Kind == CurtainPatternKind.VermilionJade &&
-        !UsesVermilion && ActiveLoop < 0 && HasClosedTurtle();
-    public bool CanPress => ActiveLoop == Frame && IsJoin(CurrentPin) && !pressed[CurrentPin];
-    public bool CanConfirm => HasClosedTurtle() &&
-        (Kind == CurtainPatternKind.Turtle || IsClosed(Frame));
+    public int CompletedRows { get; private set; }
+    public bool CanConfirm => CompletedRows == RowCount;
+    public bool CanRedo => CompletedRows > 0 || passes[0].Shuttle.x > 0f;
+    public bool IsGripped { get; private set; }
+    public Vector2 Shuttle => passes[Mathf.Min(CompletedRows, RowCount - 1)].Shuttle;
 
-    public CurtainPatternDraft(CurtainPatternKind kind)
-    {
-        if (kind != CurtainPatternKind.Turtle && kind != CurtainPatternKind.VermilionJade)
-            throw new System.ArgumentOutOfRangeException(nameof(kind));
-        Kind = kind;
-    }
-
-    public IReadOnlyList<int> Path(int loop) => paths[loop];
-    public bool IsDemonstration(int loop) => Kind == CurtainPatternKind.Turtle && (loop == 0 || loop == 2);
-    public bool IsPressed(int pin) => IsJoin(pin) && pressed[pin];
-    public bool IsClosed(int loop) => paths[loop].Count > 1 && paths[loop][paths[loop].Count - 1] == 0;
-
-    public bool CanStart(int loop) => loop >= 0 && loop <= Frame && ActiveLoop < 0 &&
-        !IsDemonstration(loop) && !IsClosed(loop) &&
-        (loop == Frame ? UsesVermilion : !UsesVermilion);
-
-    public bool TryStitch(int loop, int pin)
-    {
-        if (loop < 0 || loop > Frame || pin < 0 || pin >= PinCount(loop))
-            return false;
-        if (ActiveLoop < 0)
-        {
-            if (pin != 0 || !CanStart(loop))
-                return false;
-            paths[loop].Add(pin);
-            ActiveLoop = loop;
-            history.Push((Action.Start, loop, pin));
-            return true;
-        }
-        if (loop != ActiveLoop || !AreAdjacent(CurrentPin, pin) ||
-            (pin == 0 ? paths[loop].Count < MainPins : paths[loop].Contains(pin)))
-            return false;
-        paths[loop].Add(pin);
-        history.Push((Action.Stitch, loop, pin));
-        if (pin == 0)
-            ActiveLoop = -1;
-        return true;
-    }
-
-    public bool TrySwitchThread()
-    {
-        if (!CanSwitchThread)
-            return false;
-        UsesVermilion = true;
-        history.Push((Action.SwitchThread, Frame, -1));
-        return true;
-    }
-
-    public bool TryPress()
-    {
-        if (!CanPress)
-            return false;
-        int pin = CurrentPin;
-        pressed[pin] = true;
-        history.Push((Action.Press, Frame, pin));
-        return true;
-    }
-
-    public bool Undo()
-    {
-        if (history.Count == 0)
-            return false;
-        var step = history.Pop();
-        switch (step.action)
-        {
-            case Action.Start:
-                paths[step.loop].Clear();
-                ActiveLoop = -1;
-                break;
-            case Action.Stitch:
-                paths[step.loop].RemoveAt(paths[step.loop].Count - 1);
-                ActiveLoop = step.loop;
-                break;
-            case Action.SwitchThread:
-                UsesVermilion = false;
-                break;
-            case Action.Press:
-                pressed[step.pin] = false;
-                break;
-        }
-        return true;
-    }
-
-    public int GuidedPin
+    public int ThreadingScore
     {
         get
         {
-            const int guidedLoop = 1;
-            if (Kind != CurtainPatternKind.Turtle || IsClosed(guidedLoop))
-                return -1;
-            if (ActiveLoop < 0)
-                return 0;
-            if (ActiveLoop != guidedLoop)
-                return -1;
-            int last = CurrentPin;
-            for (int step = 1; step <= MainPins; step++)
-            {
-                int pin = (last + step) % MainPins;
-                if (AreAdjacent(last, pin) && (pin == 0 ? paths[guidedLoop].Count >= MainPins :
-                        !paths[guidedLoop].Contains(pin)))
-                    return pin;
-            }
-            return -1;
+            int correct = 0;
+            foreach (Pass pass in passes)
+                foreach (CrossingResult crossing in pass.Crossings)
+                    if (crossing == CrossingResult.Correct)
+                        correct++;
+            return correct * 5;
         }
     }
 
-    public CurtainPatternResult Evaluate()
+    public int AlignmentScore => 40 * (passes[0].AlignedSamples + passes[1].AlignedSamples + passes[2].AlignedSamples)
+        / (RowCount * SamplesPerRow);
+    public int Score => ThreadingScore + AlignmentScore;
+    public WorkshopOrder.QualityGrade Grade => Score switch
     {
-        int correct = 0;
-        for (int loop = 0; loop <= Frame; loop++)
-        {
-            List<int> path = paths[loop];
-            for (int i = 1; i < path.Count; i++)
-            {
-                if (path[i] < MainPins && path[i - 1] < MainPins)
-                    correct++;
-            }
-        }
-        if (Kind == CurtainPatternKind.Turtle)
-            return new CurtainPatternResult(correct, 12);
-        return new CurtainPatternResult(correct + (pressed[RightJoin] ? 1 : 0) +
-            (pressed[LeftJoin] ? 1 : 0), 32);
-    }
-
-    bool HasClosedTurtle()
-    {
-        for (int loop = 0; loop < TurtleCount; loop++)
-        {
-            if (!IsDemonstration(loop) && IsClosed(loop))
-                return true;
-        }
-        return false;
-    }
-
-    static bool AreAdjacent(int from, int to)
-    {
-        if (from == DetourPin || to == DetourPin)
-            return from == 1 || from == 2 || to == 1 || to == 2;
-        int difference = Mathf.Abs(from - to);
-        return difference == 1 || difference == MainPins - 1;
-    }
-
-    public static bool IsJoin(int pin) => pin == RightJoin || pin == LeftJoin;
-    public static int PinCount(int loop) => loop == Frame ? MainPins : MainPins + 1;
-
-    static readonly Vector2[] FramePins =
-    {
-        new(.075f, .925f), new(.925f, .925f), new(.925f, .5f),
-        new(.925f, .075f), new(.075f, .075f), new(.075f, .5f)
-    };
-    static readonly Vector2[] TurtlePins =
-    {
-        new(0f, .135f), new(.14f, .067f), new(.14f, -.067f),
-        new(0f, -.135f), new(-.14f, -.067f), new(-.14f, .067f), new(.18f, 0f)
+        >= 96 => WorkshopOrder.QualityGrade.S,
+        >= 90 => WorkshopOrder.QualityGrade.A,
+        >= 75 => WorkshopOrder.QualityGrade.B,
+        >= 60 => WorkshopOrder.QualityGrade.C,
+        _ => WorkshopOrder.QualityGrade.D
     };
 
-    public static Vector2 PinPosition(int loop, int pin)
+    public CurtainPatternDraft(CurtainPatternKind kind)
     {
-        if (loop == Frame)
-            return FramePins[pin];
-        var center = new Vector2(loop % 2 == 0 ? .29f : .71f, loop < 2 ? .69f : .31f);
-        return center + TurtlePins[pin];
+        design = CurtainPatternDesign.Get(kind) ?? throw new ArgumentOutOfRangeException(nameof(kind));
+        Kind = kind;
+        for (int row = 0; row < passes.Length; row++)
+            passes[row].Shuttle = GuidePosition(row, 0f);
+    }
+
+    public static float CrossingProgress(int crossing) => (crossing + 1f) / (CrossingsPerRow + 1);
+    static float SampleProgress(int sample) => (sample + 1f) / (SamplesPerRow + 1);
+    public Vector2 GuidePosition(int row, float progress) => new(progress, design.GuideHeight(row, progress));
+    public bool GoesUnder(int row, int crossing) => design.GoesUnder(row, crossing);
+    public CrossingResult ResultAt(int row, int crossing) => passes[row].Crossings[crossing];
+    public int CheckedCrossings(int row) => passes[row].CheckedCrossings;
+    public float WorkedFraction(int row) => passes[row].Shuttle.x;
+
+    /// <param name="pointer">Position relative to the active row, with X in the direction of travel.</param>
+    public bool TryGrip(Vector2 pointer)
+    {
+        if (CanConfirm || IsGripped)
+            return false;
+        Vector2 offset = Shuttle - pointer;
+        if (Mathf.Abs(offset.x) > GripReach || Mathf.Abs(offset.y) > GripHeight)
+            return false;
+        gripOffset = offset;
+        IsGripped = true;
+        return true;
+    }
+
+    public bool Drag(Vector2 pointer, bool under)
+    {
+        if (!IsGripped)
+            return false;
+        int row = CompletedRows;
+        Pass pass = passes[row];
+        Vector2 from = pass.Shuttle;
+        Vector2 to = pointer + gripOffset;
+        if (to.y < 0f || to.y > 1f)
+        {
+            Release();
+            return false;
+        }
+        if (to.x < from.x || to == from)
+            return false;
+
+        // Stop at the clamp and score each fixed position crossed by this segment.
+        if (to.x > 1f)
+            to = Vector2.LerpUnclamped(from, to, (1f - from.x) / (to.x - from.x));
+        if (to.x >= EndOfPass)
+            to.x = 1f;
+        while (pass.CheckedCrossings < CrossingsPerRow && CrossingProgress(pass.CheckedCrossings) <= to.x)
+        {
+            int crossing = pass.CheckedCrossings++;
+            pass.Crossings[crossing] = under == GoesUnder(row, crossing) ? CrossingResult.Correct : CrossingResult.Wrong;
+        }
+        while (pass.CheckedSamples < SamplesPerRow && SampleProgress(pass.CheckedSamples) <= to.x)
+        {
+            float progress = SampleProgress(pass.CheckedSamples++);
+            float height = Mathf.LerpUnclamped(from.y, to.y, (progress - from.x) / (to.x - from.x));
+            if (Mathf.Abs(height - design.GuideHeight(row, progress)) <= PrecisionHalfWidth)
+                pass.AlignedSamples++;
+        }
+        pass.Shuttle = to;
+        if (to.x == 1f)
+        {
+            CompletedRows++;
+            Release();
+        }
+        return true;
+    }
+
+    public void Release() => IsGripped = false;
+
+    public bool RedoRow()
+    {
+        if (!CanRedo)
+            return false;
+        Release();
+        if (CanConfirm || Shuttle.x == 0f)
+            CompletedRows--;
+        passes[CompletedRows].Reset(GuidePosition(CompletedRows, 0f));
+        return true;
     }
 }

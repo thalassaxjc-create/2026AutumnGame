@@ -13,10 +13,12 @@ public sealed class WeavingStationTrigger : MonoBehaviour
     [SerializeField] string promptText = "按 E 开始编帘";
 
     PlayerController playerInRange;
+    PlayerController activePlayer;
     CharacterController playerBody;
     BoxCollider stationArea;
     bool minigameOpen;
     bool playerWasEnabled;
+    bool directPractice;
     WorkshopOrder order;
     bool IsAvailable => WorkshopOrder.Current?.CanPlay(WorkshopOrder.Stage.Weaving) ?? true;
 
@@ -70,7 +72,8 @@ public sealed class WeavingStationTrigger : MonoBehaviour
 
     void ClearPlayer()
     {
-        CloseMinigame(false);
+        if (!directPractice)
+            CloseMinigame(false);
         playerInRange = null;
         playerBody = null;
         if (InteractionPromptUI.CurrentMessage == promptText)
@@ -79,7 +82,19 @@ public sealed class WeavingStationTrigger : MonoBehaviour
 
     public void OpenMinigame()
     {
-        if (minigameOpen || playerInRange == null || !ContainsPlayer() || GameFlowModalState.IsInteractionBlocked)
+        if (playerInRange != null && ContainsPlayer())
+            OpenFor(playerInRange, false);
+    }
+
+    public void OpenForPractice(int day = 1)
+    {
+        if (WorkshopPracticeMode.Enabled)
+            OpenFor(FindFirstObjectByType<PlayerController>(), true, day);
+    }
+
+    void OpenFor(PlayerController player, bool practiceFromMenu, int practiceDay = 1)
+    {
+        if (minigameOpen || player == null || SceneTransitionState.IsLoading || GameFlowModalState.IsInteractionBlocked)
             return;
 
         ResolveController();
@@ -89,7 +104,7 @@ public sealed class WeavingStationTrigger : MonoBehaviour
             return;
         }
 
-        order = WorkshopOrder.Current;
+        order = WorkshopPracticeMode.Enabled ? null : WorkshopOrder.Current;
         if (order != null)
         {
             if (minigameController == null || !order.Begin(WorkshopOrder.Stage.Weaving))
@@ -98,16 +113,17 @@ public sealed class WeavingStationTrigger : MonoBehaviour
                 return;
             }
             minigameController.ResultConfirmed += order.ConfirmWeaving;
-            GameFlowModalState.Acquire(this);
         }
 
-        playerWasEnabled = playerInRange.enabled;
+        directPractice = practiceFromMenu;
+        activePlayer = player;
+        playerWasEnabled = player.enabled;
         minigameOpen = true;
-        InteractionPromptUI.Hide();
-        playerInRange.enabled = false;
+        GameFlowModalState.Acquire(this);
+        player.enabled = false;
 
         if (minigameController != null)
-            minigameController.Open(CloseMinigame);
+            minigameController.Open(CloseMinigame, order?.Days ?? practiceDay);
         else
             minigameCanvas.SetActive(true);
     }
@@ -126,7 +142,6 @@ public sealed class WeavingStationTrigger : MonoBehaviour
                 minigameController.ResultConfirmed -= order.ConfirmWeaving;
             order.Leave(WorkshopOrder.Stage.Weaving);
             order = null;
-            GameFlowModalState.Release(this, waitForInteractRelease);
         }
 
         if (minigameController != null)
@@ -134,8 +149,11 @@ public sealed class WeavingStationTrigger : MonoBehaviour
         else if (minigameCanvas != null)
             minigameCanvas.SetActive(false);
 
-        if (playerInRange != null)
-            playerInRange.enabled = playerWasEnabled;
+        if (activePlayer != null)
+            activePlayer.enabled = playerWasEnabled;
+        activePlayer = null;
+        directPractice = false;
+        GameFlowModalState.Release(this, waitForInteractRelease);
     }
 
     public void Configure(GameObject canvasRoot, WeavingMinigameController controller)
@@ -150,5 +168,9 @@ public sealed class WeavingStationTrigger : MonoBehaviour
             minigameController = GetComponent<WeavingMinigameController>();
     }
 
-    void OnDisable() => ClearPlayer();
+    void OnDisable()
+    {
+        CloseMinigame(false);
+        ClearPlayer();
+    }
 }

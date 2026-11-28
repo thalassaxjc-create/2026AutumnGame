@@ -18,6 +18,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     LacquerStationTrigger lacquer;
     DryingStationTrigger drying;
     PatternStationTrigger pattern;
+    VermilionTrimStation trim;
     WorkshopDayOverlay dayOverlay;
     ChopableBamboo forestTarget;
     Camera sceneCamera;
@@ -31,8 +32,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     bool inventoryExpanded;
     int displayedOrderRevision = -1;
     int displayedInventoryRevision = -1;
-    bool displayedPatternBlank;
-    int displayedFinishedCurtains = -1;
+    int displayedCurtainRevision = -1;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
     static void ResetSession()
@@ -45,6 +45,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     static void StartStory()
     {
+        if (WorkshopPracticeMode.Enabled)
+            return;
 #if UNITY_EDITOR
         if (UnityEditor.SessionState.GetBool("BambooHarvest.StartPreview", false))
             return;
@@ -120,6 +122,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             weaving = FindFirstObjectByType<WeavingStationTrigger>();
             lacquer = FindFirstObjectByType<LacquerStationTrigger>();
             pattern = FindFirstObjectByType<PatternStationTrigger>();
+            trim = FindFirstObjectByType<VermilionTrimStation>();
             GameObject dryingPoint = GameObject.Find("DryingInteractionPoint");
             if (dryingPoint != null)
             {
@@ -136,15 +139,15 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         2 => new[]
         {
-            "舅舅：纸坊要两张龟纹小帘。你看我留的半张样稿，照着左边把右边补齐。回到起针孔，把结收紧。",
-            "小皮：左边两格我记住了！小白把叼来的竹丝搁在样稿旁边，摇了摇尾巴。",
-            "舅舅：去工坊电脑看订单。两张帘都从竹子做起，刷漆阴干后再到纹样台补龟纹。"
+            "舅舅：纸坊要两张龟纹小帘。看好那张满幅样稿，细细的龟甲格要一格接一格，铺满帘面。",
+            "舅舅：拖着木梭到交叉口。样稿写「下」就提起线从下面穿，写「上」就放下线，从上面跨过去。",
+            "舅舅：去工坊电脑看订单。手上有阴干的素帘，就能到纹样台选龟纹加工。"
         },
         3 => new[]
         {
-            "舅舅：镇上体验馆订了两张朱边青示范帘。两张都要先编帘、刷漆阴干，再用青线织纹、朱线收边。",
-            "舅舅：绕到左右两个接边孔，把青线尾压进朱边里。做完拿样稿对一眼，再去电脑交单。",
-            "小皮：昨天我练熟了龟纹。今天看谁把两个线尾收得齐！"
+            "舅舅：镇上体验馆要两张朱边青。先把青竹帘编好、刷漆阴干，留着竹帘的本色。",
+            "舅舅：阴干后拿去大漆台旁。沿四边贴红绸，四角折好压牢。这样帘边耐磨，在浆池里也看得清。",
+            "小皮：我去把晾干的帘子拿来！"
         },
         4 => new[]
         {
@@ -293,19 +296,18 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 : next;
         }
 
-        if (displayedInventoryRevision == WorkshopInventory.Revision && displayedPatternBlank == order.HasPatternBlank &&
-            displayedFinishedCurtains == order.FinishedCurtainCount)
+        if (displayedInventoryRevision == WorkshopInventory.Revision && displayedCurtainRevision == order.CurtainRevision)
             return;
         displayedInventoryRevision = WorkshopInventory.Revision;
-        displayedPatternBlank = order.HasPatternBlank;
-        displayedFinishedCurtains = order.FinishedCurtainCount;
+        displayedCurtainRevision = order.CurtainRevision;
         inventory.text = inventoryExpanded
             ? $"背包  [B 收起]\n完整青竹 ×{WorkshopInventory.GreenBamboo}    斑竹 ×{order.SpottedBamboo}    增白剂 ×{order.Brightener}\n粗竹片 ×{WorkshopInventory.RoughPieces}    精竹片 ×{WorkshopInventory.FinePieces}    残次竹片 ×{WorkshopInventory.DefectivePieces}\n竹条 ×{WorkshopInventory.BambooRods}    残次竹条 ×{WorkshopInventory.DefectiveRods}\n竹丝 ×{WorkshopInventory.BambooThreads}    残次竹丝 ×{WorkshopInventory.DefectiveThreads}    其中斑竹丝 ×{WorkshopInventory.SpottedThreads}"
             : $"背包 [B 展开]    青竹 ×{WorkshopInventory.GreenBamboo}    斑竹 ×{order.SpottedBamboo}    竹丝 ×{WorkshopInventory.TotalThreads}";
-        if (order.HasPatternBlank)
-            inventory.text += inventoryExpanded ? "\n待织纹样的素帘 ×1" : "    素帘 ×1";
-        if (order.FinishedCurtainCount > 0)
-            inventory.text += (inventoryExpanded ? "\n" : "    ") + $"成品帘 ×{order.FinishedCurtainCount}";
+        if (inventoryExpanded)
+            inventory.text += $"\n编好帘 ×{order.WovenCurtains}    漆帘 ×{order.LacqueredCurtains}    阴干中 ×{order.DryingCurtains}" +
+                $"\n阴干素帘 ×{order.PlainCurtains}    花纹／包边帘 ×{order.FinishedCurtains}";
+        else if (order.PlainCurtains > 0)
+            inventory.text += $"    阴干素帘 ×{order.PlainCurtains}";
     }
 
     Transform FindTarget(WorkshopOrder order)
@@ -325,8 +327,10 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 ConfigureForestTarget();
             return forestTarget != null ? forestTarget.transform : null;
         }
-        if (order.CanUsePatternStation)
+        if (order.GetStatus(WorkshopOrder.Stage.Pattern) == WorkshopOrder.StageStatus.Available)
             return pattern != null ? pattern.transform : null;
+        if (order.GetStatus(WorkshopOrder.Stage.VermilionTrim) == WorkshopOrder.StageStatus.Available)
+            return trim != null ? trim.transform : null;
         if (order.GetStatus(WorkshopOrder.Stage.BambooFinishing) != WorkshopOrder.StageStatus.Complete)
             return bamboo != null ? bamboo.transform : null;
         if (order.GetStatus(WorkshopOrder.Stage.Weaving) != WorkshopOrder.StageStatus.Complete)
@@ -350,10 +354,11 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             WorkshopOrder.Phase.Village => "去和村口大爷说话",
             WorkshopOrder.Phase.Home => "去院子找舅舅",
             WorkshopOrder.Phase.NewOrder => $"去工坊电脑查看{order.DayName}订单",
-            WorkshopOrder.Phase.ReadyToSubmit => order.CollectorAvailable && order.PendingCurtainGrade is WorkshopOrder.QualityGrade.S or WorkshopOrder.QualityGrade.A
-                ? "可去电脑交单，或带龟纹帘找集市东头的富商"
-                : order.IsPatternOrder ? "纹样完成，回电脑交单" : "阴干完成，返回工坊电脑提交订单",
-            WorkshopOrder.Phase.OrderComplete => "今日订单已交齐，可继续赶集赚钱",
+            WorkshopOrder.Phase.ReadyToSubmit => order.CollectorCurtainGrade is WorkshopOrder.QualityGrade.S or WorkshopOrder.QualityGrade.A
+                ? "可去电脑交单，或带罗纹帘找集市东头的富商"
+                : order.RequiresVermilionTrim ? "朱边青已完成，回电脑交单"
+                : order.IsPatternOrder ? "龟纹完成，回电脑交单" : "阴干完成，返回工坊电脑提交订单",
+            WorkshopOrder.Phase.OrderComplete => "今日订单已交齐，可继续做帘或去集市",
             WorkshopOrder.Phase.Complete => order.CanAdvanceDay ? "今日已结算" : "五天比试已结束",
             _ => ProductionTarget(order)
         };
@@ -361,15 +366,16 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     static string ProductionTarget(WorkshopOrder order)
     {
-        if (order.CanCollectCurtain)
-            return "阴干完成，回晾晒架按 E 收下纸帘";
         if (order.AwaitingReturnedCurtain)
             return order.DeliveredCount == 1 ? "去院子找老周，补第二张帘的断线" : "去院子找老周，压平第三张帘的翘边";
         if (order.NeedsBamboo)
             return order.HarvestedStalks.Count >= BambooHarvest.HarvestCount
                 ? "今天的青竹已采完，明早竹林会长出新竹"
                 : "去竹林采青竹，或到集市买斑竹";
-        if (order.CanUsePatternStation) return $"阴干完成，到纹样台完成{order.OrderName}";
+        if (order.GetStatus(WorkshopOrder.Stage.Pattern) == WorkshopOrder.StageStatus.Available)
+            return "有阴干素帘，到纹样台选「龟纹」";
+        if (order.GetStatus(WorkshopOrder.Stage.VermilionTrim) == WorkshopOrder.StageStatus.Available)
+            return "有阴干素帘，到大漆台旁的朱边台包红绸";
         if (order.GetStatus(WorkshopOrder.Stage.Preparation) != WorkshopOrder.StageStatus.Complete)
             return "带青竹回篾竹区完成劈竹与剐青";
         if (order.GetStatus(WorkshopOrder.Stage.BambooFinishing) != WorkshopOrder.StageStatus.Complete)
@@ -378,7 +384,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             return "到编帘区完成编帘";
         if (order.GetStatus(WorkshopOrder.Stage.Lacquer) != WorkshopOrder.StageStatus.Complete)
             return "到刷漆区完成上漆";
-        return order.IsDrying ? $"等待阴干（剩余 {order.RemainingDryingMinutes / 60:00}:{order.RemainingDryingMinutes % 60:00}）"
+        return order.IsDrying && !order.CanStartDrying ? $"等待阴干（最快 {order.RemainingDryingMinutes / 60:00}:{order.RemainingDryingMinutes % 60:00}）"
             : "把漆帘放到晾晒架阴干";
     }
 
@@ -454,7 +460,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             CreatePrimitivePart(child.transform, PrimitiveType.Sphere, "Head", new Vector3(0f, .82f, 0f),
                 Vector3.one * .55f, new Color32(226, 184, 148, 255));
             string line = day == 2 ? "小皮：我在找右边两个起针孔。"
-                : day == 3 ? "小皮：朱线绕到接边孔时，我得记得压住青线尾。"
+                : day == 3 ? "小皮：红绸到帘角得折平，再压牢。"
                 : "小皮：哼，才做了一张吗？";
             ConfigureRuntimeNpc(child, "小皮", line, 2.05f);
         }

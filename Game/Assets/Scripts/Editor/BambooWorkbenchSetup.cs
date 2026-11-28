@@ -15,6 +15,7 @@ public static class BambooWorkbenchSetup
 {
     const string DirectoryPath = "Logs/BambooHarvest";
     const string CommandPath = DirectoryPath + "/workbench-command.txt";
+    const string RestorePracticeKey = "BambooWorkbench.RestorePracticeAfterTests";
     const string PreviewKey = "BambooWorkbench.Preview";
     const string ResumeBatchKey = "BambooWorkbench.ResumeScrapedBatch";
     const string BatchCheckpointPath = DirectoryPath + "/blocked-batch-checkpoint.json";
@@ -71,6 +72,7 @@ public static class BambooWorkbenchSetup
             {
                 case "configure": Configure(); break;
                 case "configure-pattern": PatternStationSetup.Configure(); break;
+                case "configure-trim": PatternStationSetup.ConfigureVermilionTrim(); break;
                 case "configure-market": VillageMarketSetup.Configure(); break;
                 case "test": RunAllTests(); break;
                 case "test-story": RunTests(new Filter
@@ -79,6 +81,18 @@ public static class BambooWorkbenchSetup
                     testNames = new[] { nameof(WorkshopOrderSceneTests) + "." +
                         nameof(WorkshopOrderSceneTests.StoryOrderAndSettlementUseExistingSceneObjects) }
                 }, "Running workshop story EditMode test..."); break;
+                case "test-lacquer-strokes": RunTests(new Filter
+                {
+                    testMode = TestMode.EditMode,
+                    testNames = new[] { nameof(WorkshopOrderSceneTests) + "." +
+                        nameof(WorkshopOrderSceneTests.LacquerStrokesTrackTheGuideAcrossAllSongs) }
+                }, "Running lacquer stroke Play Mode interaction..."); break;
+                case "test-lacquer-taps": RunTests(new Filter
+                {
+                    testMode = TestMode.EditMode,
+                    testNames = new[] { nameof(WorkshopOrderSceneTests) + "." +
+                        nameof(WorkshopOrderSceneTests.FirstLacquerTapStaysPlayableAcrossAllSongs) }
+                }, "Running lacquer opening tap Play Mode interaction..."); break;
                 case "preview": Preview(); break;
                 case "resume-batch": ResumeSavedBatch(); break;
                 case "stop": EditorApplication.isPlaying = false; break;
@@ -259,7 +273,24 @@ public static class BambooWorkbenchSetup
         EditorSceneManager.SaveOpenScenes();
         Directory.CreateDirectory(DirectoryPath);
         File.WriteAllText(DirectoryPath + "/workbench-tests-summary.txt", message);
-        testApi.Execute(new ExecutionSettings(filter));
+        SessionState.SetBool(RestorePracticeKey, SessionState.GetBool(WorkshopPracticeMode.PreferenceKey, false));
+        SessionState.SetBool(WorkshopPracticeMode.PreferenceKey, false);
+        try
+        {
+            testApi.Execute(new ExecutionSettings(filter));
+        }
+        catch
+        {
+            RestorePracticeMode();
+            throw;
+        }
+    }
+
+    static void RestorePracticeMode()
+    {
+        if (SessionState.GetBool(RestorePracticeKey, false))
+            SessionState.SetBool(WorkshopPracticeMode.PreferenceKey, true);
+        SessionState.EraseBool(RestorePracticeKey);
     }
 
     class Results : ICallbacks
@@ -269,6 +300,7 @@ public static class BambooWorkbenchSetup
         public void TestFinished(ITestResultAdaptor result) { }
         public void RunFinished(ITestResultAdaptor result)
         {
+            RestorePracticeMode();
             Directory.CreateDirectory(DirectoryPath);
             TestRunnerApi.SaveResultToFile(result, DirectoryPath + "/workbench-full-results.xml");
             File.WriteAllText(DirectoryPath + "/workbench-tests-summary.txt",

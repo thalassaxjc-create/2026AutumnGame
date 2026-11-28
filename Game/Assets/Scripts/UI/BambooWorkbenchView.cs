@@ -26,6 +26,22 @@ public class BambooWorkbenchView : MonoBehaviour
     public RectTransform SurfaceRect => surface.rectTransform;
     public RectTransform KnifeRect => blade;
 
+    internal void Bind(BambooCraftProgress model)
+    {
+        if (progress == model)
+            return;
+        progress = surface.Progress = finishingSurface.Progress = model;
+        lastFeedbackSerial = progress.FinishingFeedbackSerial;
+        lastRevision = -1;
+        nextFinishingTextTime = 0f;
+        for (int i = 0; i < peel.Length; i++)
+        {
+            peel[i].gameObject.SetActive(false);
+            peelAge[i] = 1f;
+        }
+        Refresh();
+    }
+
     public static BambooWorkbenchView Create(BambooCraftProgress model)
     {
         var go = new GameObject("BambooWorkbenchUI", typeof(RectTransform));

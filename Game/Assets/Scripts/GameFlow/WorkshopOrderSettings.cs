@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [CreateAssetMenu(menuName = "宣纸帘/订单原型配置")]
 public sealed class WorkshopOrderSettings : ScriptableObject
@@ -26,8 +27,8 @@ public sealed class WorkshopOrderSettings : ScriptableObject
     [Min(0)] public int turtlePrice = 140;
     [Min(0)] public int xiaoPiDayTwoIncome = 280;
     [Min(0)] public int xiaoBaiDayTwoIncome = 252;
-    [Min(1)] public int vermilionJadeMinutes = 30;
-    [Min(0)] public int vermilionJadePrice = 180;
+    [FormerlySerializedAs("vermilionJadeMinutes"), Min(1)] public int vermilionTrimMinutes = 30;
+    [FormerlySerializedAs("vermilionJadePrice"), Min(0)] public int borderedCurtainPrice = 180;
     [Min(0)] public int xiaoPiDayThreeIncome = 414;
     [Min(0)] public int xiaoBaiDayThreeIncome = 360;
 }

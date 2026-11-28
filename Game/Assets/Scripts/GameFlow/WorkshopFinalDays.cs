@@ -23,9 +23,10 @@ public sealed partial class WorkshopOrder
 
     public bool TryTurnTrial()
     {
-        if (!PendingTrial || TrialTurned || MinutesUntilClose <= 10)
+        Curtain curtain = FindDeliverable();
+        if (!PendingTrial || TrialTurned || curtain == null || MinutesUntilClose <= 10)
             return false;
-        ThinCornerFollowsCurtain = (int)WeavingResult.Value.grade > (int)QualityGrade.B;
+        ThinCornerFollowsCurtain = (int)curtain.Weaving > (int)QualityGrade.B;
         TrialTurned = true;
         AdvanceTime(10);
         return true;
@@ -55,17 +56,18 @@ public sealed partial class WorkshopOrder
             (hiredPartner && (DeliveredCount != 2 || Funds < PartnerFee)))
             return false;
 
-        WeavingResult = new WeavingMinigameController.WeavingResult { grade = WeavingMinigameController.WeavingGrade.B };
-        LacquerResult = new LacquerMinigameController.LacquerResult { grade = LacquerMinigameController.LacquerGrade.B };
-        completedStages = (int)Stage.Drying + 1;
-        CurrentPhase = Phase.ReadyToSubmit;
+        curtainStock.Add(new Curtain(QualityGrade.B, defective: false, spotted: false)
+        {
+            Lacquer = QualityGrade.B,
+            State = CurtainState.Dried
+        });
         if (hiredPartner)
         {
             ChangeFunds(-PartnerFee);
             XiaoPiFunds += PartnerFee;
             partnerIncome += PartnerFee;
         }
-        AdvanceTime(minutes);
+        StockChanged(minutes);
         return true;
     }
 

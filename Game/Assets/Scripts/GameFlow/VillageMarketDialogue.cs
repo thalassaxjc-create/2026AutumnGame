@@ -165,7 +165,7 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
     {
         if (order.TeaNoticeCompleted)
         {
-            string tip = order.HasCollectorTip ? "我听说第二天集市东头有个富商，专收好手艺做的龟纹帘。" :
+            string tip = order.HasCollectorTip ? "我听说第二天集市东头有个富商，专收好手艺做的罗纹帘。" :
                 "乡亲们看到告示，来喝茶时都说要多留个心眼。";
             view.SetContent(TeaTitle, Message("王老板：" + tip));
             return;
@@ -208,18 +208,19 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
             return;
         }
         string thanks = $"王老板给了你 {WorkshopOrder.TeaNoticeReward} 元茶水费。" +
-            (order.Days == 1 ? "\n「明天集市东头会有个富商来收高档货，你可以提前准备。」" : "");
+            (order.Days == 1 ? "\n「明天集市东头有个富商收罗纹帘，你可以提前准备。」" : "");
         Trade(order.TryFinishTeaNotice, thanks, "今天剩余时间不足 30 分钟，明早再来吧。");
     }
 
     void ShowCollector(WorkshopOrder order)
     {
-        bool eligible = order.PendingCurtainGrade is WorkshopOrder.QualityGrade.S or WorkshopOrder.QualityGrade.A;
-        view.SetContent("富商的龟纹订单", Message(order.CollectorBoughtToday ? "富商：我已收好这张帘，今天的货齐了。" :
-            $"富商：我只收一张 A 或 S 级的龟纹小帘，底价 {WorkshopOrder.CollectorBasePrice} 元，按品相加价。\n" +
-            $"手上成品 {(order.PendingCurtainGrade?.ToString() ?? "无")}    卖给我也计入今天的交付张数。"));
+        WorkshopOrder.QualityGrade? grade = order.CollectorCurtainGrade;
+        bool eligible = grade is WorkshopOrder.QualityGrade.S or WorkshopOrder.QualityGrade.A;
+        view.SetContent("富商收购罗纹帘", Message(order.CollectorBoughtToday ? "富商：多谢，这一张罗纹就够了。" :
+            $"富商：我收一张罗纹帘，综合品相要到 A 或 S 级。底价 {WorkshopOrder.CollectorBasePrice} 元，按品相加价。\n" +
+            $"手上罗纹帘 {(grade?.ToString() ?? "无")}    货款计入今日收入。"));
         if (!order.CollectorBoughtToday)
-            view.SetPrimary("卖给富商", () => Trade(order.TrySellToCollector, "已交付给富商。"), order.CollectorAvailable && eligible);
+            view.SetPrimary("出售罗纹帘", () => Trade(order.TrySellToCollector, "已售出罗纹帘。"), order.CollectorAvailable && eligible);
     }
 
     void Trade(Func<bool> transact, string success, string failure = "当前无法交易。")
