@@ -196,46 +196,50 @@ public sealed class WorkshopPatternOrderTests
         Assert.That(order.CloseDay(), Is.True);
         Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((811, 884, 762)));
         Assert.That(order.TryStartNextDay(), Is.True);
-        Assert.That(order.RequiredSheets, Is.EqualTo(3));
-        order.CloseIntroduction(WorkshopOrder.Phase.Home, 1);
+        Assert.That(order.RequiredSheets, Is.EqualTo(2));
+        order.CloseIntroduction(WorkshopOrder.Phase.Home);
         order.OpenComputer();
         order.ReadOrder();
         order.CloseComputer();
-        Assert.That(order.BasePrice, Is.EqualTo(130));
-        for (int sheet = 1; sheet <= order.RequiredSheets; sheet++)
-        {
-            if (sheet == 1)
-            {
-                WorkshopOrderTests.CompleteBaseCurtain(order);
-                Assert.That(order.Submit(), Is.False);
-                Assert.That(order.TryTurnTrial(), Is.True);
-                Assert.That(order.TryTurnTrial(), Is.False);
-                Assert.That(order.TryRepairTrial(true), Is.False);
-                Assert.That(order.TryRepairTrial(false), Is.True);
-            }
-            else
-            {
-                Assert.That(order.AwaitingReturnedCurtain, Is.True);
-                Assert.That(order.Begin(WorkshopOrder.Stage.Lacquer), Is.False);
-                Assert.That(order.TryFinishReturnedCurtain(false), Is.True);
-                Assert.That(order.TryFinishReturnedCurtain(false), Is.False);
-                Assert.That(order.AvailableOrderCurtains, Is.EqualTo(1));
-            }
-            Assert.That(order.Submit(), Is.True);
-            Assert.That(order.BatchBonus, Is.EqualTo(sheet == 3 ? 120 : 0));
-        }
+        Assert.That(order.BasePrice, Is.EqualTo(150));
+        Assert.That(order.NeedsThreadRepair, Is.True);
+        Assert.That(order.TryFinishThreadRepair(), Is.True);
+        Assert.That(order.TrySelectPattern(CurtainPatternKind.TiedFlower), Is.True);
+        WeavePattern(order.PatternDraft, wrongCrossings: 12);
+        Assert.That(order.TryConfirmPattern(), Is.True);
+        Assert.That(order.Submit(), Is.True);
+        Assert.That(order.LastDelivery.Value.Style.Pattern, Is.EqualTo(CurtainPatternKind.TiedFlower));
+        Assert.That(order.Reward, Is.EqualTo(135));
+        Assert.That(order.NeedsWarpRepair, Is.True);
+        Assert.That(order.TryFinishWarpRepair(), Is.True);
+        BindEdges(order.OpenTrimDraft(CurtainEdgeStyle.VermilionJade));
+        Assert.That(order.TryConfirmVermilionTrim(), Is.True);
+        Assert.That(order.Submit(), Is.True);
+        Assert.That(order.LastDelivery.Value.Style.Edge, Is.EqualTo(CurtainEdgeStyle.VermilionJade));
+        Assert.That(order.Reward, Is.EqualTo(150));
         Assert.That(order.CloseDay(), Is.True);
         Assert.That(order.CurrentSettlement.Value.Delivered, Is.True);
-        Assert.That(order.CurrentSettlement.Value.RequiredSheets, Is.EqualTo(3));
+        Assert.That(order.CurrentSettlement.Value.RequiredSheets, Is.EqualTo(2));
         Assert.That(order.TryStartNextDay(), Is.True);
         order.CloseIntroduction(WorkshopOrder.Phase.Home);
         Assert.That(order.Begin(WorkshopOrder.Stage.Weaving), Is.False);
-        Assert.That(order.CanUseTurtleSample, Is.True);
+        Assert.That(order.AilinPattern, Is.EqualTo(CurtainPatternKind.TiedFlower));
         Assert.That(order.CloseDay(), Is.False);
-        Assert.That(order.TryFinishLesson(WorkshopOrder.LessonTopic.ThinCorner, true,
-            WorkshopOrder.PaperDestination.Visitor), Is.True);
-        Assert.That(order.TryFinishLesson(WorkshopOrder.LessonTopic.LevelFrame, true,
-            WorkshopOrder.PaperDestination.Visitor), Is.False);
+        Assert.That(order.TryFinishLesson(WorkshopOrder.PaperDestination.Visitor), Is.False);
+        Assert.That(order.PrepareAilinLesson(), Is.True);
+        Assert.That(order.TrySelectPattern(CurtainPatternKind.TiedFlower), Is.False);
+        Assert.That(order.CompleteLessonPass(WorkshopOrder.LessonBeat.Scrape), Is.True);
+        Assert.That(order.CompleteLessonPass(WorkshopOrder.LessonBeat.Weave), Is.True);
+        Assert.That(order.TrySelectPattern(CurtainPatternKind.Turtle), Is.False);
+        Assert.That(order.TrySelectPattern(CurtainPatternKind.TiedFlower), Is.True);
+        WeavePattern(order.PatternDraft);
+        Assert.That(order.TryConfirmPattern(), Is.True);
+        Assert.That(order.AilinCurtainWoven, Is.True);
+        Assert.That(order.AilinWeaveGrade.Value, Is.LessThanOrEqualTo(WorkshopOrder.QualityGrade.B));
+        Assert.That(order.TryFinishLesson(WorkshopOrder.PaperDestination.Visitor), Is.False);
+        Assert.That(order.TryGivePatternAdvice(order.PatternFault), Is.True);
+        Assert.That(order.TryFinishLesson(WorkshopOrder.PaperDestination.Visitor), Is.True);
+        Assert.That(order.TryFinishLesson(WorkshopOrder.PaperDestination.Visitor), Is.False);
         Assert.That(order.FirstPaperDestination, Is.EqualTo(WorkshopOrder.PaperDestination.Visitor));
         Assert.That(order.DeliveredCount, Is.EqualTo(1));
         Assert.That(order.LastDelivery, Is.Null);
@@ -254,20 +258,20 @@ public sealed class WorkshopPatternOrderTests
             Assert.That(order.TryStartNextDay(), Is.True);
         }
 
-        order.CloseIntroduction(WorkshopOrder.Phase.Home, 1);
+        order.CloseIntroduction(WorkshopOrder.Phase.Home);
         order.OpenComputer();
         order.ReadOrder();
         order.CloseComputer();
-        WorkshopOrderTests.CompleteBaseCurtain(order);
-        Assert.That(order.TryTurnTrial(), Is.True);
-        Assert.That(order.TryRepairTrial(false), Is.True);
+        Assert.That(order.TryFinishThreadRepair(), Is.True);
+        Assert.That(order.TrySelectPattern(CurtainPatternKind.TiedFlower), Is.True);
+        WeavePattern(order.PatternDraft, wrongCrossings: 12);
+        Assert.That(order.TryConfirmPattern(), Is.True);
         Assert.That(order.Submit(), Is.True);
         Assert.That(order.CloseDay(), Is.True);
         var report = order.CurrentSettlement.Value;
         Assert.That(report.Delivered, Is.False);
         Assert.That(report.DeliveredCount, Is.EqualTo(1));
-        Assert.That(report.BatchBonus, Is.Zero);
-        Assert.That(report.PlayerIncome, Is.EqualTo(169));
+        Assert.That(report.PlayerIncome, Is.EqualTo(135));
         Assert.That(order.TryStartNextDay(), Is.True);
         Assert.That(order.Days, Is.EqualTo(5));
     }

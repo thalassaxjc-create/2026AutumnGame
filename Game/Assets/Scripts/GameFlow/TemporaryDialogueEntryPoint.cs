@@ -122,7 +122,7 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
         bool casual = !reminder && !activeDebrief && casualMessages.Length > 0 &&
             order?.CanExplore == true && order.CurrentPhase != storyPhase;
         activeMessages = reminder ? reminderMessages
-            : activeDebrief ? new[] { "舅舅：艾琳说，那张纸是她自己捞起来的。来，把这五天的账算一算。" }
+            : activeDebrief ? new[] { "舅舅：艾琳说，那张帘是她自己做的。来，把这五天的账算一算。" }
             : casual ? casualMessages
             : storyMessages.Length > 0 ? storyMessages : new[] { placeholderMessage };
         activeCompletesStory = !reminder && !casual && !activeDebrief;

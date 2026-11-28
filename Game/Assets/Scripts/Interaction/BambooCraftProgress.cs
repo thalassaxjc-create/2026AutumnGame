@@ -303,6 +303,14 @@ public sealed partial class BambooCraftProgress
         return completed;
     }
 
+    public void BeginLessonScrape(string message)
+    {
+        scrapingPieceCount = 1;
+        ResetSurface();
+        Stage = Step.Scraping;
+        Say(message);
+    }
+
     public void CancelStroke()
     {
         dragging = validStart = false;

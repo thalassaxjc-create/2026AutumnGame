@@ -215,6 +215,8 @@ public sealed partial class WorkshopOrder
         Curtain curtain = FirstPlainCurtain();
         if (DayEnded || running.HasValue || curtain == null || CurtainPatternDesign.Get(selection) == null)
             return false;
+        if (IsTeachingDay && (CurrentLesson != LessonBeat.Pattern || selection != AilinPattern))
+            return false;
         if (!curtain.PatternDrafts.TryGetValue(selection, out CurtainPatternDraft draft))
         {
             draft = new CurtainPatternDraft(selection);
@@ -234,6 +236,8 @@ public sealed partial class WorkshopOrder
         curtain.PatternGrade = PatternDraft.Grade;
         curtain.PatternDrafts.Clear();
         curtain.TrimDrafts.Clear();
+        if (IsTeachingDay)
+            RecordAilinWeave(curtain.PatternGrade, PatternDraft);
         PatternDraft = null;
         TrimDraft = null;
         StockChanged(PatternMinutes);

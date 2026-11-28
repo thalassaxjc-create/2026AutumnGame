@@ -88,6 +88,12 @@ public sealed class WeavingMinigameController : MonoBehaviour
     [SerializeField, Min(0.2f)] float spawnInterval = 0.46f;
     [SerializeField, Min(0.5f)] float noteTravelTime = 2.2f;
     bool automaticShuttle;
+    bool lessonMode;
+    bool lessonPupil;
+    bool lessonChartStored;
+    int storedThreads;
+    int storedKnotEvery;
+    int storedMinutes;
     internal const float SPlusAccuracy = .98f;
     [SerializeField, Min(0.01f)] float perfectWindow = 0.075f;
     [SerializeField, Min(0.02f)] float greatWindow = 0.145f;
@@ -182,6 +188,8 @@ public sealed class WeavingMinigameController : MonoBehaviour
     float pendingChordStartedAt;
 
     public bool IsOpen => phase != Phase.Closed;
+    public bool IsLessonDemo => lessonMode && !lessonPupil && IsOpen;
+    public bool IsLessonPupil => lessonMode && lessonPupil && IsOpen;
     public int RequiredThreads => requiredThreads;
     public static int MusicChartNoteCount => MusicBeatTimes.Length;
     public static float MusicChartEndTime => MusicBeatTimes[MusicBeatTimes.Length - 1];
@@ -274,6 +282,16 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
         phase = Phase.Closed;
         exitRequested = null;
+        lessonMode = false;
+        lessonPupil = false;
+        if (lessonChartStored)
+        {
+            requiredThreads = storedThreads;
+            knotEvery = storedKnotEvery;
+            gameMinutesCost = storedMinutes;
+            lessonChartStored = false;
+        }
+        AilinDanmaku.Stop();
         ClearActiveNotes();
         pendingChord = null;
 
@@ -390,8 +408,43 @@ public sealed class WeavingMinigameController : MonoBehaviour
         if (!StartMusicChart())
             songTime = 0f;
         phase = Phase.Playing;
-        ShowFeedback(musicClockActive ? "跟住音乐，听梭落线" : "听梭落线",
+        ShowFeedback(lessonMode && lessonPupil ? "艾琳自己编"
+            : musicClockActive ? "跟住音乐，听梭落线" : "听梭落线",
             new Color32(255, 237, 190, 255));
+    }
+
+    public void OpenLesson(Action onExit)
+    {
+        if (!lessonChartStored)
+        {
+            storedThreads = requiredThreads;
+            storedKnotEvery = knotEvery;
+            storedMinutes = gameMinutesCost;
+            lessonChartStored = true;
+        }
+        requiredThreads = 12;
+        knotEvery = 4;
+        gameMinutesCost = 0;
+        lessonMode = true;
+        lessonPupil = false;
+        Open(onExit, 1, false);
+        if (introBodyText != null)
+            introBodyText.text = "先编一道给艾琳看。\n\n竹丝落到横线时，按对应的 F 或 J\n每第 4 根同时按 F + J 打结\n\n空格开始";
+    }
+
+    void DrivePupil()
+    {
+        ActiveNote note = FindClosestCandidate();
+        if (note == null || Mathf.Abs(songTime - note.spec.targetTime) > perfectWindow)
+            return;
+        if (note.spec.index % 4 == 1 && note.spec.kind != NoteKind.Knot)
+            return;
+        if (note.spec.kind == NoteKind.Knot)
+            HandlePress(true, true);
+        else if (note.spec.kind == NoteKind.Left)
+            HandlePress(true, false);
+        else
+            HandlePress(false, true);
     }
 
     void GenerateSchedule()
@@ -474,10 +527,15 @@ public sealed class WeavingMinigameController : MonoBehaviour
         SpawnDueNotes();
         UpdateNotePositions();
 
-        bool leftDown = keyboard.fKey.wasPressedThisFrame;
-        bool rightDown = keyboard.jKey.wasPressedThisFrame;
-        if (leftDown || rightDown)
-            HandlePress(leftDown, rightDown);
+        if (lessonMode && lessonPupil)
+            DrivePupil();
+        else
+        {
+            bool leftDown = keyboard.fKey.wasPressedThisFrame;
+            bool rightDown = keyboard.jKey.wasPressedThisFrame;
+            if (leftDown || rightDown)
+                HandlePress(leftDown, rightDown);
+        }
 
         ResolvePendingChordTimeout();
         ResolveMissedNotes();
@@ -747,6 +805,24 @@ public sealed class WeavingMinigameController : MonoBehaviour
 
     void FinishRound()
     {
+        if (lessonMode && !lessonPupil)
+        {
+            lessonPupil = true;
+            AilinDanmaku.Play(canvasRoot.transform,
+                "这怎么这么快", "两边要一起按吗", "这怎么这么难", "我跟不上梭", "结打在哪儿");
+            BeginCountdown();
+            return;
+        }
+        if (lessonMode && lessonPupil)
+        {
+            string line = missCount > 0
+                ? "艾琳，有几根竹丝漏过去了。落到横线上再按，打结要两边一起。"
+                : "艾琳，这一道跟着拍子。就这样编。";
+            RequestExit();
+            AilinLessonTalk.Show(line, () =>
+                WorkshopOrder.Current?.CompleteLessonPass(WorkshopOrder.LessonBeat.Weave));
+            return;
+        }
         phase = Phase.Result;
         resultPanel.SetActive(true);
         float accuracy = score / Mathf.Max(1f, requiredThreads * 100f);

@@ -31,12 +31,14 @@ public sealed class CurtainPatternView : MonoBehaviour
     Text processingTime;
     Text remark;
     Text actionLabel;
+    Text controls;
     Button undo;
     Button review;
     Button continueWork;
     int selectionFrame;
     bool inspecting;
     bool shuttleUnder;
+    bool pupilRemarks;
 
     public CurtainPatternGraphic Board => board;
 
@@ -80,6 +82,22 @@ public sealed class CurtainPatternView : MonoBehaviour
             Redo();
             return;
         }
+        if (PupilTurn)
+        {
+            if (!pupilRemarks)
+            {
+                pupilRemarks = true;
+                AilinDanmaku.Play(transform,
+                    "这一梭从下面穿吗", "线好密", "这怎么这么难", "我怕扎反了", "手要这样拿梭吗");
+            }
+            GuidePupil(keyboard, mouse);
+            return;
+        }
+        if (pupilRemarks)
+        {
+            pupilRemarks = false;
+            AilinDanmaku.Stop();
+        }
         if (draft.CanConfirm)
             return;
 
@@ -102,7 +120,9 @@ public sealed class CurtainPatternView : MonoBehaviour
         bool layerChanged = shuttleUnder != under;
         shuttleUnder = under;
         if (draft.CompletedRows != row)
-            ApplyChange(draft.CanConfirm ? "三道已收线，可以对样。" : "松开左键，在新起点抓住木梭。");
+            ApplyChange(draft.CanConfirm ? "三道已收线，可以对样。"
+                : order != null && order.IsTeachingDay ? "这一道她看过了。她会照着走，按住木梭才能改她。"
+                : "松开左键，在新起点抓住木梭。");
         else if (draft.CheckedCrossings(row) != crossings)
         {
             int last = draft.CheckedCrossings(row) - 1;
@@ -128,13 +148,16 @@ public sealed class CurtainPatternView : MonoBehaviour
     {
         draft?.Release();
         draft = null;
-        bool needsPattern = order?.IsPatternOrder == true && order.DeliveredCount < WorkshopOrder.SheetsPerDay;
+        bool teaching = order != null && order.IsTeachingDay;
+        bool marksOrder = order != null && (order.IsPatternOrder || order.Days == 4 || teaching);
         catalogNote.text = order == null ? "开发试玩"
-            : $"阴干素帘 ×{order.PlainCurtains}" + (needsPattern ? "　浅绿标出今日待交纹样" : "");
+            : teaching ? "艾琳要扎花。浅绿是她选的。"
+            : $"阴干素帘 ×{order.PlainCurtains}" + (marksOrder ? "　浅绿标出今日待交纹样" : "");
         for (int i = 0; i < choices.Length; i++)
         {
             CurtainPatternKind kind = CurtainPatternDesign.Choices[i];
-            choices[i].image.color = needsPattern && order.NeedsStyle(new WorkshopOrder.SheetStyle(kind)) ? OrderCard : Card;
+            bool wanted = teaching ? kind == order.AilinPattern : order.NeedsStyle(new WorkshopOrder.SheetStyle(kind));
+            choices[i].image.color = marksOrder && wanted ? OrderCard : Card;
         }
         bench.SetActive(false);
         catalog.SetActive(true);
@@ -145,7 +168,11 @@ public sealed class CurtainPatternView : MonoBehaviour
         if (order != null)
         {
             if (!order.TrySelectPattern(kind))
+            {
+                if (order.IsTeachingDay)
+                    catalogNote.text = "艾琳：我要扎花。别的今天不学。";
                 return;
+            }
             draft = order.PatternDraft;
         }
         else if (!practiceDrafts.TryGetValue(kind, out draft))
@@ -159,7 +186,7 @@ public sealed class CurtainPatternView : MonoBehaviour
         inspecting = false;
         catalog.SetActive(false);
         bench.SetActive(true);
-        mode.text = order == null ? "开发试玩" : "使用一张阴干素帘";
+        mode.text = order == null ? "开发试玩" : order.IsTeachingDay ? "教艾琳 · 扎花" : "使用一张阴干素帘";
         processingTime.text = order == null ? "" : $"加工 {order.PatternMinutes} 分钟";
         sample.Show(kind, isSample: true, showGuide: false);
         for (int i = 0; i < tutorialHints.Length; i++)
@@ -169,10 +196,43 @@ public sealed class CurtainPatternView : MonoBehaviour
 
     void Exit() => returnToWorkshop?.Invoke();
 
+    bool PupilTurn => order != null && order.IsTeachingDay && draft != null &&
+        draft.CompletedRows > 0 && !draft.CanConfirm && !inspecting;
+
     void Redo()
     {
         if (!inspecting && draft?.RedoRow() == true)
-            ApplyChange("这一道已退回起点。");
+            ApplyChange(order != null && order.IsTeachingDay ? "这一道退回去了，再教她。" : "这一道已退回起点。");
+    }
+
+    void GuidePupil(Keyboard keyboard, Mouse mouse)
+    {
+        int row = draft.CompletedRows;
+        int crossings = draft.CheckedCrossings(row);
+        int next = Mathf.Min(crossings, CurtainPatternDraft.CrossingsPerRow - 1);
+        bool under = keyboard?.spaceKey.isPressed == true;
+        bool steadied = false;
+        if (mouse != null && mouse.leftButton.isPressed &&
+            board.TryShuttlePointer(mouse.position.ReadValue(), row, out Vector2 travel))
+            steadied = draft.TrySteady(travel);
+        else
+            draft.Release();
+        shuttleUnder = steadied ? under : draft.GoesUnder(0, next);
+        float target = Mathf.MoveTowards(draft.WorkedFraction(row), 1f, Mathf.Min(.04f, .22f * Time.deltaTime));
+        draft.GlideLesson(target, shuttleUnder, steadied);
+        if (draft.CompletedRows != row)
+            ApplyChange(draft.CanConfirm ? "三道都教完了，可以对样。" : "这一道她走完了。下一道她还会照搬第一道。");
+        else if (draft.CheckedCrossings(row) != crossings)
+        {
+            int last = draft.CheckedCrossings(row) - 1;
+            ApplyChange(draft.ResultAt(row, last) == CurtainPatternDraft.CrossingResult.Wrong
+                ? "这一梭穿反了。右键可以再教这一道。" : "艾琳：这梭对了。");
+        }
+        else
+        {
+            ShowLayer();
+            board.RefreshShuttle(shuttleUnder);
+        }
     }
 
     void ReviewOrConfirm()
@@ -193,7 +253,17 @@ public sealed class CurtainPatternView : MonoBehaviour
             return;
         }
         if (order.TryConfirmPattern())
+        {
+            bool teaching = order.IsTeachingDay;
+            string line = order.PatternCritique;
             Exit();
+            if (teaching)
+                AilinLessonTalk.Show(line, () =>
+                {
+                    WorkshopOrder current = WorkshopOrder.Current;
+                    current?.TryGivePatternAdvice(current.PatternFault);
+                });
+        }
         else
             remark.text = $"今天剩余时间不足 {order.PatternMinutes} 分钟。";
     }
@@ -207,11 +277,18 @@ public sealed class CurtainPatternView : MonoBehaviour
     void ApplyChange(string message)
     {
         remark.text = message;
+        bool teaching = order != null && order.IsTeachingDay;
         string name = CurtainPatternDesign.Get(draft.Kind).Name;
-        title.text = inspecting ? "对样 · " + name : name;
+        title.text = inspecting ? "对样 · " + name : teaching ? "教艾琳 · " + name : name;
         string direction = CurtainPatternDesign.IsReverse(draft.CompletedRows) ? "向左拖梭" : "向右拖梭";
-        caption.text = $"帘面    {draft.CompletedRows} / {CurtainPatternDraft.RowCount} 道已收线" +
+        caption.text = teaching && !inspecting && !draft.CanConfirm
+            ? draft.CompletedRows == 0 ? "先拖一道给她看" : $"艾琳在织第 {draft.CompletedRows + 1} 道，你教她这一梭"
+            : $"帘面    {draft.CompletedRows} / {CurtainPatternDraft.RowCount} 道已收线" +
             (draft.CanConfirm ? "" : $"    ·    {direction}");
+        if (controls != null)
+            controls.text = PupilTurn
+                ? "按住木梭跟着她    空格改上下    右键再教这一道"
+                : "左键拖梭    空格提线    右键重织    Esc 回工坊";
         board.Show(draft.Kind, draft, showGuide: !inspecting);
         if (!inspecting)
             board.RefreshShuttle(shuttleUnder);
@@ -225,6 +302,9 @@ public sealed class CurtainPatternView : MonoBehaviour
         if (inspecting)
             score.text = $"穿线 {draft.ThreadingScore}/60    走线 {draft.AlignmentScore}/40\n纹样 {draft.Grade}  ·  {draft.Score}/100";
         undo.interactable = !inspecting && draft.CanRedo;
+        Text undoLabel = undo.GetComponentInChildren<Text>();
+        if (undoLabel != null)
+            undoLabel.text = teaching ? "再教这一道" : "重织一道";
         continueWork.gameObject.SetActive(inspecting);
         actionLabel.text = inspecting ? (order == null ? "完成试玩" : "确认成品") : "对样";
         review.interactable = draft.CanConfirm;
@@ -232,8 +312,24 @@ public sealed class CurtainPatternView : MonoBehaviour
 
     void ShowLayer()
     {
-        instructions.text = draft.CanConfirm ? "对照样稿查看成品。" :
-            shuttleUnder ? "空格按住    从下穿" : "空格松开    从上跨";
+        if (draft.CanConfirm)
+            instructions.text = "对照样稿查看成品。";
+        else if (PupilTurn)
+        {
+            int row = draft.CompletedRows;
+            int crossing = Mathf.Min(draft.CheckedCrossings(row), CurtainPatternDraft.CrossingsPerRow - 1);
+            bool copied = draft.GoesUnder(0, crossing);
+            bool needed = draft.GoesUnder(row, crossing);
+            instructions.text = copied == needed
+                ? "她记得这一梭。按住木梭跟着走"
+                : copied
+                    ? "她要穿错，想从下穿。按住木梭，松开空格"
+                    : "她要穿错，想从上跨。按住木梭，按住空格";
+        }
+        else if (order != null && order.IsTeachingDay)
+            instructions.text = shuttleUnder ? "示范：空格按住，从下穿" : "示范：空格松开，从上跨";
+        else
+            instructions.text = shuttleUnder ? "空格按住    从下穿" : "空格松开    从上跨";
     }
 
     void ShowRecipe()
@@ -307,7 +403,7 @@ public sealed class CurtainPatternView : MonoBehaviour
             26, ink, TextAnchor.MiddleLeft);
         title = WorkshopStoryUI.Label(page, "当前纹样", "", new Rect(.045f, .814f, .55f, .095f),
             56, ink, TextAnchor.MiddleLeft, true);
-        WorkshopStoryUI.Label(page, "操作提示", "左键拖梭    空格提线    右键重织    Esc 回工坊",
+        controls = WorkshopStoryUI.Label(page, "操作提示", "左键拖梭    空格提线    右键重织    Esc 回工坊",
             new Rect(.53f, .85f, .427f, .075f), 27, ink, TextAnchor.MiddleRight);
         caption = WorkshopStoryUI.Label(page, "帘面进度", "", new Rect(.045f, .752f, .59f, .055f),
             30, ink, TextAnchor.MiddleLeft, true);

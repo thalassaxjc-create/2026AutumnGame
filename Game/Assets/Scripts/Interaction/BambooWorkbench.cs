@@ -20,7 +20,15 @@ public class BambooWorkbench : MonoBehaviour
     CursorLockMode oldCursorLock;
     bool oldCursorVisible;
     float lastSampleTime;
+    enum LessonPhase { None, Demo, Pupil }
+    LessonPhase lessonPhase;
+    float pupilX;
+    int pupilRow;
+    bool pupilJabbed;
+    static readonly float[] PupilRows = { .12f, .4f, .68f, .92f };
     public bool IsOpen { get; private set; }
+    public bool IsLessonDemo => lessonPhase == LessonPhase.Demo;
+    public bool IsLessonPupil => lessonPhase == LessonPhase.Pupil;
     public BambooCraftProgress Progress => practiceProgress ?? BambooCraftSession.Current;
     public BambooWorkbenchView View => view;
 
@@ -79,6 +87,17 @@ public class BambooWorkbench : MonoBehaviour
             var order = WorkshopOrder.Current;
             bool inArea = player != null && Contains(player.transform.position) &&
                 !GameFlowModalState.IsInteractionBlocked;
+            if (order?.CurrentLesson == WorkshopOrder.LessonBeat.Scrape)
+            {
+                if (inArea)
+                    InteractionPromptUI.Show("按 E 教艾琳刮青");
+                else if (wasInArea)
+                    InteractionPromptUI.Hide();
+                wasInArea = inArea;
+                if (inArea && SceneTransitionManager.TryConsumeInteractPress())
+                    OpenLesson();
+                return;
+            }
             bool canWork = order == null || order.CanWorkBamboo;
             if (inArea) InteractionPromptUI.Show(!canWork
                 ? order.DayEnded ? "今日已收工" : order.IntroductionHint ?? "先采集完整青竹或到集市购买斑竹"
@@ -93,6 +112,18 @@ public class BambooWorkbench : MonoBehaviour
         if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
         {
             Close();
+            return;
+        }
+        if (lessonPhase == LessonPhase.Pupil)
+        {
+            DriveAilinScrape();
+            return;
+        }
+        if (lessonPhase == LessonPhase.Demo)
+        {
+            StrokeFromPointer();
+            if (Progress.Stage != BambooCraftProgress.Step.Scraping)
+                BeginAilinScrape();
             return;
         }
         var activeOrder = WorkshopOrder.Current;
@@ -123,6 +154,12 @@ public class BambooWorkbench : MonoBehaviour
             view.FinishingInput(pulling);
             return;
         }
+        StrokeFromPointer();
+        WorkshopOrder.Current?.ObserveBamboo(Progress);
+    }
+
+    void StrokeFromPointer()
+    {
         Mouse mouse = Mouse.current;
         if (mouse == null) { CancelPointer(); return; }
         Vector2 screen = mouse.position.ReadValue();
@@ -151,24 +188,100 @@ public class BambooWorkbench : MonoBehaviour
         }
         if (mouse.leftButton.wasReleasedThisFrame)
         {
-            // Include the release position even if no held frame arrived at the endpoint.
             if (held) Progress.Drag(point, Mathf.Max(0.001f, Time.unscaledDeltaTime));
             if (Progress.EndStroke()) view.PlaySplit();
             held = false;
         }
         view.Pointer(screen, held && mouse.leftButton.isPressed, speed, removed);
-        WorkshopOrder.Current?.ObserveBamboo(Progress);
     }
 
-    public bool Open() => Open(false, BambooCraftProgress.Step.PlaceBamboo);
+    bool OpenLesson()
+    {
+        if (!Open(false, BambooCraftProgress.Step.Scraping, lesson: true))
+            return false;
+        Progress.BeginLessonScrape("先刮给艾琳看。按住左键，顺着竹青刮到净。");
+        lessonPhase = LessonPhase.Demo;
+        view.ShowKnife(false);
+        view.Refresh();
+        return true;
+    }
+
+    void BeginAilinScrape()
+    {
+        held = false;
+        Progress.CancelStroke();
+        Progress.BeginLessonScrape("换艾琳来刮。刀自己走。");
+        lessonPhase = LessonPhase.Pupil;
+        pupilX = 0f;
+        pupilRow = 0;
+        pupilJabbed = false;
+        Progress.BeginStroke(new Vector2(0f, PupilRows[0]));
+        view.Refresh();
+        AilinDanmaku.Play(view.transform,
+            "这要用多大力啊", "刀好沉", "这怎么这么难", "竹青好滑", "我怕刮破了");
+    }
+
+    void DriveAilinScrape()
+    {
+        if (Progress.Stage != BambooCraftProgress.Step.Scraping)
+        {
+            FinishAilinScrape();
+            return;
+        }
+        float next = Mathf.Min(1f, pupilX + Mathf.Min(.02f, .5f * Time.deltaTime));
+        float y = PupilRows[Mathf.Clamp(pupilRow, 0, PupilRows.Length - 1)];
+        if (!pupilJabbed && pupilX < .51f && next >= .51f)
+        {
+            pupilJabbed = true;
+            Progress.Drag(new Vector2(.56f, y), .008f);
+            next = Mathf.Max(next, .56f);
+        }
+        int removed = Progress.Drag(new Vector2(next, y), Mathf.Max(.016f, Time.deltaTime));
+        pupilX = next;
+        view.Pointer(LessonScreen(next, y), true, .5f, removed);
+        if (Progress.Stage != BambooCraftProgress.Step.Scraping)
+        {
+            FinishAilinScrape();
+            return;
+        }
+        if (pupilX < .98f)
+            return;
+        pupilX = 0f;
+        pupilRow++;
+        if (pupilRow >= PupilRows.Length)
+            pupilRow = 0;
+        Progress.EndStroke();
+        Progress.BeginStroke(new Vector2(0f, PupilRows[pupilRow]));
+    }
+
+    void FinishAilinScrape()
+    {
+        string line = Progress.Damage > 0
+            ? "艾琳，竹节上太快了。经过竹节要把刀放慢，别留下深痕。"
+            : "艾琳，刀要贴着竹青刮。这一遍刮净了，就这样。";
+        Close();
+        AilinLessonTalk.Show(line, () =>
+            WorkshopOrder.Current?.CompleteLessonPass(WorkshopOrder.LessonBeat.Scrape));
+    }
+
+    Vector2 LessonScreen(float x, float y)
+    {
+        RectTransform rect = view.SurfaceRect;
+        Rect area = rect.rect;
+        Vector3 world = rect.TransformPoint(new Vector3(
+            Mathf.Lerp(area.xMin, area.xMax, x), Mathf.Lerp(area.yMin, area.yMax, y), 0f));
+        return RectTransformUtility.WorldToScreenPoint(null, world);
+    }
+
+    public bool Open() => Open(false, BambooCraftProgress.Step.PlaceBamboo, false);
 
     public void OpenForPractice(BambooCraftProgress.Step step)
     {
         if (WorkshopPracticeMode.Enabled)
-            Open(true, step);
+            Open(true, step, false);
     }
 
-    bool Open(bool directPractice, BambooCraftProgress.Step step)
+    bool Open(bool directPractice, BambooCraftProgress.Step step, bool lesson)
     {
         if (player == null)
             player = FindFirstObjectByType<PlayerController>();
@@ -178,13 +291,15 @@ public class BambooWorkbench : MonoBehaviour
         cameraView = player.GameplayCamera != null ? player.GameplayCamera : Camera.main;
         if (cameraView == null) return false;
         var order = WorkshopOrder.Current;
-        if (order != null && !order.CanWorkBamboo)
+        if (!lesson && order != null && !order.CanWorkBamboo)
             return false;
 #if UNITY_EDITOR
-        if (WorkshopPracticeMode.Enabled)
+        if (WorkshopPracticeMode.Enabled && !lesson)
             practiceProgress = BambooCraftProgress.CreatePractice(step, order?.HasUpgradedKnife == true);
 #endif
-        Progress.UpgradedKnife = order?.HasUpgradedKnife == true;
+        if (lesson)
+            practiceProgress = new BambooCraftProgress(() => 0f, () => false);
+        Progress.UpgradedKnife = !lesson && order?.HasUpgradedKnife == true;
         GameFlowModalState.Acquire(this);
         if (view == null) view = BambooWorkbenchView.Create(Progress);
         else
@@ -233,7 +348,9 @@ public class BambooWorkbench : MonoBehaviour
         if (follow != null) follow.enabled = followEnabled;
         Cursor.lockState = oldCursorLock; Cursor.visible = oldCursorVisible;
         IsOpen = false;
+        lessonPhase = LessonPhase.None;
         practiceProgress = null;
+        AilinDanmaku.Stop();
         GameFlowModalState.Release(this, waitForInteractRelease);
     }
 

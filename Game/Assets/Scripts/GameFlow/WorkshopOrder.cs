@@ -118,15 +118,14 @@ public sealed partial class WorkshopOrder
     {
         1 => "第一天", 2 => "第二天", 3 => "第三天", 4 => "第四天", _ => "第五天"
     };
-    public int RequiredSheets => Days switch { 4 => 3, 5 => 1, _ => SheetsPerDay };
+    public int RequiredSheets => Days switch { 5 => 1, _ => SheetsPerDay };
     public const int SampleBatchBonus = 120;
     public bool SampleBatch { get; private set; }
     public int BatchBonus { get; private set; }
     public string CustomerNotes => Days switch
     {
-        4 when SampleBatch => $"按样验货：三张均达 B 级或以上，整批奖励 {SampleBatchBonus} 元。未交齐仍按张结算。",
-        4 => "分批验收：每张单独结算，不计整批奖励。",
-        5 => "18:00 前到院子找艾琳，选一张旧样帘或试纸教她试捞。",
+        4 => "不用做新帘。先把断线的旧帘补上，改成扎花；再把翘边压平，收一圈朱边青。",
+        5 => "艾琳从海外来学非遗宣纸帘。教她刮青、编素帘、扎花。做完告诉她哪里要改。",
         _ => ""
     };
     public bool IsPatternOrder => Days == 2;
@@ -148,8 +147,8 @@ public sealed partial class WorkshopOrder
     {
         2 => "龟纹帘与单丝路帘",
         3 => "朱边青与深褐",
-        4 => "纸坊返修批次",
-        5 => "艾琳的第一张纸",
+        4 => "两张退修帘",
+        5 => "艾琳的第一张帘",
         _ => "普通宣纸帘"
     };
 
@@ -158,6 +157,9 @@ public sealed partial class WorkshopOrder
         2 => new SheetStyle(index == 0 ? CurtainPatternKind.Turtle : CurtainPatternKind.SingleThread),
         3 => new SheetStyle(CurtainPatternKind.None,
             index == 0 ? CurtainEdgeStyle.VermilionJade : CurtainEdgeStyle.DarkBrown),
+        4 => index == 0
+            ? new SheetStyle(CurtainPatternKind.TiedFlower)
+            : new SheetStyle(CurtainPatternKind.None, CurtainEdgeStyle.VermilionJade),
         _ => default
     };
 
@@ -218,7 +220,7 @@ public sealed partial class WorkshopOrder
     {
         2 => settings.turtlePrice,
         3 => settings.borderedCurtainPrice,
-        4 => SampleBatch ? 130 : 150,
+        4 => 150,
         5 => 240,
         _ => settings.baseReward
     };
@@ -234,7 +236,7 @@ public sealed partial class WorkshopOrder
         Phase.Home => "先到院子与舅舅交谈，再回工坊电脑查看订单",
         _ => null
     };
-    public bool NeedsBamboo => !IsTeachingDay && !AwaitingReturnedCurtain &&
+    public bool NeedsBamboo => Days != 4 && !IsTeachingDay && !AwaitingReturnedCurtain &&
         CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
 
     int CompletedSteps
@@ -245,7 +247,7 @@ public sealed partial class WorkshopOrder
                 return SheetSteps - 1;
             if (CurrentPhase != Phase.Production)
                 return 0;
-            if ((IsPatternOrder || RequiresVermilionTrim) && FirstPlainCurtain() != null)
+            if ((IsPatternOrder || RequiresVermilionTrim || Days == 4) && FirstPlainCurtain() != null)
                 return (int)Stage.Pattern;
             if (FirstCurtain(CurtainState.Lacquered) != null || IsDrying)
                 return (int)Stage.Drying;
@@ -358,9 +360,11 @@ public sealed partial class WorkshopOrder
 
     public StageStatus GetStatus(Stage stage)
     {
+        bool patternWork = IsPatternOrder || (Days == 4 && ThreadRepaired && DeliveredCount == 0);
+        bool trimWork = RequiresVermilionTrim || (Days == 4 && WarpRepaired && DeliveredCount >= 1);
         if (IsTeachingDay || AwaitingReturnedCurtain ||
-            (stage == Stage.Pattern && !IsPatternOrder) ||
-            (stage == Stage.VermilionTrim && !RequiresVermilionTrim))
+            (stage == Stage.Pattern && !patternWork) ||
+            (stage == Stage.VermilionTrim && !trimWork))
             return StageStatus.Locked;
         int steps = CompletedSteps;
         int step = StepIndex(stage);

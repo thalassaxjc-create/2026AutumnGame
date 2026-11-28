@@ -32,7 +32,7 @@ public sealed class PatternStationTrigger : MonoBehaviour
             HidePrompt();
             return;
         }
-        InteractionPromptUI.Show(Prompt);
+        InteractionPromptUI.Show(CurrentPrompt());
         if (SceneTransitionManager.TryConsumeInteractPress())
             Open(WorkshopPracticeMode.Enabled ? null : order);
     }
@@ -95,9 +95,17 @@ public sealed class PatternStationTrigger : MonoBehaviour
         Close(false);
     }
 
+    static string CurrentPrompt()
+    {
+        WorkshopOrder order = WorkshopOrder.Current;
+        return order != null && order.IsTeachingDay && order.CurrentLesson == WorkshopOrder.LessonBeat.Pattern
+            ? "按 E 教艾琳扎花"
+            : Prompt;
+    }
+
     static void HidePrompt()
     {
-        if (InteractionPromptUI.CurrentMessage == Prompt)
+        if (InteractionPromptUI.CurrentMessage == Prompt || InteractionPromptUI.CurrentMessage == "按 E 教艾琳扎花")
             InteractionPromptUI.Hide();
     }
 }

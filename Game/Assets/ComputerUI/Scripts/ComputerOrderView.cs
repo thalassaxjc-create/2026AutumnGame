@@ -77,24 +77,25 @@ public sealed class ComputerOrderView : MonoBehaviour
         }
         if (customOrder)
         {
-            bool storyDay = order.Days >= 4;
+            bool teaching = order.IsTeachingDay;
             bool trim = order.RequiresVermilionTrim;
+            bool repairDay = order.Days == 4;
             patternTitle.text = order.OrderName;
-            if (order.IsTeachingDay)
+            if (teaching)
                 patternDescription.text = order.DayName;
-            else if (storyDay)
-                patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元";
+            else if (repairDay)
+                patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元  ·  改旧帘，不做新的";
             else
             {
                 string finishing = trim ? $"上漆边 {order.TrimMinutes} 分钟 / 张" : $"纹样 {order.PatternMinutes} 分钟 / 张";
                 patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元  ·  {finishing}";
             }
-            sampleHeading.gameObject.SetActive(!storyDay && !order.IsTeachingDay);
-            sampleNotes.gameObject.SetActive(storyDay || order.IsTeachingDay);
-            sampleNotes.text = order.PendingTrial ? "第一张已阴干，先回院子找老周试捞。" : order.CustomerNotes;
+            sampleHeading.gameObject.SetActive(!teaching);
+            sampleNotes.gameObject.SetActive(teaching || repairDay);
+            sampleNotes.text = order.CustomerNotes;
             for (int i = 0; i < patternSamples.Length; i++)
             {
-                bool showSample = !storyDay && !order.IsTeachingDay;
+                bool showSample = !teaching;
                 patternSamples[i].gameObject.SetActive(showSample);
                 sampleLabels[i].gameObject.SetActive(showSample);
                 if (!showSample)
@@ -105,11 +106,13 @@ public sealed class ComputerOrderView : MonoBehaviour
                 sampleLabels[i].text = $"{style.Name} ×1\n{status}";
                 sampleLabels[i].color = status == "待制作" ? WorkshopStoryUI.Ink : WorkshopStoryUI.Green;
             }
-            if (order.IsTeachingDay)
+            if (teaching)
                 patternSteps.text = "";
-            else if (storyDay)
-                patternSteps.text = delivered ? "今日订单已全部交付。\n\n随时可以去村里做生意，或在左上角收工。"
-                    : $"已交 {order.DeliveredCount}/{order.RequiredSheets} 张\n\n待交成品 ×{order.AvailableOrderCurtains}";
+            else if (repairDay)
+                patternSteps.text = delivered ? "两张退修帘都交了。\n\n可以去村里走走，或在左上角收工。"
+                    : $"已交 {order.DeliveredCount}/{order.RequiredSheets} 张\n\n" +
+                    "第一张：找老周补断线，再到纹样台改成扎花。\n" +
+                    "第二张：找老周压平翘边，再到上漆边台收朱边青。";
             else
             {
                 string finishingStep = trim ? $"上漆边   {StepLabel(order, WorkshopOrder.Stage.VermilionTrim)}"

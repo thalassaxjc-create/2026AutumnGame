@@ -767,12 +767,12 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(task.pivot, Is.EqualTo(Vector2.one));
         Assert.That(task.anchoredPosition, Is.EqualTo(new Vector2(-32f, -48f)),
             "订单任务应独占右上区域，不能与左上角竹子背包重叠");
-        var booklet = GameObject.Find("打开小册子").GetComponent<RectTransform>();
+        var booklet = GameObject.Find("打开手册").GetComponent<RectTransform>();
         Assert.That(booklet.anchorMin, Is.EqualTo(Vector2.zero));
         Assert.That(booklet.anchorMax, Is.EqualTo(Vector2.zero));
         Assert.That(booklet.pivot, Is.EqualTo(Vector2.zero));
         Assert.That(booklet.anchoredPosition, Is.EqualTo(new Vector2(32f, 26f)),
-            "小册子按钮应在左下角，避免与右上角任务提示重叠");
+            "手册按钮应在左下角，避免与右上角任务提示重叠");
         var elder = GameObject.Find("村口大爷").GetComponent<TemporaryDialogueEntryPoint>();
         var uncle = GameObject.Find("舅舅").GetComponent<TemporaryDialogueEntryPoint>();
         MoveNear(uncle.transform);
@@ -831,33 +831,26 @@ public sealed class WorkshopOrderSceneTests
                 Assert.That(order.CurrentSheetNumber, Is.EqualTo(sheet));
                 Assert.That(order.PatternDraft, Is.Null);
                 Assert.That(order.CanHarvest, Is.True);
-                if (day == 4 && sheet > 1)
-                    yield return RepairReturnedCurtain(sheet, keyboard);
+                if (day == 4 && sheet == 1)
+                {
+                    yield return RepairThread(keyboard);
+                    yield return FinishPattern(order, keyboard, mouse, false);
+                }
+                else if (day == 4)
+                {
+                    yield return RepairWarp(keyboard);
+                    yield return BindVermilionTrim(order, keyboard, mouse, false);
+                }
                 else
                     yield return ProduceAndDry(order, keyboard, dailyStalkNames);
                 if (order.IsPatternOrder)
                     yield return FinishPattern(order, keyboard, mouse, sheet == 1);
                 if (order.RequiresVermilionTrim)
                     yield return BindVermilionTrim(order, keyboard, mouse, sheet == 1);
-                if (day == 4 && sheet == 1)
-                {
-                    Assert.That(order.Submit(), Is.False, "样帘先试捞再交付");
-                    yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
-                    AssertCustomerBlocksWalking("老周");
-                    MoveNear(GameObject.Find("老周").transform);
-                    yield return Press(keyboard, Key.E);
-                    Click(GameObject.Find("转半圈，再试一次"));
-                    Assert.That(GameObject.Find("转帘后").activeInHierarchy, Is.True);
-                    Click(GameObject.Find("把帘的松边拉平"));
-                    Assert.That(order.TrialResolved, Is.True);
-                    yield return Press(keyboard, Key.Escape);
-                    yield return CloseJournal();
-                    yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
-                }
-                int payout = day == 4 && sheet > 1 ? 150 : pricesAtTestGrade[day - 1];
+                int payout = day == 4 ? (sheet == 1 ? 135 : 150) : pricesAtTestGrade[day - 1];
                 yield return SubmitSheet(keyboard, "+" + payout);
                 Assert.That(order.DeliveredCount, Is.EqualTo(sheet));
-                Assert.That(order.TodayIncome, Is.EqualTo(day == 4 ? 120 + 150 * (sheet - 1) : payout * sheet));
+                Assert.That(order.TodayIncome, Is.EqualTo(day == 4 ? (sheet == 1 ? 135 : 285) : payout * sheet));
                 Assert.That(order.Submit(), Is.False);
                 Assert.That(order.CanAdvanceDay, Is.False);
                 Assert.That(order.Settlements.Count, Is.EqualTo(day - 1));
@@ -872,7 +865,7 @@ public sealed class WorkshopOrderSceneTests
                 else
                 {
                     yield return Frames(2);
-                    Assert.That(GameObject.Find("关闭小册子"), Is.Null, "重复交付静默入册");
+                    Assert.That(GameObject.Find("关闭手册"), Is.Null, "重复交付静默入册");
                 }
             }
             if (order.IsTeachingDay)
@@ -880,28 +873,23 @@ public sealed class WorkshopOrderSceneTests
                 AssertCustomerBlocksWalking("艾琳");
                 MoveNear(GameObject.Find("艾琳").transform);
                 yield return Press(keyboard, Key.E);
-                Click(GameObject.Find("用修过的旧帘查薄角"));
-                Click(GameObject.Find("开始练习"));
-                Click(GameObject.Find("起帘"));
-                Click(GameObject.Find("轮到艾琳"));
-                double deadline = EditorApplication.timeSinceStartup + 15d;
-                while (GameObject.Find("试捞状态").GetComponent<Text>().text != "一边抬高了，现在提醒")
-                {
-                    Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待艾琳的提醒时机");
-                    yield return null;
-                }
+                Click(GameObject.Find("跟我来"));
+                Assert.That(order.LessonPrepared, Is.True);
+                Assert.That(order.CanUsePatternStation, Is.False, "刮青和编素帘做完才有帘可教");
+                yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
+                Assert.That(GameObject.Find("艾琳"), Is.Not.Null, "艾琳要跟着进工坊");
+                yield return TeachAilinScrape(keyboard, mouse);
+                yield return TeachAilinWeave(keyboard);
+                yield return TeachAilinAtLoom(order, keyboard, mouse);
+                MoveNear(GameObject.Find("艾琳").transform);
                 yield return Press(keyboard, Key.E);
-                while (GameObject.Find("揭纸并盖村印") == null)
-                {
-                    Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待揭纸");
-                    yield return null;
-                }
-                Assert.That(order.TaughtLesson, Is.Null, "揭纸并选择去处前不能算教学完毕");
-                Click(GameObject.Find("揭纸并盖村印"));
+                Assert.That(order.TaughtLesson, Is.Null, "交帘之前不能算教学完毕");
+                Assert.That(order.LessonAdviceGiven, Is.True);
                 Click(GameObject.Find("给艾琳带走"));
                 Assert.That(order.LessonSucceeded, Is.True);
                 yield return Press(keyboard, Key.Escape);
                 yield return CloseJournal();
+                yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
             }
             Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.OrderComplete));
             Assert.That(order.CanExplore, Is.True);
@@ -925,7 +913,7 @@ public sealed class WorkshopOrderSceneTests
                 yield return CloseJournal();
             }
         }
-        Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((1332, 1574, 1362)));
+        Assert.That((order.Funds, order.XiaoPiFunds, order.XiaoBaiFunds), Is.EqualTo((1197, 1574, 1362)));
         Assert.That(order.Days, Is.EqualTo(5));
         Assert.That(order.Settlements.Count, Is.EqualTo(5));
         Assert.That(order.Settlements.All(record => record.Delivered), Is.True);
@@ -1007,7 +995,7 @@ public sealed class WorkshopOrderSceneTests
         yield return Frames(2);
         yield return Press(keyboard, Key.Escape);
         yield return Frames(2);
-        Assert.That(GameObject.Find("关闭小册子"), Is.Null);
+        Assert.That(GameObject.Find("关闭手册"), Is.Null);
         Assert.That(teaHint.enabled, Is.False, "完成茶摊支线后清除指路文字");
         var collectorHint = GameObject.Find("富商情报提示").GetComponent<Text>();
         Assert.That(collectorHint.enabled, Is.True);
@@ -1140,7 +1128,8 @@ public sealed class WorkshopOrderSceneTests
             { grade = LacquerMinigameController.LacquerGrade.S, gameMinutes = 20 });
         Assert.That(order.BeginDrying(), Is.True);
         order.AdvanceTime(order.RemainingDryingMinutes);
-        yield return CollectCurtain(keyboard);
+        Assert.That(order.IsDrying, Is.False);
+        Assert.That(order.CanUsePatternStation, Is.True);
         yield return FinishPattern(order, keyboard, mouse, verifyPreview: false);
         yield return SubmitSheet(keyboard, "+280");
         Assert.That(order.LastDelivery.Value.Grade, Is.EqualTo(WorkshopOrder.QualityGrade.B));
@@ -1455,26 +1444,133 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(order.CanUseTrimStation, Is.True);
     }
 
-    static IEnumerator RepairReturnedCurtain(int sheet, Keyboard keyboard)
+    static IEnumerator TeachAilinScrape(Keyboard keyboard, Mouse mouse)
+    {
+        var bench = Object.FindFirstObjectByType<BambooWorkbench>();
+        Assert.That(bench, Is.Not.Null);
+        MoveTo(bench.transform.position + Vector3.up * .15f);
+        double wait = EditorApplication.timeSinceStartup + 5d;
+        while (InteractionPromptUI.CurrentMessage != "按 E 教艾琳刮青")
+        {
+            Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(wait), "按 E 教艾琳刮青");
+            yield return null;
+        }
+        yield return Press(keyboard, Key.E);
+        Assert.That(bench.IsOpen, Is.True, "刮青要用篾竹台");
+        yield return Frames(2);
+        var surface = bench.View.SurfaceRect;
+        foreach (float y in new[] { .12f, .38f, .64f, .9f })
+            for (float x = 0f; x <= 1.02f; x += .08f)
+                yield return AimSurface(keyboard, mouse, surface, Mathf.Clamp01(x), y);
+        double deadline = EditorApplication.timeSinceStartup + 30d;
+        while (!AilinLessonTalk.IsOpen)
+        {
+            Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "刮完应告诉艾琳哪里要改");
+            yield return null;
+        }
+        Assert.That(GameObject.Find("点评正文").GetComponent<Text>().text, Does.Contain("艾琳"));
+        yield return Press(keyboard, Key.Enter);
+        Assert.That(WorkshopOrder.Current.CurrentLesson, Is.EqualTo(WorkshopOrder.LessonBeat.Weave));
+    }
+
+    static IEnumerator AimSurface(Keyboard keyboard, Mouse mouse, RectTransform surface, float x, float y)
+    {
+        Canvas.ForceUpdateCanvases();
+        Rect rect = surface.rect;
+        Vector2 local = new(Mathf.Lerp(rect.xMin, rect.xMax, x), Mathf.Lerp(rect.yMin, rect.yMax, y));
+        Vector2 screen = RectTransformUtility.WorldToScreenPoint(null, surface.TransformPoint(local));
+        yield return InputFrame(() =>
+        {
+            keyboard.MakeCurrent();
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            mouse.MakeCurrent();
+            InputSystem.QueueStateEvent(mouse, new MouseState { position = screen }.WithButton(MouseButton.Left, true));
+        });
+    }
+
+    static IEnumerator TeachAilinWeave(Keyboard keyboard)
+    {
+        yield return MoveIntoStation(Object.FindFirstObjectByType<WeavingStationTrigger>(), "按 E 教艾琳编素帘");
+        yield return Press(keyboard, Key.E);
+        Assert.That(Object.FindFirstObjectByType<WeavingMinigameController>().IsOpen, Is.True, "编帘要用原来的编帘台");
+        yield return Press(keyboard, Key.Space);
+        double deadline = EditorApplication.timeSinceStartup + 50d;
+        while (!AilinLessonTalk.IsOpen)
+        {
+            Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "编完应告诉艾琳哪里要改");
+            yield return null;
+        }
+        Assert.That(GameObject.Find("点评正文").GetComponent<Text>().text, Does.Contain("艾琳"));
+        yield return Press(keyboard, Key.Enter);
+        Assert.That(WorkshopOrder.Current.CurrentLesson, Is.EqualTo(WorkshopOrder.LessonBeat.Pattern));
+    }
+
+    static IEnumerator TeachAilinAtLoom(WorkshopOrder order, Keyboard keyboard, Mouse mouse)
+    {
+        var station = Object.FindFirstObjectByType<PatternStationTrigger>();
+        Assert.That(station, Is.Not.Null);
+        MoveNear(station.transform);
+        yield return Press(keyboard, Key.E);
+        Assert.That(station.IsOpen, Is.True);
+        Click(GameObject.Find("选样_龟纹"));
+        yield return Frames(2);
+        Assert.That(order.PatternDraft, Is.Null, "艾琳只要扎花");
+        Click(GameObject.Find("选样_扎花"));
+        yield return Frames(2);
+        var draft = order.PatternDraft;
+        Assert.That(draft.Kind, Is.EqualTo(CurtainPatternKind.TiedFlower));
+        var board = Object.FindFirstObjectByType<CurtainPatternView>().Board;
+        yield return WeaveShuttleRows(draft, board, keyboard, mouse, correct: true, maxRows: 1);
+        Assert.That(draft.CompletedRows, Is.EqualTo(1), "第一道是示范");
+        double deadline = EditorApplication.timeSinceStartup + 40d;
+        while (!draft.CanConfirm)
+        {
+            Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "扶着艾琳的梭应能教完后两道");
+            int row = draft.CompletedRows;
+            int crossing = Mathf.Min(draft.CheckedCrossings(row), CurtainPatternDraft.CrossingsPerRow - 1);
+            bool under = draft.GoesUnder(row, crossing);
+            yield return SetShuttleInput(keyboard, mouse, board, row, draft.Shuttle, under);
+        }
+        Click(GameObject.Find("预览纹样"));
+        yield return Frames(2);
+        Assert.That(GameObject.Find("计分").GetComponent<Text>().text, Does.Contain("纹样 S"));
+        Click(GameObject.Find("预览纹样"));
+        Assert.That(order.AilinCurtainWoven, Is.True);
+        Assert.That(order.TaughtLesson, Is.Null);
+        Assert.That(station.IsOpen, Is.False);
+        Assert.That(AilinLessonTalk.IsOpen, Is.True, "扎完直接告诉她哪里要改");
+        yield return Press(keyboard, Key.Enter);
+        Assert.That(order.LessonAdviceGiven, Is.True);
+    }
+
+    static IEnumerator RepairThread(Keyboard keyboard)
     {
         yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
         MoveNear(GameObject.Find("老周").transform);
         yield return Press(keyboard, Key.E);
-        if (sheet == 2)
-        {
-            foreach (string corner in new[] { "左上孔", "右上孔", "右下孔", "左下孔" })
-                Click(GameObject.Find(corner));
-            Click(GameObject.Find("收线并检查"));
-        }
-        else
-        {
-            Click(GameObject.Find("左上 · 放夹子"));
-            Click(GameObject.Find("左下 · 放夹子"));
-            Click(GameObject.Find("转半圈检查"));
-            Click(GameObject.Find("压平并检查"));
-        }
-        Assert.That(WorkshopOrder.Current.AvailableOrderCurtains, Is.EqualTo(1));
+        foreach (string corner in new[] { "左上孔", "右上孔", "右下孔", "左下孔" })
+            Click(GameObject.Find(corner));
+        Click(GameObject.Find("收线并检查"));
+        Assert.That(WorkshopOrder.Current.ThreadRepaired, Is.True);
+        Assert.That(WorkshopOrder.Current.PlainCurtains, Is.EqualTo(1));
         yield return Press(keyboard, Key.Escape);
+        yield return CloseJournal();
+        yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
+    }
+
+    static IEnumerator RepairWarp(Keyboard keyboard)
+    {
+        yield return LoadSceneAndWait(SceneTransitionState.WorldSceneName);
+        MoveNear(GameObject.Find("老周").transform);
+        yield return Press(keyboard, Key.E);
+        Click(GameObject.Find("左上 · 翘 · 放夹子"));
+        Click(GameObject.Find("左下 · 翘 · 放夹子"));
+        Click(GameObject.Find("转半圈"));
+        Click(GameObject.Find("把松边拉平"));
+        Assert.That(WorkshopOrder.Current.WarpRepaired, Is.True);
+        Assert.That(WorkshopOrder.Current.PlainCurtains, Is.EqualTo(1));
+        yield return Press(keyboard, Key.Escape);
+        yield return CloseJournal();
         yield return LoadSceneAndWait(SceneTransitionState.WorkshopSceneName);
     }
 
@@ -1490,8 +1586,17 @@ public sealed class WorkshopOrderSceneTests
 
     static IEnumerator FinishPattern(WorkshopOrder order, Keyboard keyboard, Mouse mouse, bool verifyPreview)
     {
+        string patternName = order.NextSheetStyle.Pattern switch
+        {
+            CurtainPatternKind.Turtle => "龟纹",
+            CurtainPatternKind.SingleThread => "单丝路",
+            CurtainPatternKind.DoubleThread => "双丝路",
+            CurtainPatternKind.Ribbed => "罗纹",
+            CurtainPatternKind.TiedFlower => "扎花",
+            _ => "素帘"
+        };
+        string patternCard = "选样_" + patternName;
         bool turtle = order.NextSheetStyle.Pattern == CurtainPatternKind.Turtle;
-        string patternCard = turtle ? "选样_龟纹" : "选样_单丝路";
         var station = Object.FindFirstObjectByType<PatternStationTrigger>();
         Assert.That(station, Is.Not.Null);
         MoveNear(station.transform);
@@ -1689,7 +1794,7 @@ public sealed class WorkshopOrderSceneTests
         MoveNear(GameObject.Find("舅舅").transform);
         yield return Press(keyboard, Key.E);
         Assert.That(GameObject.Find("舅舅").GetComponent<TemporaryDialogueEntryPoint>().IsOpen, Is.True);
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < (order.IsTeachingDay ? 1 : 3); i++)
             yield return Press(keyboard, Key.Enter);
         if (order.Days == 4)
             yield return Press(keyboard, Key.Digit1);
@@ -1705,8 +1810,8 @@ public sealed class WorkshopOrderSceneTests
         MoveNear(computer.transform);
         yield return Press(keyboard, Key.E);
         Click(computer.Screen, "订单");
-        Assert.That(Find(computer.Screen, "订单样稿").activeInHierarchy,
-            Is.EqualTo(order.IsPatternOrder || order.RequiresVermilionTrim));
+        bool showsSamples = order.Days is >= 2 and <= 4;
+        Assert.That(Find(computer.Screen, "订单样稿").activeInHierarchy, Is.EqualTo(showsSamples));
         yield return Press(keyboard, Key.Escape);
         Assert.That(order.CanUsePatternStation, Is.False);
         Assert.That(order.CanHarvest, Is.True);
@@ -1727,9 +1832,9 @@ public sealed class WorkshopOrderSceneTests
     static IEnumerator CloseJournal(bool checkPeople = false)
     {
         double deadline = EditorApplication.timeSinceStartup + 10d;
-        while (GameObject.Find("关闭小册子") == null)
+        while (GameObject.Find("关闭手册") == null)
         {
-            Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待小册子弹出");
+            Assert.That(EditorApplication.timeSinceStartup, Is.LessThan(deadline), "等待手册弹出");
             yield return null;
         }
         if (checkPeople)
@@ -1740,7 +1845,7 @@ public sealed class WorkshopOrderSceneTests
             Click(GameObject.Find("事件书签"));
             Assert.That(GameObject.Find("事件截图").GetComponent<RawImage>().texture, Is.Not.Null);
         }
-        Click(GameObject.Find("关闭小册子"));
+        Click(GameObject.Find("关闭手册"));
         yield return Frames(2);
     }
 
@@ -1841,9 +1946,10 @@ public sealed class WorkshopOrderSceneTests
     }
 
     static IEnumerator WeaveShuttleRows(CurtainPatternDraft draft, CurtainPatternGraphic board, Keyboard keyboard,
-        Mouse mouse, bool correct)
+        Mouse mouse, bool correct, int maxRows = int.MaxValue)
     {
-        for (int row = draft.CompletedRows; row < CurtainPatternDraft.RowCount; row++)
+        int limit = Mathf.Min(CurtainPatternDraft.RowCount, maxRows);
+        for (int row = draft.CompletedRows; row < limit; row++)
         {
             yield return SetShuttleInput(keyboard, mouse, board, row, draft.Shuttle, under: false);
             Assert.That(draft.IsGripped, Is.True);

@@ -141,6 +141,69 @@ public sealed class CurtainPatternDraft
 
     public void Release() => IsGripped = false;
 
+    /// <summary>Keep hold of Ailin's shuttle while it moves. Wider than a normal grip.</summary>
+    public bool TrySteady(Vector2 pointer)
+    {
+        if (CanConfirm || CompletedRows == 0)
+            return false;
+        Vector2 offset = Shuttle - pointer;
+        if (Mathf.Abs(offset.x) > .16f || Mathf.Abs(offset.y) > .32f)
+        {
+            Release();
+            return false;
+        }
+        if (!IsGripped)
+        {
+            gripOffset = Vector2.zero;
+            IsGripped = true;
+        }
+        return true;
+    }
+
+    /// <summary>Move her shuttle forward along the row. Off the guide she drifts and misses the line.</summary>
+    public void GlideLesson(float targetX, bool under, bool onGuide)
+    {
+        if (CanConfirm || CompletedRows == 0)
+            return;
+        int row = CompletedRows;
+        targetX = Mathf.Clamp(Mathf.Max(targetX, Shuttle.x), 0f, 1f);
+        if (targetX <= Shuttle.x + .0001f)
+            return;
+        if (!IsGripped && !TryGrip(Shuttle))
+            return;
+        gripOffset = Vector2.zero;
+        Vector2 dest = GuidePosition(row, targetX);
+        if (!onGuide)
+            dest.y = Mathf.Clamp(dest.y + .22f, .02f, .98f);
+        Drag(dest, under);
+    }
+
+    /// <summary>Ailin advances one crossing along the guide using the instruction she was just given.</summary>
+    public bool TeachCrossing(bool under)
+    {
+        if (CanConfirm || IsGripped || CompletedRows == 0)
+            return false;
+        int row = CompletedRows;
+        int crossing = passes[row].CheckedCrossings;
+        if (crossing >= CrossingsPerRow)
+            return false;
+        float target = crossing == CrossingsPerRow - 1 ? 1f : CrossingProgress(crossing) + .012f;
+        if (!TryGrip(Shuttle))
+            return false;
+        float start = Shuttle.x;
+        const int steps = 16;
+        for (int step = 1; step <= steps; step++)
+        {
+            float progress = Mathf.Lerp(start, target, step / (float)steps);
+            if (Drag(GuidePosition(row, progress), under))
+                continue;
+            Release();
+            return CompletedRows != row || passes[row].CheckedCrossings > crossing;
+        }
+        Release();
+        return true;
+    }
+
     public bool RedoRow()
     {
         if (!CanRedo)

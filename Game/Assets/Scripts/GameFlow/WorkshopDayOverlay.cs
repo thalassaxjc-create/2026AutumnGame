@@ -254,10 +254,10 @@ public sealed class WorkshopDayOverlay : MonoBehaviour
         string epilogue = firstOption
             ? "你在工坊门口挂上接单牌。第二天小皮拿着一根劈歪的竹片来问你，歪的那一边该怎么下刀。"
             : order.DeliveredCount > 0
-                ? "你拖着来时的行李箱出了村。后来舅舅寄来一张试纸，背面写着艾琳的第一张纸晾干了。"
+                ? "你拖着来时的行李箱出了村。后来舅舅寄来一张扎花帘的样子，背面写着艾琳的第一张帘晾干了。"
                 : "你拖着来时的行李箱出了村。后来舅舅寄来一张试纸，背面问你今天走到了哪里。";
         if (order.TaughtLesson.HasValue && !order.LessonSucceeded)
-            epilogue += "\n艾琳把缺角的第一张试纸夹进信里，说下次想试得再匀一点。";
+            epilogue += "\n艾琳把花心松了的那张帘夹进信里，说下次想再扎紧一点。";
         if (order.TaughtLesson.HasValue)
             epilogue += "\n" + order.PaperDestinationText;
         epilogue += shareNotes ? "\n工坊木匣里多了一页新来访者的批注。" : "\n手册里还夹着一根竹丝，两边都留了空白。";

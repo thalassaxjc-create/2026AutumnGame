@@ -27,13 +27,13 @@ internal sealed class WorkshopJournalView : MonoBehaviour
     internal void Build(WorkshopJournal book)
     {
         journal = book;
-        open = WorkshopStoryUI.Button(transform, "打开小册子", "小册子 [N]",
+        open = WorkshopStoryUI.Button(transform, "打开手册", "手册 [N]",
             new Rect(0, 0, 0, 0), WorkshopStoryUI.Wood, 24, OpenBook);
         var openRect = (RectTransform)open.transform;
         openRect.pivot = new Vector2(0, 0);
         openRect.anchoredPosition = new Vector2(32, 26);
         openRect.sizeDelta = new Vector2(176, 44);
-        var modalOwner = new GameObject("小册子交互");
+        var modalOwner = new GameObject("手册交互");
         modalOwner.transform.SetParent(transform, false);
         modal = modalOwner.AddComponent<SettlementExitController>();
     }
@@ -94,7 +94,7 @@ internal sealed class WorkshopJournalView : MonoBehaviour
         catch (System.Exception error)
         {
             journal.Unphotographed.Clear();
-            Debug.LogWarning($"小册子截图失败，文字记录仍可查看：{error.Message}", this);
+            Debug.LogWarning($"手册截图失败，文字记录仍可查看：{error.Message}", this);
         }
         finally
         {
@@ -128,7 +128,7 @@ internal sealed class WorkshopJournalView : MonoBehaviour
 
     void BuildPage()
     {
-        page = WorkshopStoryUI.Panel(transform, "宣纸帘小册子", new Rect(0, 0, 1, 1),
+        page = WorkshopStoryUI.Panel(transform, "宣纸帘手册", new Rect(0, 0, 1, 1),
             new Color32(30, 24, 18, 209), true).gameObject;
         var sheet = WorkshopStoryUI.Panel(page.transform, "册页", new Rect(.16f, .07f, .68f, .86f),
             WorkshopStoryUI.Paper, true).transform;
@@ -136,7 +136,7 @@ internal sealed class WorkshopJournalView : MonoBehaviour
             WorkshopStoryUI.Green, 28, () => Select(false));
         WorkshopStoryUI.Button(sheet, "人物书签", "人物", new Rect(.26f, .89f, .18f, .08f),
             WorkshopStoryUI.Green, 28, () => Select(true));
-        WorkshopStoryUI.Button(sheet, "关闭小册子", "合上 [Esc]", new Rect(.74f, .89f, .20f, .08f),
+        WorkshopStoryUI.Button(sheet, "关闭手册", "合上 [Esc]", new Rect(.74f, .89f, .20f, .08f),
             WorkshopStoryUI.Wood, 24, CloseBook);
         title = WorkshopStoryUI.Label(sheet, "条目标题", "", new Rect(.06f, .77f, .88f, .1f),
             38, WorkshopStoryUI.Ink, bold: true);

@@ -41,7 +41,7 @@ internal sealed class WorkshopJournal
             "小白" => "喜欢叼竹丝的小狗，也是比试的一员。",
             "村口大爷" => "在村口打招呼，知道舅舅最近的消息。",
             "老周" => "捞纸工人。斜着照光验帘，再用指肚摸平整度。",
-            "艾琳" => "来纸坊看试捞的访客，想带一张龟纹帘回去自己试试。",
+            "艾琳" => "来学非遗宣纸帘的外国友人。先看你示范，再自己刮青、编素帘、扎花。",
             _ => "在村镇交谈时认识的人。"
         };
         string location = scene == SceneTransitionState.WorkshopSceneName ? "工坊" :

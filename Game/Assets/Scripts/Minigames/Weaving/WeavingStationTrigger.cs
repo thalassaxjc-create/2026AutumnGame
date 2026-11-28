@@ -25,6 +25,8 @@ public sealed class WeavingStationTrigger : MonoBehaviour
     bool BucketHasPriority => xiaoPiBucket != null && xiaoPiBucket.CanInteractFrom(playerInRange);
 
     public bool IsMinigameOpen => minigameOpen;
+    public bool IsLessonDemo => minigameController != null && minigameController.IsLessonDemo;
+    public bool IsLessonPupil => minigameController != null && minigameController.IsLessonPupil;
 
     void Awake()
     {
@@ -47,6 +49,15 @@ public sealed class WeavingStationTrigger : MonoBehaviour
         // trigger bounds before letting a stale registration consume Interact.
         if (playerInRange != null && !ContainsPlayer())
             ClearPlayer();
+        bool teachingWeave = WorkshopOrder.Current?.CurrentLesson == WorkshopOrder.LessonBeat.Weave;
+        if (teachingWeave && playerInRange != null && ContainsPlayer() && !minigameOpen &&
+            !GameFlowModalState.IsInteractionBlocked)
+        {
+            InteractionPromptUI.Show("按 E 教艾琳编素帘");
+            if (SceneTransitionManager.TryConsumeInteractPress())
+                OpenTeaching();
+            return;
+        }
         if (minigameOpen || playerInRange == null || !IsAvailable || GameFlowModalState.IsInteractionBlocked || BucketHasPriority)
             return;
 
@@ -87,6 +98,23 @@ public sealed class WeavingStationTrigger : MonoBehaviour
         playerBody = null;
         if (InteractionPromptUI.CurrentMessage == promptText)
             InteractionPromptUI.Hide();
+    }
+
+    void OpenTeaching()
+    {
+        if (minigameOpen || playerInRange == null || SceneTransitionState.IsLoading || GameFlowModalState.IsInteractionBlocked)
+            return;
+        ResolveController();
+        if (minigameController == null)
+            return;
+        directPractice = false;
+        activePlayer = playerInRange;
+        playerWasEnabled = playerInRange.enabled;
+        minigameOpen = true;
+        order = null;
+        GameFlowModalState.Acquire(this);
+        playerInRange.enabled = false;
+        minigameController.OpenLesson(CloseMinigame);
     }
 
     public void OpenMinigame()

@@ -100,7 +100,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 new[] { "我就是回来休息一下", "我回来看看舅舅需要帮忙不" });
 
             uncle = ConfigureDialogue("舅舅", WorkshopOrder.Phase.Home, UncleLines(order.Days),
-                order.Days == 4 ? new[] { "分批验收，每张 150 元起", "当面按样验货，每张 130 元起，合格整批加 120 元" } : null, true,
+                null, true,
                 UncleCasualLine(order.Days));
 
             if (uncle != null)
@@ -126,6 +126,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             lacquer = FindFirstObjectByType<LacquerStationTrigger>();
             pattern = FindFirstObjectByType<PatternStationTrigger>();
             trim = FindFirstObjectByType<VermilionTrimStation>();
+            BringAilinAlong(order);
             GameObject dryingPoint = GameObject.Find("DryingInteractionPoint");
             if (dryingPoint != null)
             {
@@ -136,6 +137,14 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             else
                 Debug.LogWarning("WorkshopScene 未找到 DryingInteractionPoint，无法开始阴干。", this);
         }
+        else if (scene.name == SceneTransitionState.HomeSceneName)
+            BringAilinAlong(order);
+    }
+
+    static void BringAilinAlong(WorkshopOrder order)
+    {
+        if (order.IsTeachingDay && order.LessonPrepared && !order.TaughtLesson.HasValue)
+            AilinCompanion.JoinPlayer();
     }
 
     static string[] UncleLines(int day) => day switch
@@ -154,15 +163,13 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         },
         4 => new[]
         {
-            "舅舅：纸坊送回两张用坏的旧帘，还得补一张新帘。先做新帘，阴干了拿去给老周试捞。",
-            "老周：试捞完，我把断线的和翘边的两张拿给你。你想分开交，还是三张一起按样验？",
-            "舅舅：你来定。交不齐就把已经做好的交了，别为了赶数把湿帘从架上摘下来。"
+            "舅舅：纸坊退回两张旧帘，不要新的。一张龟纹断了线，一张边翘了。",
+            "舅舅：断线那张补上以后，拿到纹样台改成扎花。翘边压平以后，拿到上漆边台收朱边青。",
+            "舅舅：前三天会的纹样和包边，今天用在别人退回来的帘上。"
         },
         5 => new[]
         {
-            "舅舅：艾琳傍晚就走，想在走之前自己捞一张纸。院子里有旧帘，你挑个好懂的办法教她。",
-            "舅舅：你头一天也是摸着做的。想想哪一句提醒，能让她一下就明白。",
-            "舅舅：等她试完，咱们把五天的账算清楚，再聊聊你想去哪。"
+            "舅舅：艾琳是外国友人，来学咱们的非遗宣纸帘。她在院子里。"
         },
         _ =>
                 new[]
@@ -176,8 +183,8 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     static string UncleCasualLine(int day) => day switch
     {
         1 => "舅舅：别急，阴干最忌心浮气躁。",
-        4 => "舅舅：先交做好的。老周下次来，再拿前一张试捞的纸和新帘对一对。",
-        5 => "舅舅：艾琳就在院里。给她找张样帘，或者拿昨天的试纸去。",
+        4 => "舅舅：老周就在院里。先补断线，再去压翘边。",
+        5 => "舅舅：艾琳在院里，是来学非遗宣纸帘的外国友人。",
         _ => "舅舅：做完先对一对样稿，再去电脑上交单。"
     };
 
@@ -303,12 +310,14 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         {
             displayedOrderRevision = order.Revision;
             status.text = $"{order.DayName}  {order.Hour:00}:{order.Minute:00}    主角 ¥{order.Funds}    小皮 ¥{order.XiaoPiFunds}    小白 ¥{order.XiaoBaiFunds}";
-            string next = TaskText(order);
-            task.text = !order.IsTeachingDay && (order.CurrentPhase == WorkshopOrder.Phase.Production ||
-                order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit)
-                ? $"第 {order.CurrentSheetNumber}/{order.RequiredSheets} 张 · {next}"
-                : next;
         }
+        string next = TaskText(order);
+        string shown = !order.IsTeachingDay && (order.CurrentPhase == WorkshopOrder.Phase.Production ||
+            order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit)
+            ? $"第 {order.CurrentSheetNumber}/{order.RequiredSheets} 张 · {next}"
+            : next;
+        if (task.text != shown)
+            task.text = shown;
 
         if (displayedInventoryRevision == WorkshopInventory.Revision && displayedCurtainRevision == order.CurtainRevision)
             return;
@@ -329,7 +338,19 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         // NPC 自身带有头顶光标，避免再叠一层屏幕光标。
         if (order.CurrentPhase == WorkshopOrder.Phase.Village || order.CurrentPhase == WorkshopOrder.Phase.Home)
             return null;
-        if (order.IsTeachingDay || order.PendingTrial || order.AwaitingReturnedCurtain)
+        if (order.IsTeachingDay)
+        {
+            if (!order.LessonPrepared || order.LessonAdviceGiven || order.TaughtLesson.HasValue || AilinLessonTalk.IsOpen)
+                return null;
+            return order.CurrentLesson switch
+            {
+                WorkshopOrder.LessonBeat.Scrape => bamboo != null ? bamboo.transform : null,
+                WorkshopOrder.LessonBeat.Weave => weaving != null ? weaving.transform : null,
+                WorkshopOrder.LessonBeat.Pattern => pattern != null ? pattern.transform : null,
+                _ => null
+            };
+        }
+        if (order.NeedsThreadRepair || order.NeedsWarpRepair)
             return null;
         if (order.CurrentPhase == WorkshopOrder.Phase.NewOrder || order.CurrentPhase == WorkshopOrder.Phase.ReadyToSubmit)
             return computer != null ? computer.transform : null;
@@ -354,14 +375,53 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
         return drying != null ? drying.transform : null;
     }
 
-    static string TaskText(WorkshopOrder order)
+    string TeachingTask(WorkshopOrder order)
+    {
+        if (!order.CanTeachLesson)
+            return "艾琳已经启程，可以收工结算";
+        if (order.LessonAdviceGiven)
+            return "把扎花帘交给艾琳";
+        if (!order.LessonPrepared)
+            return "去找艾琳";
+        if (AilinLessonTalk.IsOpen)
+            return "看完对艾琳的点评";
+        switch (order.CurrentLesson)
+        {
+            case WorkshopOrder.LessonBeat.Scrape:
+                if (bamboo != null && bamboo.IsLessonPupil)
+                    return "看艾琳刮青";
+                if (bamboo != null && bamboo.IsLessonDemo)
+                    return "先刮一道给艾琳看";
+                return "到篾竹台教艾琳刮青";
+            case WorkshopOrder.LessonBeat.Weave:
+                if (weaving != null && weaving.IsLessonPupil)
+                    return "看艾琳编素帘";
+                if (weaving != null && weaving.IsLessonDemo)
+                    return "先编一道给艾琳看";
+                return "到编帘台教艾琳编一道素帘";
+            case WorkshopOrder.LessonBeat.Pattern:
+                CurtainPatternDraft draft = order.PatternDraft;
+                bool atStation = pattern != null && pattern.IsOpen;
+                if (draft == null)
+                    return atStation ? "给艾琳选扎花" : "到纹样台教艾琳扎花";
+                if (draft.CanConfirm)
+                    return atStation ? "对样，确认艾琳的扎花帘" : "回纹样台对样";
+                if (draft.CompletedRows == 0)
+                    return atStation ? "先拖一道给艾琳看" : "回纹样台，先拖一道给艾琳看";
+                return atStation ? "按住艾琳的梭，空格纠正她" : "回纹样台，按住艾琳的梭";
+            default:
+                return "看完对艾琳的点评";
+        }
+    }
+
+    string TaskText(WorkshopOrder order)
     {
         if (order.PendingTrial)
-            return "第一张已阴干，带到院子找老周试捞";
+            return "第一张已阴干，拿到院子让老周捞一张试纸";
         if (order.IsTeachingDay && order.CurrentPhase == WorkshopOrder.Phase.Production)
-            return order.CanTeachLesson ? "18:00 前回院子找艾琳，一起试捞并揭纸" : "艾琳已经启程，可以收工结算";
+            return TeachingTask(order);
         if (order.IsTeachingDay && order.CurrentPhase == WorkshopOrder.Phase.OrderComplete)
-            return "艾琳已试捞，去找舅舅结算五天的账";
+            return "去找舅舅结算";
         return order.CurrentPhase switch
         {
             WorkshopOrder.Phase.Opening => "序章",
@@ -380,8 +440,14 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     static string ProductionTarget(WorkshopOrder order)
     {
-        if (order.AwaitingReturnedCurtain)
-            return order.DeliveredCount == 1 ? "去院子找老周，补第二张帘的断线" : "去院子找老周，压平第三张帘的翘边";
+        if (order.NeedsThreadRepair)
+            return "去院子找老周，把断掉的龟纹线补上";
+        if (order.Days == 4 && order.DeliveredCount == 0 && order.PlainCurtains > 0)
+            return "到纹样台，把这张旧帘改成扎花";
+        if (order.NeedsWarpRepair)
+            return "去院子找老周，压平翘边";
+        if (order.Days == 4 && order.WarpRepaired && order.PlainCurtains > 0)
+            return "到上漆边台，给这张帘收朱边青";
         if (order.NeedsBamboo)
             return order.HarvestedStalks.Count >= BambooHarvest.HarvestCount
                 ? "今天的青竹已采完，明早竹林会长出新竹"
@@ -450,7 +516,16 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
 
     static void CreateCustomer(Transform uncleTransform, int day)
     {
-        string customerName = day == 4 ? "老周" : "艾琳";
+        if (day != 4)
+        {
+            WorkshopOrder order = WorkshopOrder.Current;
+            if (order != null && order.LessonPrepared && !order.TaughtLesson.HasValue)
+                AilinCompanion.JoinPlayer();
+            else
+                AilinCompanion.Ensure(uncleTransform.position + new Vector3(.3f, 0f, 5.5f));
+            return;
+        }
+        string customerName = "老周";
         var customer = new GameObject(customerName);
         customer.transform.position = uncleTransform.position + new Vector3(.3f, 0f, 5.5f);
         CreatePrimitivePart(customer.transform, PrimitiveType.Capsule, "Body", Vector3.zero,
