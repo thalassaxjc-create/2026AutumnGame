@@ -26,6 +26,8 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
     int messageIndex;
     int selectedChoice;
     WorkshopOrder.Phase? storyPhase;
+    WorkshopOrder.Phase? reminderPhase;
+    string[] reminderMessages = Array.Empty<string>();
 
     public bool IsOpen => isOpen;
     public bool IsAwaitingChoice => awaitingChoice;
@@ -44,6 +46,15 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
     }
 
     public void ConfigureCasual(params string[] messages) => casualMessages = messages ?? Array.Empty<string>();
+
+    public void ConfigureReminder(WorkshopOrder.Phase phase, params string[] messages)
+    {
+        reminderPhase = phase;
+        reminderMessages = messages ?? Array.Empty<string>();
+    }
+
+    public bool HasReminderFor(WorkshopOrder.Phase phase) =>
+        reminderPhase == phase && reminderMessages.Length > 0;
 
     void Update()
     {
@@ -101,9 +112,11 @@ public sealed class TemporaryDialogueEntryPoint : MonoBehaviour, IDialogueEntryP
             return false;
         EnsureView();
         var order = WorkshopOrder.Current;
-        bool casual = casualMessages.Length > 0 && order?.CanExplore == true && order.CurrentPhase != storyPhase;
-        activeMessages = casual ? casualMessages : storyMessages.Length > 0 ? storyMessages : new[] { placeholderMessage };
-        activeCompletesStory = !casual;
+        bool reminder = order != null && HasReminderFor(order.CurrentPhase);
+        bool casual = !reminder && casualMessages.Length > 0 && order?.CanExplore == true && order.CurrentPhase != storyPhase;
+        activeMessages = reminder ? reminderMessages : casual ? casualMessages
+            : storyMessages.Length > 0 ? storyMessages : new[] { placeholderMessage };
+        activeCompletesStory = !reminder && !casual;
         messageIndex = 0;
         selectedChoice = 0;
         awaitingChoice = false;

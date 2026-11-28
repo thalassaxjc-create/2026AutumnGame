@@ -140,6 +140,12 @@ public sealed partial class WorkshopOrder
         or Phase.ReadyToSubmit or Phase.OrderComplete;
     public bool CanHarvest => CanExplore;
     public bool CanWorkBamboo => !DayEnded && HasBamboo;
+    public string IntroductionHint => CurrentPhase switch
+    {
+        Phase.Village => "先与村口大爷交谈，再去院子找舅舅开启订单",
+        Phase.Home => "先到院子与舅舅交谈，再回工坊电脑查看订单",
+        _ => null
+    };
     public bool NeedsBamboo => CurrentPhase == Phase.Production && CompletedSteps == 0 && !HasBamboo;
 
     int CompletedSteps

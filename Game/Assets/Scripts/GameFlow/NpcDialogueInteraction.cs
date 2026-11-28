@@ -34,6 +34,7 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
                 return true;
             WorkshopOrder order = WorkshopOrder.Current;
             return order != null && (order.CurrentPhase == storyPhase ||
+                (dialogueEntryPoint is TemporaryDialogueEntryPoint dialogue && dialogue.HasReminderFor(order.CurrentPhase)) ||
                 (allowDuringProduction && order.CurrentPhase is WorkshopOrder.Phase.Production
                     or WorkshopOrder.Phase.ReadyToSubmit or WorkshopOrder.Phase.OrderComplete));
         }
@@ -158,7 +159,9 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     {
         EnsureMarker();
         bool visible = StoryAvailable && !dialogueOpen && !GameFlowModalState.IsModalOpen &&
-            !SceneTransitionState.IsLoading;
+            !SceneTransitionState.IsLoading &&
+            !(WorkshopOrder.Current != null && dialogueEntryPoint is TemporaryDialogueEntryPoint dialogue &&
+                dialogue.HasReminderFor(WorkshopOrder.Current.CurrentPhase));
         if (markerPivot.gameObject.activeSelf != visible)
             markerPivot.gameObject.SetActive(visible);
         if (!visible)

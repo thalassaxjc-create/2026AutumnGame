@@ -18,6 +18,21 @@ public sealed class WorkshopPatternOrderTests
     public void DisposeSettings() => Object.DestroyImmediate(settings);
 
     [Test]
+    public void TeaNoticeIsAvailableBeforeElderDialogueButNotDuringOpeningOrAfterClosing()
+    {
+        Assert.That(order.CanVisitTeaStall, Is.False);
+        Assert.That(order.TryFinishTeaNotice(), Is.False);
+        order.CompleteOpening();
+        Assert.That(order.CanExplore, Is.False);
+        Assert.That(order.CanVisitTeaStall, Is.True);
+        Assert.That(order.TryFinishTeaNotice(), Is.True);
+        Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Village));
+        Assert.That(order.Funds, Is.EqualTo(30));
+        order.AdvanceTime(order.MinutesUntilClose);
+        Assert.That(order.CanVisitTeaStall, Is.False);
+    }
+
+    [Test]
     public void ClockScalesOnlyAutomaticTimeAndKeepsFractions()
     {
         order.CompleteOpening();
@@ -191,6 +206,23 @@ public sealed class WorkshopPatternOrderTests
         Assert.That(order.CloseDay(), Is.True);
         Assert.That(order.CurrentSettlement.Value.DeliveredCount, Is.EqualTo(1));
         Assert.That(order.CurrentSettlement.Value.PlayerIncome, Is.EqualTo(salePrice + 182));
+    }
+
+    [TestCase(29, false)]
+    [TestCase(30, true)]
+    public void TeaNoticeChargesOnceOnlyWhenThirtyMinutesRemain(int remainingMinutes, bool succeeds)
+    {
+        order.CompleteOpening();
+        order.CloseIntroduction(WorkshopOrder.Phase.Village);
+        order.AdvanceTime(order.MinutesUntilClose - remainingMinutes);
+        int beforeTime = order.ElapsedGameMinutes;
+        int beforeFunds = order.Funds;
+        Assert.That(order.TryFinishTeaNotice(), Is.EqualTo(succeeds));
+        Assert.That(order.TryFinishTeaNotice(), Is.False);
+        Assert.That(order.TeaNoticeCompleted, Is.EqualTo(succeeds));
+        Assert.That(order.HasCollectorTip, Is.EqualTo(succeeds));
+        Assert.That(order.ElapsedGameMinutes - beforeTime, Is.EqualTo(succeeds ? 30 : 0));
+        Assert.That(order.Funds - beforeFunds, Is.EqualTo(succeeds ? 30 : 0));
     }
 
     [Test]

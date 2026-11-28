@@ -318,4 +318,65 @@ public sealed class WorkshopOrderTests
             Object.DestroyImmediate(settings);
         }
     }
+
+    [Test]
+    public void BlackMarketOpensAt1800EvenBeforeIntroductionsAndRequiresExactFunds()
+    {
+        var settings = ScriptableObject.CreateInstance<WorkshopOrderSettings>();
+        settings.initialFunds = 20;
+        try
+        {
+            var order = new WorkshopOrder(settings);
+            order.CompleteOpening();
+            order.AdvanceTime(17 * 60 + 59 - order.Hour * 60 - order.Minute);
+            Assert.That(order.BlackMarketOpen, Is.False);
+            Assert.That(order.TryBuyBrightener(), Is.False);
+            order.AdvanceTime(1);
+            Assert.That(order.BlackMarketOpen, Is.True, "支线出现只要求傍晚，不要求先完成主线对话。");
+            Assert.That(order.TryBuyBrightener(), Is.True);
+            Assert.That((order.Funds, order.Brightener), Is.EqualTo((0, 1)));
+            Assert.That(order.TryBuyBrightener(), Is.False, "余额不足不得产生瓶子或负债。");
+            Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.Village));
+            order.AdvanceTime(order.MinutesUntilClose);
+            Assert.That(order.BlackMarketOpen, Is.False);
+            Assert.That(order.TrySabotageXiaoPi(), Is.False);
+            Assert.That(order.Brightener, Is.EqualTo(1));
+        }
+        finally { Object.DestroyImmediate(settings); }
+    }
+
+    [Test]
+    public void SabotageConsumesOneBottleAndDeductsExactly100OnceAtSettlement()
+    {
+        var settings = ScriptableObject.CreateInstance<WorkshopOrderSettings>();
+        settings.initialFunds = 40;
+        settings.initialXiaoPiFunds = 300;
+        settings.xiaoPiDayOneIncome = 50;
+        try
+        {
+            var order = new WorkshopOrder(settings);
+            order.CompleteOpening();
+            Assert.That(order.TrySabotageXiaoPi(), Is.False);
+            order.AdvanceTime(18 * 60 - order.Hour * 60 - order.Minute);
+            Assert.That(order.TryBuyBrightener(), Is.True);
+            Assert.That(order.TryBuyBrightener(), Is.True);
+            Assert.That(order.TrySabotageXiaoPi(), Is.True);
+            Assert.That(order.TrySabotageXiaoPi(), Is.False);
+            Assert.That((order.Brightener, order.Funds, order.XiaoPiFunds), Is.EqualTo((1, 0, 300)));
+            order.AdvanceTime(order.MinutesUntilClose);
+            Assert.That(order.CurrentSettlement.Value.XiaoPiPenalized, Is.True);
+            Assert.That(order.CurrentSettlement.Value.XiaoPiIncome, Is.EqualTo(-50), "固定扣100，不以零为下限截断。");
+            Assert.That(order.XiaoPiFunds, Is.EqualTo(250));
+            order.AdvanceTime(20);
+            Assert.That(order.CloseDay(), Is.False);
+            Assert.That(order.XiaoPiFunds, Is.EqualTo(250));
+            Assert.That(order.TryStartNextDay(), Is.True);
+            Assert.That(order.XiaoPiSabotaged, Is.False);
+            Assert.That(order.Brightener, Is.EqualTo(1), "剩余瓶子可带到次日，但前一天的破坏状态不可继承。");
+            Assert.That(order.CloseDay(), Is.True);
+            Assert.That(order.CurrentSettlement.Value.XiaoPiPenalized, Is.False);
+            Assert.That(order.CurrentSettlement.Value.XiaoPiIncome, Is.EqualTo(settings.xiaoPiDayTwoIncome));
+        }
+        finally { Object.DestroyImmediate(settings); }
+    }
 }
