@@ -10,11 +10,14 @@ internal sealed class VillageActivityView
     readonly Text body;
     readonly Button[] options = new Button[OptionCount];
     readonly Text[] optionLabels = new Text[OptionCount];
+    readonly WorkshopToolGraphic[] toolPreviews = new WorkshopToolGraphic[OptionCount];
     readonly Button primary;
     readonly Text primaryLabel;
     readonly Button secondary;
     readonly Button undo;
     readonly Text draft;
+    readonly Button headerAction;
+    readonly Text headerActionLabel;
 
     internal GameObject Root { get; }
 
@@ -38,6 +41,9 @@ internal sealed class VillageActivityView
         WorkshopStoryUI.Panel(card, "木色横边", new Rect(0, .98f, 1, .02f), WorkshopStoryUI.Wood);
         title = WorkshopStoryUI.Label(card, "标题", "", new Rect(.06f, .84f, .88f, .11f),
             48, WorkshopStoryUI.Ink, TextAnchor.MiddleLeft, true);
+        headerAction = WorkshopStoryUI.Button(card, "茶摊消息", "", new Rect(.655f, .855f, .285f, .072f),
+            WorkshopStoryUI.Green, 24, NoAction);
+        headerActionLabel = headerAction.GetComponentInChildren<Text>();
         body = WorkshopStoryUI.Label(card, "说明", "", new Rect(.06f, .54f, .88f, .28f),
             31, WorkshopStoryUI.Ink, TextAnchor.UpperLeft);
         draft = WorkshopStoryUI.Label(card, "告示草稿", "", new Rect(.06f, .54f, .88f, .10f),
@@ -68,8 +74,16 @@ internal sealed class VillageActivityView
     {
         title.text = heading;
         SetBody(description);
-        foreach (Button option in options)
-            option.gameObject.SetActive(false);
+        for (int i = 0; i < options.Length; i++)
+        {
+            options[i].gameObject.SetActive(false);
+            if (toolPreviews[i] == null)
+                continue;
+            toolPreviews[i].gameObject.SetActive(false);
+            Layout(optionLabels[i].rectTransform, new Rect(.04f, .03f, .92f, .94f));
+        }
+        headerAction.gameObject.SetActive(false);
+        Layout(title.rectTransform, new Rect(.06f, .84f, .88f, .11f));
         primary.gameObject.SetActive(false);
         secondary.gameObject.SetActive(false);
         undo.gameObject.SetActive(false);
@@ -87,6 +101,24 @@ internal sealed class VillageActivityView
 
     internal void SetPrimary(string caption, UnityAction action, bool enabled = true) =>
         Bind(primary, primaryLabel, caption, action, enabled);
+
+    internal void SetHeaderAction(string caption, UnityAction action, bool enabled = true)
+    {
+        Layout(title.rectTransform, new Rect(.06f, .84f, .565f, .11f));
+        Bind(headerAction, headerActionLabel, caption, action, enabled);
+    }
+
+    internal void ShowTool(int index, bool shuttle)
+    {
+        if (toolPreviews[index] == null)
+        {
+            var swatch = WorkshopStoryUI.Region(options[index].transform, "工具样图", new Rect(.052f, .10f, .22f, .80f));
+            toolPreviews[index] = swatch.gameObject.AddComponent<WorkshopToolGraphic>();
+            toolPreviews[index].Show(shuttle);
+        }
+        toolPreviews[index].gameObject.SetActive(true);
+        Layout(optionLabels[index].rectTransform, new Rect(.286f, .03f, .69f, .94f));
+    }
 
     internal void SetClear(UnityAction action, bool enabled) => Bind(secondary, null, "清空", action, enabled);
 

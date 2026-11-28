@@ -6,7 +6,7 @@ using UnityEngine.InputSystem;
 [DisallowMultipleComponent]
 public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, IDialogueAvailability
 {
-    public enum Role { Blacksmith, TeaOwner, LiAunt, GoodsMerchant, Collector, NightTrader, XiaoPiBucket }
+    public enum Role { Blacksmith, TeaOwner, LiAunt, GoodsMerchant, Collector, NightTrader, XiaoPiBucket, OfficialSteward }
 
     const string TeaTitle = "茶摊的大学问";
     static readonly string[] TeaWords =
@@ -20,24 +20,29 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
 
     readonly List<int> chosenWords = new(4);
     VillageActivityView view;
+    PaperInspectionView paperInspectionView;
     NpcCharacter character;
     Action closedCallback;
     CursorLockMode previousCursorLock;
     bool previousCursorVisible;
     string feedback;
+    bool viewingOfficialTip;
     int displayedOrderRevision = -1;
     int displayedInventoryRevision = -1;
 
     public Role MerchantRole => role;
-    public bool IsDialogueAvailable => WorkshopOrder.Current is { } order && (role switch
-    {
-        Role.TeaOwner => order.CanVisitTeaStall,
-        Role.LiAunt => order.CanVisitSpottedGrove,
-        Role.Collector => order.CollectorVisiting,
-        Role.NightTrader => order.BlackMarketOpen,
-        Role.XiaoPiBucket => order.CanDoSideQuests,
-        _ => order.CanExplore
-    });
+    public bool IsDialogueAvailable => WorkshopOrder.Current is { } order
+        ? role switch
+        {
+            Role.TeaOwner => order.CanVisitTeaStall,
+            Role.LiAunt => order.CanVisitSpottedGrove,
+            Role.Collector => order.CollectorVisiting,
+            Role.NightTrader => order.BlackMarketOpen,
+            Role.XiaoPiBucket => order.CanDoSideQuests,
+            Role.OfficialSteward => order.OfficialStewardAvailable,
+            _ => order.CanExplore
+        }
+        : role == Role.XiaoPiBucket;
 
     public void Configure(Role value, GameObject model)
     {
@@ -61,7 +66,7 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
                 Close();
                 return;
             }
-            if (displayedOrderRevision != WorkshopOrder.Current.Revision ||
+            if (displayedOrderRevision != (WorkshopOrder.Current?.Revision ?? -1) ||
                 displayedInventoryRevision != WorkshopInventory.Revision)
                 Refresh();
         }
@@ -71,7 +76,7 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
 
     void UpdateAppearance()
     {
-        if (role is not (Role.NightTrader or Role.Collector))
+        if (role is not (Role.NightTrader or Role.Collector or Role.OfficialSteward))
             return;
         bool visible = IsDialogueAvailable || closedCallback != null;
         if (appearance != null && appearance.activeSelf != visible)
@@ -85,6 +90,7 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
             return false;
         view ??= new VillageActivityView(transform, Close);
         feedback = null;
+        viewingOfficialTip = false;
         chosenWords.Clear();
         closedCallback = onDialogueClosed;
         previousCursorLock = Cursor.lockState;
@@ -100,6 +106,8 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
     {
         if (closedCallback == null)
             return;
+        if (paperInspectionView != null)
+            paperInspectionView.Hide();
         view.Root.SetActive(false);
         Cursor.lockState = previousCursorLock;
         Cursor.visible = previousCursorVisible;
@@ -115,22 +123,30 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
     void Refresh()
     {
         var order = WorkshopOrder.Current;
-        if (order == null)
-            return;
-        displayedOrderRevision = order.Revision;
+        displayedOrderRevision = order?.Revision ?? -1;
         displayedInventoryRevision = WorkshopInventory.Revision;
+        if (order == null)
+        {
+            view.SetContent("小皮的编帘水桶", "小皮在这里给编帘用的线过水。\n想找增白剂，可以从村口开始正式游戏，18:00 后找牌楼旁的黑衣小贩。");
+            view.SetExpandedBody();
+            return;
+        }
 
         switch (role)
         {
             case Role.Blacksmith:
-                view.SetContent("铁匠铺", Message($"铁匠：炉子还缺柴火。完整青竹一根给 {WorkshopOrder.GreenBambooSalePrice} 元。\n" +
-                    $"你的青竹 {WorkshopInventory.GreenBamboo} 根    资金 ¥{order.Funds}"));
-                view.SetOption(0, "卖 1 根青竹", () => Trade(order.TrySellGreenBamboo, $"卖出青竹，收入 {WorkshopOrder.GreenBambooSalePrice} 元。"),
-                    order.CanExplore && WorkshopInventory.GreenBamboo > 0);
+                ShowBlacksmith(order);
                 break;
 
             case Role.TeaOwner:
-                ShowTea(order);
+                if (viewingOfficialTip)
+                    ShowOfficialTip(order);
+                else
+                    ShowTea(order);
+                break;
+
+            case Role.OfficialSteward:
+                ShowOfficialSteward(order);
                 break;
 
             case Role.LiAunt:
@@ -182,16 +198,85 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
         }
     }
 
+    void ShowBlacksmith(WorkshopOrder order)
+    {
+        view.SetContent("铁匠铺", Message("铁匠：看看新打的黄铜篾刀，还有缠了青线的木梭。装好就能在工位用。\n" +
+            $"篾刀一次剐青四片，一次过剑门出 100 根竹条。木梭可织出 S+，成品综合 S+ 加价 {order.SPlusPremiumPercent}%。\n\n" +
+            $"青竹 {WorkshopInventory.GreenBamboo} 根 · 每根收 {WorkshopOrder.GreenBambooSalePrice} 元    资金 ¥{order.Funds}"));
+        view.SetOption(0, "卖 1 根青竹", () => Trade(order.TrySellGreenBamboo, $"卖出青竹，收入 {WorkshopOrder.GreenBambooSalePrice} 元。"),
+            order.CanExplore && WorkshopInventory.GreenBamboo > 0);
+        view.SetOption(2, order.HasUpgradedKnife ? "篾刀 · 已装备" : $"好一点的篾刀  ¥{WorkshopOrder.KnifeUpgradePrice}",
+            () => Trade(order.TryBuyKnifeUpgrade, "黄铜嵌边篾刀已装到篾竹台。"),
+            !order.HasUpgradedKnife && order.Funds >= WorkshopOrder.KnifeUpgradePrice);
+        view.SetOption(3, order.HasAutomaticShuttle ? "木梭 · 已装备" : $"自动绑线木梭  ¥{WorkshopOrder.ShuttleUpgradePrice}",
+            () => Trade(order.TryBuyShuttleUpgrade, "自动绑线木梭已装到编帘台。"),
+            !order.HasAutomaticShuttle && order.Funds >= WorkshopOrder.ShuttleUpgradePrice);
+        view.ShowTool(2, false);
+        view.ShowTool(3, true);
+    }
+
+    void ShowOfficialTip(WorkshopOrder order)
+    {
+        string description = order.OfficialJobCompleted ? "王老板：府上的纸已经验完了，管事把工钱结清了。"
+            : order.HasOfficialTip
+            ? $"下午 {WorkshopOrder.OfficialOpeningHour:00}:00–{WorkshopOrder.OfficialClosingHour:00}:00 去集市北侧晒谷人家门口找府上管事。\n" +
+              $"府上招人验纸。用斜光挑出瑕疵，最多领 {WorkshopOrder.OfficialJobReward} 元工钱。"
+            : "王老板：府上下午派管事出门办货。你付茶钱，我给你带个准信儿。";
+        view.SetContent("高官府上的消息", Message(description + $"\n\n资金 ¥{order.Funds}"));
+        view.SetHeaderAction("返回告示", () => { viewingOfficialTip = false; feedback = null; Refresh(); });
+        if (!order.HasOfficialTip)
+            view.SetPrimary($"打听消息  ¥{WorkshopOrder.OfficialTipPrice}",
+                () => Trade(order.TryBuyOfficialTip, "已打听到府上的差事。"), order.CanBuyOfficialTip);
+    }
+
+    void ShowOfficialSteward(WorkshopOrder order)
+    {
+        if (order.OfficialJobCompleted)
+        {
+            view.SetContent("高官府上 · 验纸", $"管事：这批纸已经分好了，工钱 {order.OfficialJobPay} 元已结。");
+            return;
+        }
+        string description = $"管事：府里刚收了一批宣纸。我给你支一盏灯，你帮我把这 {PaperInspectionRound.SheetCount} 张纸分一分。\n\n" +
+            $"分对一张 {WorkshopOrder.OfficialPaperPay} 元 · 用时 {WorkshopOrder.OfficialJobMinutes} 分钟。";
+        if (!order.CanInspectOfficialPaper)
+            description += "\n今天离收摊太近了，明天下午再来。";
+        view.SetContent("高官府上 · 验纸", description);
+        string action = order.OfficialInspection?.Inspected > 0 ? "继续验纸" : "开始验纸";
+        view.SetPrimary(action, OpenOfficialInspection, order.CanInspectOfficialPaper);
+    }
+
+    void OpenOfficialInspection()
+    {
+        var order = WorkshopOrder.Current;
+        var inspection = order?.OpenOfficialInspection();
+        if (inspection == null)
+        {
+            Refresh();
+            return;
+        }
+        view.Root.SetActive(false);
+        paperInspectionView ??= PaperInspectionView.Create(transform, Close);
+        paperInspectionView.Open(order, inspection);
+    }
+
+    void ShowTeaTipButton(WorkshopOrder order)
+    {
+        if (order.OfficialTipUnlocked)
+            view.SetHeaderAction(order.HasOfficialTip ? "府上差事" : "打听消息",
+                () => { viewingOfficialTip = true; feedback = null; Refresh(); });
+    }
+
     void ShowTea(WorkshopOrder order)
     {
         if (order.TeaNoticeCompleted)
         {
             string tip = !order.HasCollectorTip ? "乡亲们看到告示，都说要多留个心眼。" : order.Days == 1
-                ? "明天集市东头有个富商收综合 A 或 S 级罗纹帘，你可以提前准备。"
-                : order.Days == 2 ? "富商今天就在集市东头，收综合 A 或 S 级罗纹帘。" : "那位富商第二天来过集市，告示还替大家提着醒呢。";
+                ? "明天集市东头有个富商收综合至少 A 级的罗纹帘，你可以提前准备。"
+                : order.Days == 2 ? "富商今天就在集市东头，收综合至少 A 级的罗纹帘。" : "那位富商第二天来过集市，告示还替大家提着醒呢。";
             view.SetContent(TeaTitle + " · 已完成", "王老板（感激地）：大学生就是有学问！告示写得明明白白，这下乡亲们不会再上当了。\n" +
                 $"茶水费 {WorkshopOrder.TeaNoticeReward} 元已领取 · 用时 {WorkshopOrder.TeaNoticeMinutes} 分钟 · 不耗体力\n\n「{tip}」");
             view.SetTeaDraft("已张贴：请乡亲们留意以鉴宝为由骗走旧物的人。", null, false);
+            ShowTeaTipButton(order);
             return;
         }
 
@@ -223,6 +308,7 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
             ShowTea(order);
         }, chosenWords.Count > 0);
         view.SetPrimary("贴告示", () => PostTeaNotice(order), chosenWords.Count == CorrectTeaOrder.Length);
+        ShowTeaTipButton(order);
     }
 
     void PostTeaNotice(WorkshopOrder order)
@@ -245,10 +331,10 @@ public sealed class VillageMarketDialogue : MonoBehaviour, IDialogueEntryPoint, 
     void ShowCollector(WorkshopOrder order)
     {
         WorkshopOrder.QualityGrade? grade = order.CollectorCurtainGrade;
-        bool eligible = grade is WorkshopOrder.QualityGrade.S or WorkshopOrder.QualityGrade.A;
+        bool eligible = grade.HasValue && grade.Value <= WorkshopOrder.QualityGrade.A;
         view.SetContent("富商收购罗纹帘", Message(order.CollectorBoughtToday ? "富商：多谢，这一张罗纹就够了。" :
-            $"富商：我收一张罗纹帘，综合品相要到 A 或 S 级。底价 {WorkshopOrder.CollectorBasePrice} 元，按品相加价。\n" +
-            $"手上罗纹帘 {(grade?.ToString() ?? "无")}    货款计入今日收入。"));
+            $"富商：我收一张罗纹帘，综合品相至少 A 级。底价 {WorkshopOrder.CollectorBasePrice} 元，按品相加价。\n" +
+            $"手上罗纹帘 {(grade.HasValue ? WorkshopOrder.GradeText(grade.Value) : "无")}    货款计入今日收入。"));
         if (!order.CollectorBoughtToday)
             view.SetPrimary("出售罗纹帘", () => Trade(order.TrySellToCollector, "已售出罗纹帘。"), order.CollectorAvailable && eligible);
     }

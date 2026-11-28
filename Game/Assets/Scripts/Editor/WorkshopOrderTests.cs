@@ -1,3 +1,4 @@
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 
@@ -5,6 +6,41 @@ public sealed class WorkshopOrderTests
 {
     [SetUp]
     public void ResetInventory() => WorkshopInventory.StartFirstDay();
+
+    [TestCase(1f, 0, false, WeavingMinigameController.WeavingGrade.S)]
+    [TestCase(.979f, 0, true, WeavingMinigameController.WeavingGrade.S)]
+    [TestCase(.99f, 1, true, WeavingMinigameController.WeavingGrade.S)]
+    [TestCase(.98f, 0, true, WeavingMinigameController.WeavingGrade.SPlus)]
+    public void OnlyTheEquippedShuttleCanEarnSPlusWithoutMisses(float accuracy, int misses, bool upgraded,
+        WeavingMinigameController.WeavingGrade expected)
+    {
+        var calculate = typeof(WeavingMinigameController).GetMethod("CalculateGrade", BindingFlags.Static | BindingFlags.NonPublic);
+        Assert.That(calculate.Invoke(null, new object[] { accuracy, misses, upgraded }), Is.EqualTo(expected));
+    }
+
+    [TestCase(false, LacquerMinigameController.LacquerGrade.S, WorkshopOrder.QualityGrade.S, 130)]
+    [TestCase(true, LacquerMinigameController.LacquerGrade.S, WorkshopOrder.QualityGrade.SPlus, 140)]
+    [TestCase(true, LacquerMinigameController.LacquerGrade.A, WorkshopOrder.QualityGrade.A, 115)]
+    public void SPlusPremiumUsesTheFinishedCurtainGrade(bool purchased, LacquerMinigameController.LacquerGrade lacquer,
+        WorkshopOrder.QualityGrade expectedGrade, int expectedPrice)
+    {
+        var settings = ScriptableObject.CreateInstance<WorkshopOrderSettings>();
+        settings.initialFunds = WorkshopOrder.ShuttleUpgradePrice;
+        try
+        {
+            var order = new WorkshopOrder(settings);
+            StartProduction(order);
+            if (purchased)
+                Assert.That(order.TryBuyShuttleUpgrade(), Is.True);
+            CompleteBaseCurtain(order, WeavingMinigameController.WeavingGrade.SPlus, lacquer);
+            Assert.That(order.Submit(), Is.True);
+            Assert.That(order.LastDelivery.Value.Weaving,
+                Is.EqualTo(purchased ? WorkshopOrder.QualityGrade.SPlus : WorkshopOrder.QualityGrade.S));
+            Assert.That(order.FinalGrade, Is.EqualTo(expectedGrade));
+            Assert.That(order.Reward, Is.EqualTo(expectedPrice));
+        }
+        finally { Object.DestroyImmediate(settings); }
+    }
 
     [Test]
     public void FirstDayFlowUsesExactTimeAndSettlesOnlyWhenDayCloses()

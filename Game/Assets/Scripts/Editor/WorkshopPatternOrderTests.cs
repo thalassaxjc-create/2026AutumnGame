@@ -33,6 +33,60 @@ public sealed class WorkshopPatternOrderTests
     }
 
     [Test]
+    public void ToolsAndOfficialTipChargeOnceAndPaperInspectionPaysByCorrectCount()
+    {
+        settings.initialFunds = 100;
+        order = new WorkshopOrder(settings);
+        order.CompleteOpening();
+        Assert.That(order.TryBuyKnifeUpgrade(), Is.False);
+        Assert.That(order.TryBuyShuttleUpgrade(), Is.False);
+        Assert.That(order.TryBuyOfficialTip(), Is.False);
+        order.CloseIntroduction(WorkshopOrder.Phase.Village);
+        ReadNewOrder();
+        Assert.That(order.TryBuyKnifeUpgrade(), Is.True);
+        Assert.That(order.TryBuyKnifeUpgrade(), Is.False);
+        Assert.That(order.TryBuyShuttleUpgrade(), Is.True);
+        Assert.That(order.TryBuyShuttleUpgrade(), Is.False);
+        Assert.That(order.HasUpgradedKnife && order.HasAutomaticShuttle, Is.True);
+        Assert.That(order.Funds, Is.EqualTo(50));
+        order.AdvanceTime(6 * 60);
+        Assert.That(order.TryBuyOfficialTip(), Is.False);
+        Assert.That(order.OfficialStewardAvailable, Is.False);
+        Assert.That(order.CloseDay(), Is.True);
+        Assert.That(order.TryStartNextDay(), Is.True);
+        Assert.That(order.Days, Is.EqualTo(2));
+        Assert.That(order.TryBuyOfficialTip(), Is.True);
+        Assert.That(order.TryBuyOfficialTip(), Is.False);
+        Assert.That(order.Funds, Is.Zero);
+        Assert.That(order.OfficialStewardAvailable, Is.False);
+        Assert.That(order.OpenOfficialInspection(), Is.Null);
+        WorkshopOrderTests.CompleteBaseCurtain(order);
+        int minuteOfDay = order.Hour * 60 + order.Minute;
+        order.AdvanceTime(WorkshopOrder.OfficialOpeningHour * 60 - minuteOfDay);
+        Assert.That(order.OfficialStewardAvailable, Is.True);
+        var papers = order.OpenOfficialInspection();
+        Assert.That(papers, Is.Not.Null);
+        int before = order.ElapsedGameMinutes;
+        var incorrect = (PaperInspectionRound.Condition)(((int)papers.Current.Defect + 1) % 4);
+        Assert.That(order.TryClassifyOfficialPaper(incorrect), Is.True);
+        Assert.That(order.OpenOfficialInspection(), Is.SameAs(papers));
+        Assert.That(order.Funds, Is.Zero);
+        Assert.That(order.ElapsedGameMinutes, Is.EqualTo(before));
+        while (!papers.Complete)
+            Assert.That(order.TryClassifyOfficialPaper(papers.Current.Defect), Is.True);
+        Assert.That(order.TryClassifyOfficialPaper(PaperInspectionRound.Condition.Clean), Is.False);
+        Assert.That(order.OpenOfficialInspection(), Is.Null);
+        Assert.That(order.OfficialJobCompleted, Is.True);
+        Assert.That(order.Funds, Is.EqualTo(150));
+        Assert.That(order.TodayIncome, Is.EqualTo(100));
+        Assert.That(order.ElapsedGameMinutes - before, Is.EqualTo(WorkshopOrder.OfficialJobMinutes));
+        Assert.That(order.PlainCurtains, Is.EqualTo(1));
+        Assert.That(order.DeliveredCount, Is.Zero);
+        order.AdvanceTime(6 * 60);
+        Assert.That(order.OfficialStewardAvailable, Is.False);
+    }
+
+    [Test]
     public void ClockScalesOnlyAutomaticTimeAndKeepsFractions()
     {
         order.CompleteOpening();
@@ -72,7 +126,7 @@ public sealed class WorkshopPatternOrderTests
         WorkshopOrderTests.CompleteBaseCurtain(order);
         Assert.That(order.PatternDraft, Is.Null, "仍需玩家选样");
         Assert.That(order.TrySelectPattern(CurtainPatternKind.DoubleThread), Is.True);
-        Assert.That(order.TrySelectPattern(CurtainPatternKind.Turtle), Is.True);
+        Assert.That(order.TrySelectPattern(CurtainPatternKind.SingleThread), Is.True);
         var draft = order.PatternDraft;
         Assert.That(order.TryConfirmPattern(), Is.False);
         Assert.That(order.Submit(), Is.False);
@@ -92,6 +146,9 @@ public sealed class WorkshopPatternOrderTests
         Assert.That(order.Submit(), Is.True);
         Assert.That(order.Submit(), Is.False);
         Assert.That(order.FinalGrade, Is.EqualTo(WorkshopOrder.QualityGrade.S));
+        Assert.That(order.LastDelivery.Value.Style.Pattern, Is.EqualTo(CurtainPatternKind.SingleThread));
+        Assert.That(order.IsSheetDelivered(1), Is.True);
+        Assert.That(order.IsSheetDelivered(0), Is.False);
         Assert.That(order.LastDelivery.Value.PatternGrade, Is.EqualTo(WorkshopOrder.QualityGrade.S));
         Assert.That(order.Reward, Is.EqualTo(182));
         Assert.That(order.TryStartNextDay(), Is.False);
@@ -103,6 +160,7 @@ public sealed class WorkshopPatternOrderTests
         Assert.That(order.TryConfirmPattern(), Is.False);
         Assert.That(order.ElapsedGameMinutes - before, Is.EqualTo(20));
         Assert.That(order.Submit(), Is.True);
+        Assert.That(order.LastDelivery.Value.Style.Pattern, Is.EqualTo(CurtainPatternKind.Turtle));
         Assert.That(order.LastDelivery.Value.PatternGrade, Is.EqualTo(WorkshopOrder.QualityGrade.B));
         Assert.That(order.FinalGrade, Is.EqualTo(WorkshopOrder.QualityGrade.A));
         Assert.That(order.Reward, Is.EqualTo(161));
@@ -122,14 +180,16 @@ public sealed class WorkshopPatternOrderTests
             Assert.That(order.Progress, Is.EqualTo((sheet + 5f / 7f) / WorkshopOrder.SheetsPerDay));
             before = order.ElapsedGameMinutes;
             Assert.That(order.CanUseTrimStation, Is.True);
-            Assert.That(order.Submit(), Is.False, "阴干后要独立上朱边");
+            Assert.That(order.Submit(), Is.False, "阴干后要到上漆边台加工");
             Assert.That(order.TryConfirmVermilionTrim(), Is.False);
-            BindEdges(order.OpenTrimDraft(), offset: .04f);
+            CurtainEdgeStyle style = order.RequestedSheet(WorkshopOrder.SheetsPerDay - 1 - sheet).Edge;
+            BindEdges(order.OpenTrimDraft(style));
             Assert.That(order.TryConfirmVermilionTrim(), Is.True);
             Assert.That(order.TryConfirmVermilionTrim(), Is.False);
             Assert.That(order.GetStatus(WorkshopOrder.Stage.VermilionTrim), Is.EqualTo(WorkshopOrder.StageStatus.Complete));
             Assert.That(order.ElapsedGameMinutes - before, Is.EqualTo(30));
             Assert.That(order.Submit(), Is.True);
+            Assert.That(order.LastDelivery.Value.Style.Edge, Is.EqualTo(style));
             Assert.That(order.LastDelivery.Value.PatternGrade, Is.Null);
             Assert.That(order.Reward, Is.EqualTo(234), "在包边内拖贴完成即按编帘和刷漆品相结算");
         }
@@ -287,26 +347,24 @@ public sealed class WorkshopPatternOrderTests
         Assert.That(draft.Score, Is.EqualTo(100));
     }
 
-    [Test]
-    public void TrimNeedsContinuousCoverageAndAnExplicitPressAtEachCorner()
+    [TestCase(CurtainEdgeStyle.VermilionJade)]
+    [TestCase(CurtainEdgeStyle.PaleBamboo)]
+    [TestCase(CurtainEdgeStyle.LacquerRusset)]
+    [TestCase(CurtainEdgeStyle.DarkBrown)]
+    public void TrimFollowsTheRoundedCornerAndCanResumeFromTheLastCheckpoint(CurtainEdgeStyle style)
     {
-        var draft = new VermilionTrimDraft();
-        Assert.That(draft.TryGrip(.5f, 0f), Is.False, "从边中间起手无效");
-        Assert.That(draft.TryGrip(0f, 0f), Is.True);
-        Assert.That(draft.Drag(.5f, 0f), Is.True);
+        var draft = new VermilionTrimDraft(style);
+        Assert.That(draft.TryGrip(VermilionTrimDraft.EdgePosition(0, .5f)), Is.False, "从边中间起手无效");
+        Assert.That(draft.TryGrip(draft.Front), Is.True);
+        Assert.That(draft.Drag(VermilionTrimDraft.EdgePosition(0, 1f)), Is.True);
+        Assert.That(draft.Turning, Is.True);
+        Assert.That(draft.Drag(VermilionTrimDraft.EdgePosition(1, .6f)), Is.False);
+        Assert.That(draft.SealedCorners, Is.Zero);
         draft.Release();
-        Assert.That(draft.TryPressCorner(1f, 0f), Is.False);
-        Assert.That(draft.TryGrip(.5f, 0f), Is.True);
-        Assert.That(draft.Drag(1f, .30f), Is.False);
-        draft.Release();
-        Assert.That(draft.EdgeProgress, Is.EqualTo(.5f));
-        Assert.That(draft.TryGrip(.5f, .04f), Is.True);
-        Assert.That(draft.Drag(1f, .04f), Is.True);
-        Assert.That(draft.TryPressCorner(.5f, 0f), Is.False);
-        Assert.That(draft.TryPressCorner(1f, 0f), Is.True);
-        Assert.That(draft.TryPressCorner(1f, 0f), Is.False);
+        Assert.That(draft.Drag(VermilionTrimDraft.GuidePoint(draft.LaidSteps + 1)), Is.False);
         BindEdges(draft);
         Assert.That(draft.Complete, Is.True);
+        Assert.That(draft.Style, Is.EqualTo(style));
         Assert.That(draft.SealedCorners, Is.EqualTo(VermilionTrimDraft.SideCount));
     }
 
@@ -350,13 +408,10 @@ public sealed class WorkshopPatternOrderTests
         }
     }
 
-    static void BindEdges(VermilionTrimDraft draft, float offset = 0f)
+    static void BindEdges(VermilionTrimDraft draft)
     {
+        Assert.That(draft.TryGrip(draft.Front), Is.True);
         while (!draft.Complete)
-        {
-            Assert.That(draft.TryGrip(0f, offset), Is.True);
-            Assert.That(draft.Drag(1f, offset), Is.True);
-            Assert.That(draft.TryPressCorner(1f, offset), Is.True);
-        }
+            Assert.That(draft.Drag(VermilionTrimDraft.GuidePoint(draft.LaidSteps + 1)), Is.True);
     }
 }

@@ -15,10 +15,11 @@ public sealed partial class WorkshopOrder
         public int DryAt { get; set; }
         public CurtainPatternKind Pattern { get; set; }
         public QualityGrade? PatternGrade { get; set; }
-        public bool HasTrim { get; set; }
+        public CurtainEdgeStyle Edge { get; set; }
         public Dictionary<CurtainPatternKind, CurtainPatternDraft> PatternDrafts { get; } = new();
-        public VermilionTrimDraft TrimDraft { get; set; }
-        public bool IsPlain => State == CurtainState.Dried && Pattern == CurtainPatternKind.None && !HasTrim;
+        public Dictionary<CurtainEdgeStyle, VermilionTrimDraft> TrimDrafts { get; } = new();
+        public SheetStyle Style => new(Pattern, Edge);
+        public bool IsPlain => State == CurtainState.Dried && Pattern == CurtainPatternKind.None && Edge == CurtainEdgeStyle.None;
         public QualityGrade Grade => CombineGrades(Weaving, Lacquer, PatternGrade);
 
         public Curtain(QualityGrade weaving, bool defective, bool spotted)
@@ -32,7 +33,7 @@ public sealed partial class WorkshopOrder
     readonly List<Curtain> curtainStock = new();
     Stage? running;
     public CurtainPatternDraft PatternDraft { get; private set; }
-    public VermilionTrimDraft TrimDraft => FirstPlainCurtain()?.TrimDraft;
+    public VermilionTrimDraft TrimDraft { get; private set; }
     public int WovenCurtains => CountCurtains(CurtainState.Woven);
     public int LacqueredCurtains => CountCurtains(CurtainState.Lacquered);
     public int DryingCurtains => CountCurtains(CurtainState.Drying);
@@ -77,16 +78,27 @@ public sealed partial class WorkshopOrder
 
     Curtain FirstPlainCurtain() => curtainStock.Find(curtain => curtain.IsPlain);
 
-    bool MatchesOrder(Curtain curtain) => curtain.State == CurtainState.Dried &&
-        curtain.Pattern == PatternKind && curtain.HasTrim == RequiresVermilionTrim;
+    bool MatchesOrder(Curtain curtain) => curtain.State == CurtainState.Dried && NeedsStyle(curtain.Style);
 
     int CountOrderCurtains()
     {
         int count = 0;
-        foreach (Curtain curtain in curtainStock)
-            if (MatchesOrder(curtain))
+        for (int index = 0; index < SheetsPerDay; index++)
+            if (IsSheetReady(index))
                 count++;
         return count;
+    }
+
+    public bool IsSheetReady(int index)
+    {
+        SheetStyle style = RequestedSheet(index);
+        int needed = RequiredThrough(index, style) - DeliveredFor(style);
+        if (needed <= 0)
+            return false;
+        foreach (Curtain curtain in curtainStock)
+            if (curtain.State == CurtainState.Dried && curtain.Style.Matches(style) && --needed == 0)
+                return true;
+        return false;
     }
 
     Curtain FindDeliverable()
@@ -156,7 +168,10 @@ public sealed partial class WorkshopOrder
         if (running != Stage.Weaving ||
             !WorkshopInventory.ConsumeThreads(BambooCraftProgress.ThreadsPerBatch, out bool defective, out bool spotted))
             return;
-        curtainStock.Add(new Curtain((QualityGrade)result.grade, defective, spotted));
+        QualityGrade grade = (QualityGrade)result.grade;
+        if (grade == QualityGrade.SPlus && !HasAutomaticShuttle)
+            grade = QualityGrade.S;
+        curtainStock.Add(new Curtain(grade, defective, spotted));
         running = null;
         StockChanged(result.gameMinutes);
     }
@@ -218,28 +233,37 @@ public sealed partial class WorkshopOrder
         curtain.Pattern = PatternDraft.Kind;
         curtain.PatternGrade = PatternDraft.Grade;
         curtain.PatternDrafts.Clear();
-        curtain.TrimDraft = null;
+        curtain.TrimDrafts.Clear();
         PatternDraft = null;
+        TrimDraft = null;
         StockChanged(PatternMinutes);
         return true;
     }
 
-    public VermilionTrimDraft OpenTrimDraft()
+    public VermilionTrimDraft OpenTrimDraft(CurtainEdgeStyle style = CurtainEdgeStyle.VermilionJade)
     {
-        if (!CanUseTrimStation)
+        Curtain curtain = FirstPlainCurtain();
+        if (!CanUseTrimStation || curtain == null || !CurtainEdgePalette.IsFinish(style))
             return null;
-        return FirstPlainCurtain().TrimDraft ??= new VermilionTrimDraft();
+        if (!curtain.TrimDrafts.TryGetValue(style, out var selected))
+        {
+            selected = new VermilionTrimDraft(style);
+            curtain.TrimDrafts.Add(style, selected);
+        }
+        return TrimDraft = selected;
     }
 
     public bool TryConfirmVermilionTrim()
     {
         Curtain curtain = FirstPlainCurtain();
-        if (DayEnded || running.HasValue || curtain?.TrimDraft?.Complete != true || MinutesUntilClose < TrimMinutes)
+        if (DayEnded || running.HasValue || curtain == null || TrimDraft?.Complete != true ||
+            !curtain.TrimDrafts.ContainsValue(TrimDraft) || MinutesUntilClose < TrimMinutes)
             return false;
-        curtain.HasTrim = true;
-        curtain.TrimDraft = null;
+        curtain.Edge = TrimDraft.Style;
+        curtain.TrimDrafts.Clear();
         curtain.PatternDrafts.Clear();
         PatternDraft = null;
+        TrimDraft = null;
         StockChanged(TrimMinutes);
         return true;
     }

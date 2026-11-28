@@ -13,6 +13,14 @@ public sealed partial class WorkshopOrder
     public const int BrightenerPrice = 20;
     public const int SabotagePenalty = 100;
     public const int CollectorBasePrice = 200;
+    public const int KnifeUpgradePrice = 20;
+    public const int ShuttleUpgradePrice = 30;
+    public const int OfficialTipPrice = 50;
+    public const int OfficialPaperPay = 30;
+    public const int OfficialJobReward = OfficialPaperPay * PaperInspectionRound.SheetCount;
+    public const int OfficialJobMinutes = 30;
+    public const int OfficialOpeningHour = 12;
+    public const int OfficialClosingHour = 18;
 
     int collectorVisitDay;
     int collectorSaleDay;
@@ -24,6 +32,19 @@ public sealed partial class WorkshopOrder
     public int SpottedBamboo { get; private set; }
     public int Brightener { get; private set; }
     public bool TeaNoticeCompleted { get; private set; }
+    public bool HasUpgradedKnife { get; private set; }
+    public bool HasAutomaticShuttle { get; private set; }
+    public bool HasOfficialTip { get; private set; }
+    internal bool OfficialTipUnlocked => Days >= 2;
+    internal bool CanBuyOfficialTip => OfficialTipUnlocked && CanVisitTeaStall && !HasOfficialTip &&
+        Funds >= OfficialTipPrice;
+    public bool OfficialJobCompleted { get; private set; }
+    public PaperInspectionRound OfficialInspection { get; private set; }
+    public int OfficialJobPay => OfficialJobCompleted ? OfficialInspection.Correct * OfficialPaperPay : 0;
+    public bool OfficialStewardAvailable => CanDoSideQuests && HasOfficialTip &&
+        Hour >= OfficialOpeningHour && Hour < OfficialClosingHour;
+    public bool CanInspectOfficialPaper => OfficialStewardAvailable && !OfficialJobCompleted && !running.HasValue &&
+        Hour * 60 + Minute + OfficialJobMinutes <= OfficialClosingHour * 60;
     public bool CanDoSideQuests => !DayEnded && (CurrentPhase == Phase.Village || CanExplore);
     public bool CanVisitTeaStall => CanDoSideQuests;
     public bool CanVisitSpottedGrove => CanDoSideQuests;
@@ -58,6 +79,53 @@ public sealed partial class WorkshopOrder
         if (!CanExplore || !GreenBambooBag.TryTakeOne())
             return false;
         ChangeFunds(GreenBambooSalePrice);
+        return true;
+    }
+
+    public bool TryBuyKnifeUpgrade()
+    {
+        if (!CanExplore || HasUpgradedKnife || Funds < KnifeUpgradePrice)
+            return false;
+        HasUpgradedKnife = true;
+        ChangeFunds(-KnifeUpgradePrice);
+        return true;
+    }
+
+    public bool TryBuyShuttleUpgrade()
+    {
+        if (!CanExplore || HasAutomaticShuttle || Funds < ShuttleUpgradePrice)
+            return false;
+        HasAutomaticShuttle = true;
+        ChangeFunds(-ShuttleUpgradePrice);
+        return true;
+    }
+
+    public bool TryBuyOfficialTip()
+    {
+        if (!CanBuyOfficialTip)
+            return false;
+        HasOfficialTip = true;
+        ChangeFunds(-OfficialTipPrice);
+        return true;
+    }
+
+    public PaperInspectionRound OpenOfficialInspection()
+    {
+        if (!CanInspectOfficialPaper)
+            return null;
+        return OfficialInspection ??= new PaperInspectionRound();
+    }
+
+    public bool TryClassifyOfficialPaper(PaperInspectionRound.Condition choice)
+    {
+        if (!CanInspectOfficialPaper || OfficialInspection?.TryClassify(choice) != true)
+            return false;
+        if (OfficialInspection.Complete)
+        {
+            OfficialJobCompleted = true;
+            ChangeFunds(OfficialJobPay);
+            AdvanceTime(OfficialJobMinutes);
+        }
         return true;
     }
 
@@ -121,7 +189,7 @@ public sealed partial class WorkshopOrder
         Curtain best = null;
         foreach (Curtain curtain in curtainStock)
             if (curtain.State == CurtainState.Dried && curtain.Pattern == CurtainPatternKind.Ribbed &&
-                !curtain.HasTrim && (best == null || curtain.Grade < best.Grade))
+                curtain.Edge == CurtainEdgeStyle.None && (best == null || curtain.Grade < best.Grade))
                 best = curtain;
         return best;
     }

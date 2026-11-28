@@ -182,8 +182,9 @@ public class BambooWorkbench : MonoBehaviour
             return false;
 #if UNITY_EDITOR
         if (WorkshopPracticeMode.Enabled)
-            practiceProgress = BambooCraftProgress.CreatePractice(step);
+            practiceProgress = BambooCraftProgress.CreatePractice(step, order?.HasUpgradedKnife == true);
 #endif
+        Progress.UpgradedKnife = order?.HasUpgradedKnife == true;
         GameFlowModalState.Acquire(this);
         if (view == null) view = BambooWorkbenchView.Create(Progress);
         else
@@ -191,6 +192,7 @@ public class BambooWorkbench : MonoBehaviour
             view.Bind(Progress);
             view.gameObject.SetActive(true);
         }
+        view.ShowKnife(Progress.UpgradedKnife);
         playerEnabled = player.enabled;
         player.enabled = false;
         follow = cameraView.GetComponent<CameraFollow>();

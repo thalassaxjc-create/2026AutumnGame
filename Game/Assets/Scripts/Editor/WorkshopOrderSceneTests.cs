@@ -300,7 +300,7 @@ public sealed class WorkshopOrderSceneTests
             foreach (var (name, track) in new[]
             {
                 ("编帘", ""), ("刷大漆", "encanto"), ("刷大漆 · 第二天", "shoudie"), ("刷大漆 · 第三天", "orchid"),
-                ("纹样", ""), ("上朱边", ""), ("上朱边", "")
+                ("纹样", ""), ("上漆边", ""), ("上漆边", "")
             })
             {
                 Assert.That(EditorApplication.ExecuteMenuItem(menu + name), Is.True);
@@ -365,6 +365,11 @@ public sealed class WorkshopOrderSceneTests
         var keyboard = InputSystem.AddDevice<Keyboard>();
         InputSystem.AddDevice<Mouse>();
 
+        yield return TalkToMarketNpc(VillageMarketDialogue.Role.XiaoPiBucket, keyboard);
+        Assert.That(GameObject.Find("说明").GetComponent<Text>().text, Does.Contain("从村口开始正式游戏"));
+        Assert.That(GameObject.Find("偷偷倒入 1 瓶"), Is.Null);
+        yield return Press(keyboard, Key.Escape);
+
         yield return SceneManager.LoadSceneAsync(SceneTransitionState.WorldSceneName);
         var order = WorkshopOrder.Current;
         Assert.That(order, Is.Not.Null, "从工坊走进村庄也必须初始化剧情");
@@ -395,6 +400,83 @@ public sealed class WorkshopOrderSceneTests
         Assert.That((order.Funds, order.ElapsedGameMinutes - initialMinutes), Is.EqualTo((30, 30)));
         yield return Press(keyboard, Key.Escape);
     }
+
+    [UnityTest]
+    public IEnumerator OfficialStewardOpensLightTableAndResumesTheSamePaperBatch()
+    {
+        EditorSceneManager.OpenScene(SceneTransitionState.WorldScenePath);
+        yield return new EnterPlayMode();
+        previousBackground = InputSystem.settings.backgroundBehavior;
+        previousEditorBehavior = InputSystem.settings.editorInputBehaviorInPlayMode;
+        restoreInput = true;
+        InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+        InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+        var keyboard = InputSystem.AddDevice<Keyboard>();
+        var mouse = InputSystem.AddDevice<Mouse>();
+        var order = WorkshopOrder.Current;
+        SetMorningClock(order);
+        Object.FindFirstObjectByType<OpeningSequence>().CompleteImmediately();
+        order.CloseIntroduction(WorkshopOrder.Phase.Village);
+        order.SetClockSpeed(WorkshopOrder.ClockSpeed.Paused);
+        Assert.That(order.TryFinishTeaNotice(), Is.True);
+        for (int i = 0; i < 2; i++)
+        {
+            GreenBambooBag.AddOne();
+            Assert.That(order.TrySellGreenBamboo(), Is.True);
+        }
+        yield return TalkToMarketNpc(VillageMarketDialogue.Role.TeaOwner, keyboard);
+        Assert.That(GameObject.Find("打听消息"), Is.Null);
+        yield return Press(keyboard, Key.Escape);
+        Click(GameObject.Find("进入下一天"));
+        yield return WaitForMorning(order, 2);
+        yield return TalkToMarketNpc(VillageMarketDialogue.Role.TeaOwner, keyboard);
+        Click(GameObject.Find("打听消息"));
+        yield return Frames(2);
+        Click(GameObject.Find("打听消息  ¥50"));
+        Assert.That(order.Funds, Is.EqualTo(10));
+        yield return Press(keyboard, Key.Escape);
+        order.AdvanceTime(WorkshopOrder.OfficialOpeningHour * 60 - order.Hour * 60 - order.Minute);
+        yield return Frames(2);
+        yield return TalkToMarketNpc(VillageMarketDialogue.Role.OfficialSteward, keyboard);
+        Click(GameObject.Find("开始验纸"));
+        yield return Frames(2);
+
+        var board = GameObject.Find("斜光纸样").GetComponent<RectTransform>();
+        Rect rect = board.rect;
+        Vector2 left = RectTransformUtility.WorldToScreenPoint(null, board.TransformPoint(
+            new Vector2(rect.xMin + rect.width * .31f, rect.yMin + rect.height * .5f)));
+        Vector2 lit = RectTransformUtility.WorldToScreenPoint(null, board.TransformPoint(
+            new Vector2(rect.xMin + rect.width * .392f, rect.yMin + rect.height * .82f)));
+        Vector2 shaded = RectTransformUtility.WorldToScreenPoint(null, board.TransformPoint(
+            new Vector2(rect.xMin + rect.width * .71f, rect.yMin + rect.height * .82f)));
+        yield return SetMouse(mouse, left, held: false);
+        yield return CheckInspectionLight(lit, shaded);
+
+        string[] bins = { "合格", "折痕", "薄斑", "针孔" };
+        var inspection = order.OfficialInspection;
+        Click(GameObject.Find("归档_" + bins[(int)inspection.Current.Defect]));
+        yield return Press(keyboard, Key.Escape);
+        Assert.That(GameObject.Find("府上验纸界面"), Is.Null);
+        Assert.That(Object.FindFirstObjectByType<PlayerController>().enabled, Is.True);
+        yield return TalkToMarketNpc(VillageMarketDialogue.Role.OfficialSteward, keyboard);
+        Click(GameObject.Find("继续验纸"));
+        yield return Frames(2);
+        Assert.That(order.OfficialInspection, Is.SameAs(inspection));
+        Assert.That(inspection.Inspected, Is.EqualTo(1));
+        while (!inspection.Complete)
+            Click(GameObject.Find("归档_" + bins[(int)inspection.Current.Defect]));
+        Assert.That(order.Funds, Is.EqualTo(10 + WorkshopOrder.OfficialJobReward));
+        Assert.That(order.DeliveredCount, Is.Zero);
+        Assert.That(GameObject.Find("验纸明细").GetComponent<Text>().text, Does.Contain("分对 6 / 6 张"));
+        yield return Press(keyboard, Key.Escape);
+        Assert.That(GameFlowModalState.IsInteractionBlocked, Is.False);
+        InputSystem.RemoveDevice(mouse);
+        InputSystem.RemoveDevice(keyboard);
+    }
+
+    static IEnumerator CheckInspectionLight(Vector2 lit, Vector2 shaded) =>
+        CaptureFrame("official-paper-inspection.png", image =>
+            Assert.That(PixelAt(image, lit).r - PixelAt(image, shaded).r, Is.GreaterThan(40), "光带照亮纸面的一部分"));
 
     [UnityTest]
     public IEnumerator SpottedGroveTimeoutAndRepeatedBriefingsKeepResourcesStable()
@@ -1082,7 +1164,26 @@ public sealed class WorkshopOrderSceneTests
         var visual = bucket.GetComponent<XiaoPiBucketVisual>();
         Assert.That(visual, Is.Not.Null, "水桶视觉组件必须保存在工坊场景中。");
         Assert.That(visual.IsBleached, Is.False);
-        yield return TalkToMarketNpc(VillageMarketDialogue.Role.XiaoPiBucket, keyboard);
+        var freshThreads = new BambooCraftProgress(() => .5f, () => true);
+        CompletePreparation(freshThreads);
+        CompleteFinishing(freshThreads);
+        WorkshopInventory.CaptureCraft(freshThreads);
+        Assert.That(order.CanPlay(WorkshopOrder.Stage.Weaving), Is.True);
+        var weaving = Object.FindFirstObjectByType<WeavingStationTrigger>();
+        Bounds weavingArea = weaving.GetComponent<BoxCollider>().bounds;
+        Vector3 intersection = Vector3.MoveTowards(weavingArea.ClosestPoint(bucket.transform.position), weavingArea.center, .03f);
+        intersection.y = bucket.transform.position.y + .15f;
+        MoveTo(intersection);
+        yield return new WaitForFixedUpdate();
+        yield return Frames(2);
+        var bucketInteraction = bucket.GetComponent<NpcDialogueInteraction>();
+        Assert.That(bucketInteraction.PlayerIsInRange, Is.True);
+        Assert.That(typeof(WeavingStationTrigger).GetField("playerInRange", BindingFlags.Instance | BindingFlags.NonPublic)
+            .GetValue(weaving), Is.SameAs(Object.FindFirstObjectByType<PlayerController>()));
+        Assert.That(InteractionPromptUI.CurrentMessage, Is.EqualTo(bucketInteraction.PromptText));
+        yield return Press(keyboard, Key.E);
+        Assert.That(bucketInteraction.IsDialogueOpen, Is.True, "重叠区域按 E 应打开水桶");
+        Assert.That(weaving.IsMinigameOpen, Is.False);
         yield return Press(keyboard, Key.Escape);
         Assert.That(order.Brightener, Is.EqualTo(1), "选择离开不消耗瓶子。");
         yield return TalkToMarketNpc(VillageMarketDialogue.Role.XiaoPiBucket, keyboard);
@@ -1285,6 +1386,8 @@ public sealed class WorkshopOrderSceneTests
 
     static IEnumerator FinishPattern(WorkshopOrder order, Keyboard keyboard, Mouse mouse, bool verifyPreview)
     {
+        bool turtle = order.NextSheetStyle.Pattern == CurtainPatternKind.Turtle;
+        string patternCard = turtle ? "选样_龟纹" : "选样_单丝路";
         var station = Object.FindFirstObjectByType<PatternStationTrigger>();
         Assert.That(station, Is.Not.Null);
         MoveNear(station.transform);
@@ -1292,7 +1395,7 @@ public sealed class WorkshopOrderSceneTests
         Assert.That(station.IsOpen, Is.True);
         Assert.That(GameObject.Find("纹样选样页"), Is.Not.Null);
         Assert.That(order.PatternDraft, Is.Null, "打开纹样台时仍未选择订单纹样");
-        if (verifyPreview && order.Days == 2)
+        if (verifyPreview && turtle)
         {
             yield return CaptureFrame("pattern-catalog.png");
             using (var frameTime = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread"))
@@ -1313,12 +1416,12 @@ public sealed class WorkshopOrderSceneTests
                 yield return Frames(2);
             }
         }
-        Click(GameObject.Find("选样_龟纹"));
+        Click(GameObject.Find(patternCard));
         yield return Frames(2);
         var board = Object.FindFirstObjectByType<CurtainPatternView>().Board;
         var draft = order.PatternDraft;
         int before = order.ElapsedGameMinutes;
-        if (verifyPreview && order.Days == 2)
+        if (verifyPreview && turtle)
         {
             Assert.That(GameObject.Find("穿线顺序").GetComponent<Text>().text, Does.Contain("道 ←"));
             yield return CaptureFrame("pattern-shuttle.png");
@@ -1347,7 +1450,7 @@ public sealed class WorkshopOrderSceneTests
             yield return Press(keyboard, Key.E);
             Assert.That(station.IsOpen, Is.True);
             Assert.That(GameObject.Find("纹样选样页"), Is.Not.Null);
-            Click(GameObject.Find("选样_龟纹"));
+            Click(GameObject.Find(patternCard));
             yield return Frames(2);
             Assert.That(order.PatternDraft, Is.SameAs(draft));
             Assert.That(draft.Shuttle.x, Is.EqualTo(.24f).Within(.002f));
@@ -1362,7 +1465,7 @@ public sealed class WorkshopOrderSceneTests
         Click(GameObject.Find("预览纹样"));
         yield return Frames(2);
         Assert.That(GameObject.Find("计分").GetComponent<Text>().text, Does.Contain("纹样 D"));
-        if (verifyPreview && order.Days == 2)
+        if (verifyPreview && turtle)
             yield return CaptureFrame("pattern-turtle-inspection.png", image =>
             {
                 AssertFullTurtle(image, board);
@@ -1391,41 +1494,56 @@ public sealed class WorkshopOrderSceneTests
     static IEnumerator BindVermilionTrim(WorkshopOrder order, Keyboard keyboard, Mouse mouse, bool verifyResume)
     {
         Assert.That(order.CanUseTrimStation, Is.True);
-        Assert.That(order.PatternDraft, Is.Null, "第三天阴干后直接包朱边");
+        Assert.That(order.PatternDraft, Is.Null);
         Assert.That(order.Submit(), Is.False);
+        var style = order.NextSheetStyle.Edge;
+        string card = "选边_" + order.NextSheetStyle.Name;
         var station = Object.FindFirstObjectByType<VermilionTrimStation>();
         Assert.That(station, Is.Not.Null);
         Assert.That(station.transform.parent.parent.name, Is.EqualTo("LacqueringArea"));
         MoveTo(station.transform.position + new Vector3(0f, .15f, .25f));
         yield return Frames(2);
-        Assert.That(InteractionPromptUI.CurrentMessage, Is.EqualTo("按 E 给帘框上朱边"));
+        Assert.That(InteractionPromptUI.CurrentMessage, Is.EqualTo("按 E 在上漆边台选样"));
         yield return Press(keyboard, Key.E);
         Assert.That(station.IsOpen, Is.True);
         Assert.That(GameObject.Find("包边评分"), Is.Null);
+        yield return Frames(2);
+        Assert.That(new[] { "朱边青", "浅竹黄", "棕红", "深褐" }.All(name => GameObject.Find("选边_" + name) != null),
+            Is.True);
+        Click(GameObject.Find(card));
+        yield return Frames(2);
         var board = Object.FindFirstObjectByType<VermilionTrimView>().Board;
         var draft = order.TrimDraft;
+        Assert.That(draft.Style, Is.EqualTo(style));
 
         if (verifyResume)
         {
-            yield return DragEdge(mouse, board, 0, 0f, .51f);
-            Assert.That(draft.EdgeProgress, Is.EqualTo(.5f));
+            int halfway = VermilionTrimDraft.SectionsPerSide / 2;
+            yield return SetMouse(mouse, ScreenAt(board, board.ClothPoint(draft.Front)), held: true);
+            Vector2 point = ScreenAt(board, board.ClothPoint(VermilionTrimDraft.GuidePoint(halfway)));
+            yield return SetMouse(mouse, point, held: true);
+            Assert.That(draft.LaidSteps, Is.EqualTo(halfway));
             yield return Press(keyboard, Key.Escape);
             Assert.That(station.IsOpen, Is.False);
             Assert.That(Object.FindFirstObjectByType<PlayerController>().enabled, Is.True);
+            yield return SetMouse(mouse, point, held: false);
             yield return Press(keyboard, Key.E);
             Assert.That(station.IsOpen, Is.True);
+            Click(GameObject.Find(card));
+            yield return Frames(2);
             Assert.That(order.TrimDraft, Is.SameAs(draft));
-            Assert.That(draft.EdgeProgress, Is.EqualTo(.5f));
+            Assert.That(draft.LaidSteps, Is.EqualTo(halfway));
         }
 
-        for (int side = 0; side < VermilionTrimDraft.SideCount; side++)
+        yield return SetMouse(mouse, ScreenAt(board, board.ClothPoint(draft.Front)), held: true);
+        for (int step = draft.LaidSteps + 1; step <= VermilionTrimDraft.TotalSteps; step++)
         {
-            yield return DragEdge(mouse, board, side, draft.EdgeProgress, 1f);
-            Assert.That(draft.NeedsCorner, Is.True);
-            Vector2 end = ScreenAt(board, board.EdgeLocalPosition(side, 1f));
-            yield return MouseClick(mouse, end, MouseButton.Left);
-            Assert.That(draft.SealedCorners, Is.EqualTo(side + 1));
+            Vector2 point = ScreenAt(board, board.ClothPoint(VermilionTrimDraft.GuidePoint(step)));
+            yield return SetMouse(mouse, point, held: true);
+            Assert.That(draft.LaidSteps, Is.GreaterThanOrEqualTo(step), $"沿包边路线推进到第 {step} 步");
         }
+        yield return SetMouse(mouse, ScreenAt(board, board.ClothPoint(draft.Front)), held: false);
+        Assert.That(draft.SealedCorners, Is.EqualTo(VermilionTrimDraft.SideCount));
 
         if (verifyResume)
             yield return CaptureFrame("vermilion-trim.png", image =>
@@ -1434,26 +1552,17 @@ public sealed class WorkshopOrderSceneTests
                 Assert.That(bamboo.g > bamboo.r + 10 && bamboo.g > bamboo.b + 12, Is.True, $"青竹帘面 {bamboo}");
                 for (int side = 0; side < VermilionTrimDraft.SideCount; side++)
                 {
-                    Color32 edge = PixelAt(image, ScreenAt(board, board.EdgeLocalPosition(side, .36f)));
+                    Color32 edge = PixelAt(image, ScreenAt(board, board.ClothPoint(VermilionTrimDraft.EdgePosition(side, .36f))));
                     Assert.That(edge.r > 100 && edge.r > edge.g + 38, Is.True, $"第 {side + 1} 边 {edge}");
                 }
             });
 
         int before = order.ElapsedGameMinutes;
-        Click(GameObject.Find("确认朱边"));
+        Click(GameObject.Find("确认包边"));
         Assert.That(order.GetStatus(WorkshopOrder.Stage.VermilionTrim), Is.EqualTo(WorkshopOrder.StageStatus.Complete));
         Assert.That(order.ElapsedGameMinutes - before, Is.EqualTo(order.TrimMinutes));
         Assert.That(order.CurrentPhase, Is.EqualTo(WorkshopOrder.Phase.ReadyToSubmit));
         Assert.That(station.IsOpen, Is.False);
-    }
-
-    static IEnumerator DragEdge(Mouse mouse, CurtainPatternGraphic board, int side, float from, float to)
-    {
-        Canvas.ForceUpdateCanvases();
-        yield return SetMouse(mouse, ScreenAt(board, board.EdgeLocalPosition(side, from)), held: true);
-        Vector2 end = ScreenAt(board, board.EdgeLocalPosition(side, to));
-        yield return SetMouse(mouse, end, held: true);
-        yield return SetMouse(mouse, end, held: false);
     }
 
     static IEnumerator WaitForMorning(WorkshopOrder order, int day)

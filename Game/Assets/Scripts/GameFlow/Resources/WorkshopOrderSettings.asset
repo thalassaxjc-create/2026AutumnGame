@@ -23,6 +23,7 @@ MonoBehaviour:
   bambooFinishingMinutes: 20
   dryingMinutes: 120
   baseReward: 100
+  rewardSPlus: 1.4
   rewardS: 1.3
   rewardA: 1.15
   rewardB: 1

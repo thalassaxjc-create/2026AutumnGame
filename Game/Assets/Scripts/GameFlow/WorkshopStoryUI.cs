@@ -92,8 +92,8 @@ internal static class WorkshopStoryUI
     {
         string bonus = delivery.UsedSpottedBamboo ? "    斑竹订单 ×2" : "";
         string pattern = delivery.PatternGrade is { } grade ? $"    纹样 {grade}" : "";
-        return $"第 {number} 张    综合 {delivery.Grade}    +{delivery.Reward} 元{bonus}\n" +
-            $"编帘 {delivery.Weaving}    刷漆 {delivery.Lacquer}{pattern}    材料 ×{delivery.MaterialMultiplier:0.00}";
+        return $"第 {number} 张 · {delivery.Style.Name}    综合 {WorkshopOrder.GradeText(delivery.Grade)}    +{delivery.Reward} 元{bonus}\n" +
+            $"编帘 {WorkshopOrder.GradeText(delivery.Weaving)}    刷漆 {delivery.Lacquer}{pattern}    材料 ×{delivery.MaterialMultiplier:0.00}";
     }
 
     internal static string SettlementText(WorkshopOrder order, WorkshopOrder.DaySettlement record)

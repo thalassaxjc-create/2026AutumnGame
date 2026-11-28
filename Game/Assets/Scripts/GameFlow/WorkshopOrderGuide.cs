@@ -134,14 +134,14 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         2 => new[]
         {
-            "舅舅：纸坊要两张龟纹小帘。看好那张满幅样稿，细细的龟甲格要一格接一格，铺满帘面。",
+            "舅舅：纸坊要一张龟纹帘、一张单丝路帘。两张样稿都放在工坊电脑的订单里了。",
             "舅舅：拖着木梭到交叉口。样稿写「下」就提起线从下面穿，写「上」就放下线，从上面跨过去。",
-            "舅舅：去工坊电脑看订单。手上有阴干的素帘，就能到纹样台选龟纹加工。"
+            "舅舅：有阴干素帘就去纹样台选样。先做哪张都行，交帘前看清订单。",
         },
         3 => new[]
         {
-            "舅舅：镇上体验馆要两张朱边青。先把青竹帘编好、刷漆阴干，留着竹帘的本色。",
-            "舅舅：阴干后拿去大漆台旁。沿四边贴红绸，四角折好压牢。这样帘边耐磨，在浆池里也看得清。",
+            "舅舅：镇上体验馆要一张朱边青、一张深褐。朱边青配红边，深褐用浅竹黄帘面和靛蓝边。",
+            "舅舅：阴干后拿到大漆台旁的上漆边台选样。推滚轮沿边走一圈，过角沿着弧线收边。",
             "小皮：我去把晾干的帘子拿来！"
         },
         _ =>
@@ -253,9 +253,9 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
     {
         teaHint.enabled = worldVisible && order.CanVisitTeaStall && !order.TeaNoticeCompleted;
         collectorHint.enabled = worldVisible && order.CanVisitTeaStall && order.HasCollectorTip && order.Days <= 2;
-        string collectorText = order.Days == 1 ? "情报已解锁 · 明天集市东头富商收 A / S 级罗纹帘"
+        string collectorText = order.Days == 1 ? "情报已解锁 · 明天集市东头富商收至少 A 级的罗纹帘"
             : order.CollectorBoughtToday ? "罗纹帘已卖给富商 · 货款计入今日收入"
-            : "集市东头富商收 A / S 级罗纹帘";
+            : "集市东头富商收至少 A 级的罗纹帘";
         if (collectorHint.text != collectorText) collectorHint.text = collectorText;
         bool showNightTrader = worldVisible && order.BlackMarketOpen;
         if (nightTraderHint.gameObject.activeSelf != showNightTrader)
@@ -332,8 +332,7 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
             WorkshopOrder.Phase.Village => "去和村口大爷说话",
             WorkshopOrder.Phase.Home => "去院子找舅舅",
             WorkshopOrder.Phase.NewOrder => $"去工坊电脑查看{order.DayName}订单",
-            WorkshopOrder.Phase.ReadyToSubmit => order.RequiresVermilionTrim ? "朱边青已完成，回电脑交单"
-                : order.IsPatternOrder ? "龟纹完成，回电脑交单" : "阴干完成，返回工坊电脑提交订单",
+            WorkshopOrder.Phase.ReadyToSubmit => $"{order.NextSheetStyle.Name} 可交付，回工坊电脑",
             WorkshopOrder.Phase.OrderComplete => "今日订单已交齐，可继续做帘或去集市",
             WorkshopOrder.Phase.Complete => order.CanAdvanceDay ? "今日已结算" : "三天比试已结束",
             _ => ProductionTarget(order)
@@ -347,9 +346,9 @@ public sealed class WorkshopOrderGuide : MonoBehaviour
                 ? "今天的青竹已采完，明早竹林会长出新竹"
                 : "去竹林采青竹，或到集市买斑竹";
         if (order.GetStatus(WorkshopOrder.Stage.Pattern) == WorkshopOrder.StageStatus.Available)
-            return "有阴干素帘，到纹样台选「龟纹」";
+            return $"到纹样台选「{CurtainPatternDesign.Get(order.NextSheetStyle.Pattern).Name}」";
         if (order.GetStatus(WorkshopOrder.Stage.VermilionTrim) == WorkshopOrder.StageStatus.Available)
-            return "有阴干素帘，到大漆台旁的朱边台包红绸";
+            return $"到大漆台旁的上漆边台选「{order.NextSheetStyle.Name}」";
         if (order.GetStatus(WorkshopOrder.Stage.Preparation) != WorkshopOrder.StageStatus.Complete)
             return "带青竹回篾竹区完成劈竹与剐青";
         if (order.GetStatus(WorkshopOrder.Stage.BambooFinishing) != WorkshopOrder.StageStatus.Complete)

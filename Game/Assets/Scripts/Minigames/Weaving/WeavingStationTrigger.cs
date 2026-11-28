@@ -16,17 +16,26 @@ public sealed class WeavingStationTrigger : MonoBehaviour
     PlayerController activePlayer;
     CharacterController playerBody;
     BoxCollider stationArea;
+    NpcDialogueInteraction xiaoPiBucket;
     bool minigameOpen;
     bool playerWasEnabled;
     bool directPractice;
     WorkshopOrder order;
     bool IsAvailable => WorkshopOrder.Current?.CanPlay(WorkshopOrder.Stage.Weaving) ?? true;
+    bool BucketHasPriority => xiaoPiBucket != null && xiaoPiBucket.CanInteractFrom(playerInRange);
 
     public bool IsMinigameOpen => minigameOpen;
 
     void Awake()
     {
         stationArea = GetComponent<BoxCollider>();
+        if (transform.parent != null)
+            foreach (var dialogue in transform.parent.GetComponentsInChildren<VillageMarketDialogue>(true))
+                if (dialogue.MerchantRole == VillageMarketDialogue.Role.XiaoPiBucket)
+                {
+                    xiaoPiBucket = dialogue.GetComponent<NpcDialogueInteraction>();
+                    break;
+                }
         ResolveController();
         if (minigameCanvas != null)
             minigameCanvas.SetActive(false);
@@ -38,7 +47,7 @@ public sealed class WeavingStationTrigger : MonoBehaviour
         // trigger bounds before letting a stale registration consume Interact.
         if (playerInRange != null && !ContainsPlayer())
             ClearPlayer();
-        if (minigameOpen || playerInRange == null || !IsAvailable || GameFlowModalState.IsInteractionBlocked)
+        if (minigameOpen || playerInRange == null || !IsAvailable || GameFlowModalState.IsInteractionBlocked || BucketHasPriority)
             return;
 
         InteractionPromptUI.Show(promptText);
@@ -54,7 +63,7 @@ public sealed class WeavingStationTrigger : MonoBehaviour
 
         playerInRange = player;
         playerBody = player.GetComponent<CharacterController>();
-        if (!minigameOpen && IsAvailable && !GameFlowModalState.IsInteractionBlocked)
+        if (!minigameOpen && IsAvailable && !GameFlowModalState.IsInteractionBlocked && !BucketHasPriority)
             InteractionPromptUI.Show(promptText);
     }
 
@@ -82,7 +91,7 @@ public sealed class WeavingStationTrigger : MonoBehaviour
 
     public void OpenMinigame()
     {
-        if (playerInRange != null && ContainsPlayer())
+        if (playerInRange != null && ContainsPlayer() && !BucketHasPriority)
             OpenFor(playerInRange, false);
     }
 
@@ -123,7 +132,7 @@ public sealed class WeavingStationTrigger : MonoBehaviour
         player.enabled = false;
 
         if (minigameController != null)
-            minigameController.Open(CloseMinigame, order?.Days ?? practiceDay);
+            minigameController.Open(CloseMinigame, order?.Days ?? practiceDay, order?.HasAutomaticShuttle == true);
         else
             minigameCanvas.SetActive(true);
     }

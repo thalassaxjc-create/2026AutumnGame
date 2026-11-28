@@ -4,7 +4,7 @@ using UnityEngine;
 [RequireComponent(typeof(SettlementExitController))]
 public sealed class VermilionTrimStation : MonoBehaviour
 {
-    const string Prompt = "按 E 给帘框上朱边";
+    const string Prompt = "按 E 在上漆边台选样";
     [SerializeField, Min(.2f)] float interactionDistance = 1.45f;
     PlayerController player;
     SettlementExitController modal;
@@ -55,7 +55,7 @@ public sealed class VermilionTrimStation : MonoBehaviour
     {
         if (view == null)
         {
-            var root = new GameObject("朱边台界面", typeof(RectTransform));
+            var root = new GameObject("上漆边台界面", typeof(RectTransform));
             root.transform.SetParent(transform, false);
             view = root.AddComponent<VermilionTrimView>();
             root.SetActive(false);

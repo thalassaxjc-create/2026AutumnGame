@@ -77,6 +77,7 @@ public static class BambooWorkbenchSetup
                 case "configure-player": PlayerVisualSetup.Configure(); break;
                 case "configure-grove": VillageMarketSetup.ConfigureSpottedGrove(); break;
                 case "configure-black-market": VillageMarketSetup.ConfigureBlackMarket(); break;
+                case "configure-official": VillageMarketSetup.ConfigureOfficial(); break;
                 case "test": RunAllTests(); break;
                 case "cancel-tests": TestRunnerApi.CancelTestRun(SessionState.GetString("BambooWorkbench.TestRunId", "")); break;
                 case "test-story": RunTests(new Filter

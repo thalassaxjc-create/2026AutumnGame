@@ -21,7 +21,8 @@ public sealed class ComputerOrderView : MonoBehaviour
     TMP_Text patternTitle;
     TMP_Text patternDescription;
     TMP_Text patternSteps;
-    CurtainPatternGraphic patternSample;
+    readonly CurtainPatternGraphic[] patternSamples = new CurtainPatternGraphic[WorkshopOrder.SheetsPerDay];
+    readonly TMP_Text[] sampleLabels = new TMP_Text[WorkshopOrder.SheetsPerDay];
 
     public void Configure(ComputerUI computer, RectTransform orderTab, RectTransform page,
         RectTransform artboard, TMP_FontAsset labelFont)
@@ -74,13 +75,20 @@ public sealed class ComputerOrderView : MonoBehaviour
         }
         if (customOrder)
         {
-            patternTitle.text = $"{order.OrderName} × {WorkshopOrder.SheetsPerDay}";
+            patternTitle.text = order.OrderName;
             bool trim = order.RequiresVermilionTrim;
-            string finishing = trim ? $"上朱边 {order.TrimMinutes} 分钟" : $"龟纹 {order.PatternMinutes} 分钟";
+            string finishing = trim ? $"上漆边 {order.TrimMinutes} 分钟 / 张" : $"纹样 {order.PatternMinutes} 分钟 / 张";
             patternDescription.text = $"{order.DayName}  ·  单张底价 {order.BasePrice} 元  ·  {finishing}";
-            patternSample.Show(order.PatternKind, isSample: true, showGuide: false, withVermilionEdge: trim, withJadeBamboo: trim);
-            string finishingStep = trim ? $"上朱边   {StepLabel(order, WorkshopOrder.Stage.VermilionTrim)}"
-                : $"龟纹   {StepLabel(order, WorkshopOrder.Stage.Pattern)}";
+            for (int i = 0; i < patternSamples.Length; i++)
+            {
+                WorkshopOrder.SheetStyle style = order.RequestedSheet(i);
+                patternSamples[i].Show(style.Pattern, isSample: true, showGuide: false, finish: style.Edge);
+                string status = order.IsSheetDelivered(i) ? "已交付" : order.IsSheetReady(i) ? "可交付" : "待制作";
+                sampleLabels[i].text = $"{style.Name} ×1\n{status}";
+                sampleLabels[i].color = status == "待制作" ? WorkshopStoryUI.Ink : WorkshopStoryUI.Green;
+            }
+            string finishingStep = trim ? $"上漆边   {StepLabel(order, WorkshopOrder.Stage.VermilionTrim)}"
+                : $"纹样   {StepLabel(order, WorkshopOrder.Stage.Pattern)}";
             patternSteps.text = delivered ? "今日订单已全部交付。\n\n随时可以去村里做生意，或在左上角收工。"
                 : $"已交 {order.DeliveredCount}/{WorkshopOrder.SheetsPerDay} 张\n\n" +
                 $"待交成品 ×{order.AvailableOrderCurtains}\n" +
@@ -132,9 +140,15 @@ public sealed class ComputerOrderView : MonoBehaviour
         patternTitle = Label(card, "当日纹样", "", new Rect(120, 74, 2400, 128), 104);
         patternDescription = Label(card, "订单要求", "", new Rect(120, 220, 2500, 96), 61);
         var sampleTitle = Label(card, "样稿标题", "交付样稿", new Rect(120, 365, 1300, 83), 59);
-        patternSample = Place(card, "订单样稿", new Rect(120, 465, 1400, 784))
-            .gameObject.AddComponent<CurtainPatternGraphic>();
-        patternSample.raycastTarget = false;
+        for (int i = 0; i < patternSamples.Length; i++)
+        {
+            float x = 120 + i * 740;
+            patternSamples[i] = Place(card, i == 0 ? "订单样稿" : "第二张样稿", new Rect(x, 465, 688, 466))
+                .gameObject.AddComponent<CurtainPatternGraphic>();
+            patternSamples[i].raycastTarget = false;
+            sampleLabels[i] = Label(card, $"样稿 {i + 1} 进度", "", new Rect(x, 948, 688, 138), 53);
+            sampleLabels[i].color = ink;
+        }
         patternSteps = Label(card, "纹样进度", "", new Rect(1680, 430, 946, 660), 58);
         foreach (TMP_Text line in new[] { patternTitle, patternDescription, sampleTitle, patternSteps })
         {

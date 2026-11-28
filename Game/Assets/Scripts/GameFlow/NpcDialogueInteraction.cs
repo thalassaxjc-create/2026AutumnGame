@@ -45,6 +45,8 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
     public string PromptText => promptText;
     public float InteractionRadius => interactionRadius;
     public MonoBehaviour DialogueEntryPointComponent => dialogueEntryPoint;
+    internal bool CanInteractFrom(PlayerController player) => isActiveAndEnabled && player != null &&
+        !dialogueOpen && StoryAvailable && IsWithinInteractionRadius(player.transform.position);
 
     void Awake() => EnsureMarker();
 
@@ -70,7 +72,7 @@ public sealed class NpcDialogueInteraction : MonoBehaviour
         bool isInRange = scenePlayer != null && IsWithinInteractionRadius(scenePlayer.transform.position);
         nearbyPlayer = isInRange ? scenePlayer : null;
 
-        if (wasInRange && !isInRange && !dialogueOpen)
+        if (wasInRange && !isInRange && !dialogueOpen && InteractionPromptUI.CurrentMessage == promptText)
             InteractionPromptUI.Hide();
     }
 

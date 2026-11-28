@@ -15,6 +15,7 @@ public sealed class WorkshopOrderSettings : ScriptableObject
     [Min(0)] public int bambooFinishingMinutes = 20;
     [Min(1)] public int dryingMinutes = 120;
     [Min(0)] public int baseReward = 100;
+    [Range(0, 2)] public float rewardSPlus = 1.40f;
     [Range(0, 2)] public float rewardS = 1.30f;
     [Range(0, 2)] public float rewardA = 1.15f;
     [Range(0, 2)] public float rewardB = 1f;

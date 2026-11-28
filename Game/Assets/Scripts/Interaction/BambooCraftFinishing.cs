@@ -14,7 +14,6 @@ public sealed partial class BambooCraftProgress
     public const float PieceHalfHeight = 0.025f;
     public const float GateAspect = 924f / 260f;
     public const float SafeGateTilt = 10f;
-    readonly int[] goodGateInputs = new int[FinishingGroups];
     readonly int[] goodRodOutputs = new int[FinishingGroups];
     float gateDelay, resultDelay, preFinishingAccuracy = 1;
     float dangerTimer, unsafePullTime;
@@ -28,8 +27,11 @@ public sealed partial class BambooCraftProgress
     public bool IsGateStage => Stage == Step.GatePassing || Stage == Step.GateResult;
     public int ProcessedPieceCount => FineCount + DefectiveCount;
     public int InheritedDefectivePieces { get; private set; }
-    public bool GateSourceDefective => IsGateStage && goodGateInputs[Mathf.Clamp(
-        GatesCompleted - (Stage == Step.GateResult ? 1 : 0), 0, FinishingGroups - 1)] < PiecesPerRound;
+    public bool GateSourceDefective => IsGateStage &&
+        GoodPiecesForGate(GatesCompleted - (Stage == Step.GateResult ? 1 : 0)) < PiecesPerGate;
+    public int GatePassCount { get; private set; } = FinishingGroups;
+    int PiecesPerGate => PiecesPerBatch / GatePassCount;
+    public int RodsPerGate => PiecesPerGate * RodsPerPiece;
     public int GatesCompleted { get; private set; }
     public int PerfectGates { get; private set; }
     public float GateHeight { get; private set; } = 0.5f;
@@ -61,9 +63,9 @@ public sealed partial class BambooCraftProgress
         : preFinishingAccuracy * 0.5f + GateAccuracy * 0.25f + DrawingAccuracy * 0.25f;
 
 #if UNITY_EDITOR
-    internal static BambooCraftProgress CreatePractice(Step step)
+    internal static BambooCraftProgress CreatePractice(Step step, bool upgradedKnife)
     {
-        var craft = new BambooCraftProgress(consumeBamboo: () => true);
+        var craft = new BambooCraftProgress(consumeBamboo: () => true) { UpgradedKnife = upgradedKnife };
         switch (step)
         {
             case Step.Splitting:
@@ -119,8 +121,7 @@ public sealed partial class BambooCraftProgress
         InheritedDefectivePieces = PiecesPerBatch - goodInputs;
         FineCount -= goodInputs;
         DefectiveCount -= InheritedDefectivePieces;
-        for (int i = 0; i < FinishingGroups; i++)
-            goodGateInputs[i] = Mathf.Clamp(goodInputs - i * PiecesPerRound, 0, PiecesPerRound);
+        GatePassCount = UpgradedKnife ? 1 : FinishingGroups;
         GatesCompleted = PerfectGates = DrawingGroupsCompleted = drawingErrorsTotal = 0;
         DrawProgress = Tension = 0;
         DrawErrors = 0;
@@ -129,6 +130,9 @@ public sealed partial class BambooCraftProgress
         BeginGate();
         return true;
     }
+
+    int GoodPiecesForGate(int index) =>
+        Mathf.Clamp(PiecesPerBatch - InheritedDefectivePieces - index * PiecesPerGate, 0, PiecesPerGate);
 
     void BeginGate()
     {
@@ -207,26 +211,29 @@ public sealed partial class BambooCraftProgress
         {
             GateDamaged = true;
             FinishingFeedbackSerial++;
-            Say($"呲啦——蹭到刀刃，本组计为 {RodsPerGroup} 根残次竹条");
+            Say($"呲啦——蹭到刀刃，本组计为 {RodsPerGate} 根残次竹条");
         }
         if (PieceX - PieceHalfLength <= GateX + 0.04f) return;
-        int good = GateDamaged ? 0 : goodGateInputs[GatesCompleted] * RodsPerPiece;
-        int defective = RodsPerGroup - good;
-        goodRodOutputs[GatesCompleted] = good;
+        int good = GateDamaged ? 0 : GoodPiecesForGate(GatesCompleted) * RodsPerPiece;
+        int defective = RodsPerGate - good;
+        int groupsPerGate = RodsPerGate / RodsPerGroup;
+        int firstGroup = GatesCompleted * groupsPerGate;
+        for (int i = 0; i < groupsPerGate; i++)
+            goodRodOutputs[firstGroup + i] = Mathf.Clamp(good - i * RodsPerGroup, 0, RodsPerGroup);
         GatesCompleted++;
         if (!GateDamaged) PerfectGates++;
         RodCount += good;
         DefectiveRodCount += defective;
-        if (GatesCompleted == FinishingGroups)
+        if (GatesCompleted == GatePassCount)
         {
             Stage = Step.DrawingReady;
-            Say($"两次过剑门完成，共获得 {ThreadsPerBatch} 根竹条（含残次）；按空格开始抽丝");
+            Say($"过剑门完成，共获得 {ThreadsPerBatch} 根竹条（含残次）；按空格开始抽丝");
         }
         else
         {
             Stage = Step.GateResult;
             resultDelay = 0.9f;
-            Say($"本组获得 {RodsPerGroup} 根竹条（合格 {good}，残次 {defective}）；下一道剑门即将换位");
+            Say($"本组获得 {RodsPerGate} 根竹条（合格 {good}，残次 {defective}）；下一道剑门即将换位");
         }
     }
 

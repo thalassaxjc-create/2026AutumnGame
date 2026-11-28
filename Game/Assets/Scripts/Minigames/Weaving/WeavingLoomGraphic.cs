@@ -12,6 +12,13 @@ public sealed class WeavingLoomGraphic : MaskableGraphic
     float swingRemaining;
     int swingDirection;
     float knotPulse;
+    bool automaticShuttles;
+
+    internal void ShowAutomaticShuttles(bool upgraded)
+    {
+        automaticShuttles = upgraded;
+        SetVerticesDirty();
+    }
 
     public void SetProgress(float value)
     {
@@ -165,8 +172,20 @@ public sealed class WeavingLoomGraphic : MaskableGraphic
 
             Vector2 shuttle = new Vector2(x + sway, stringBottom);
             AddDiamond(vh, shuttle + new Vector2(3f, -4f), 17f, 27f, new Color(0f, 0f, 0f, 0.25f));
-            AddDiamond(vh, shuttle, 17f, 27f, i % 3 == 0 ? woodLight : wood);
-            AddQuad(vh, new Rect(shuttle.x - 4f, shuttle.y - 19f, 8f, 38f), woodDark);
+            if (automaticShuttles)
+            {
+                Color brass = new Color32(221, 169, 76, 255);
+                AddDiamond(vh, shuttle, 18f, 30f, new Color32(113, 68, 53, 255));
+                AddDiamond(vh, shuttle, 12f, 17f, new Color32(65, 122, 118, 255));
+                AddQuad(vh, new Rect(shuttle.x - 7f, shuttle.y - 18f, 14f, 4f), brass);
+                AddQuad(vh, new Rect(shuttle.x - 7f, shuttle.y + 14f, 14f, 4f), brass);
+                AddLine(vh, shuttle + new Vector2(-8, -2), shuttle + new Vector2(8, 2), 1.5f, thread);
+            }
+            else
+            {
+                AddDiamond(vh, shuttle, 17f, 27f, i % 3 == 0 ? woodLight : wood);
+                AddQuad(vh, new Rect(shuttle.x - 4f, shuttle.y - 19f, 8f, 38f), woodDark);
+            }
         }
 
         // 打结时在帘面中心出现非常短的亮点。

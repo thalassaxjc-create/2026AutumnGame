@@ -31,7 +31,11 @@ public static class VillageMarketSetup
             throw new InvalidOperationException("请先结束 Play Mode，再放置集市。");
 
         var palette = new Palette();
-        ConfigureScene(SceneTransitionState.WorldScenePath, scene => PlaceInVillage(scene, palette));
+        ConfigureScene(SceneTransitionState.WorldScenePath, scene =>
+        {
+            bool changed = PlaceInVillage(scene, palette);
+            return PlaceOfficial(scene, palette) || changed;
+        });
         ConfigureScene(SceneTransitionState.WorkshopScenePath, scene => PlaceBucket(scene, palette));
     }
 
@@ -85,6 +89,23 @@ public static class VillageMarketSetup
                 bucket.Find("水面").GetComponent<Renderer>(), curtain.GetComponent<Renderer>());
             return true;
         });
+    }
+
+    [MenuItem("宣纸帘/配置府上差事交付点")]
+    public static void ConfigureOfficial()
+    {
+        if (EditorApplication.isPlayingOrWillChangePlaymode)
+            throw new InvalidOperationException("请先结束 Play Mode，再配置府上差事。");
+        ConfigureScene(SceneTransitionState.WorldScenePath, scene => PlaceOfficial(scene, new Palette()));
+    }
+
+    static bool PlaceOfficial(Scene scene, Palette palette)
+    {
+        Transform house = Find(scene, "晒谷人家");
+        if (house.Find("府上管事") != null)
+            return false;
+        Merchant(house, "府上管事", new Vector3(1.6f, 0, -6.1f), Role.OfficialSteward, palette.Plum, palette);
+        return true;
     }
 
     static void ConfigureScene(string path, Func<Scene, bool> place)

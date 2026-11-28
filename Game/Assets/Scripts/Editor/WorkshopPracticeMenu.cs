@@ -42,7 +42,7 @@ static class WorkshopPracticeMenu
     static void LacquerDayThree() => OpenLacquer(3);
     [MenuItem(MenuPath + "纹样", false, 30)]
     static void Pattern() => Open(() => Object.FindFirstObjectByType<PatternStationTrigger>()?.OpenForPractice());
-    [MenuItem(MenuPath + "上朱边", false, 31)]
+    [MenuItem(MenuPath + "上漆边", false, 31)]
     static void Trim() => Open(() => Object.FindFirstObjectByType<VermilionTrimStation>()?.OpenForPractice());
 
     [MenuItem(MenuPath + "劈竹", true)]
@@ -56,7 +56,7 @@ static class WorkshopPracticeMenu
     [MenuItem(MenuPath + "刷大漆 · 第二天", true)]
     [MenuItem(MenuPath + "刷大漆 · 第三天", true)]
     [MenuItem(MenuPath + "纹样", true)]
-    [MenuItem(MenuPath + "上朱边", true)]
+    [MenuItem(MenuPath + "上漆边", true)]
     static bool CanOpen() => EditorApplication.isPlaying && !EditorApplication.isPaused &&
         WorkshopPracticeMode.Enabled && SceneManager.GetActiveScene().name == SceneTransitionState.WorkshopSceneName &&
         !SceneTransitionState.IsLocked && !GameFlowModalState.IsInteractionBlocked;
